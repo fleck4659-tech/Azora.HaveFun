@@ -1,0 +1,109 @@
+body {
+    font-family: Arial, sans-serif;
+    background: #0d1117;
+    color: white;
+    margin: 0;
+    padding: 20px;
+}
+
+h1 {
+    color: #00bfff;
+}
+
+h2, h3 {
+    color: #ffffff;
+}
+
+p {
+    color: #d0d0d0;
+}
+
+hr {
+    border: 1px solid #222;
+    margin: 20px 0;
+}
+
+button {
+    background: linear-gradient(90deg, #00bfff, #0077ff);
+    color: white;
+    border: none;
+    padding: 12px 18px;
+    margin: 8px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s ease;
+}
+
+button:hover {
+    background: linear-gradient(90deg, #0099ff, #0055ff);
+    transform: scale(1.1);
+    box-shadow: 0 0 20px #00bfff;
+.topbar {
+    background: #0f172a;
+    padding: 12px 20px;
+    border-bottom: 2px solid #00bfff;
+
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+.topbar h2 {
+    margin: 0;
+    color: #00bfff;
+}
+.menu {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.news-card {
+    background: #111827;
+    border: 1px solid #00bfff;
+    padding: 15px;
+    border-radius: 12px;
+    margin-top: 15px;
+}
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.topbar button {
+    padding: 8px 12px;
+    margin: 0;
+    border-radius: 8px;
+}
+.logo {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+}
+@media (max-width: 768px) {
+
+    body {
+        padding: 15px;
+    }
+
+    .topbar {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .menu {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    button {
+        width: 100%;
+        max-width: 300px;
+    }
+
+    .logo {
+        width: 60px;
+        height: 60px;
+    }
+}
