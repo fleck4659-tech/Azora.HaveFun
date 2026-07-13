@@ -1,0 +1,118 @@
+body{
+    margin:0;
+    background:#0d1117;
+    color:white;
+    font-family:Arial,sans-serif;
+
+    display:flex;
+    justify-content:center;
+    align-items:center;
+
+    min-height:100vh;
+}
+
+.appeal-box{
+
+    width:520px;
+
+    background:#111827;
+
+    border:2px solid #00bfff;
+
+    border-radius:20px;
+
+    padding:35px;
+
+    text-align:center;
+
+    box-shadow:0 0 25px rgba(0,191,255,.3);
+}
+
+.logo{
+
+    width:90px;
+
+    border-radius:50%;
+
+    margin-bottom:20px;
+}
+
+h1{
+
+    color:#00bfff;
+}
+
+.welcome{
+
+    font-size:20px;
+
+    font-weight:bold;
+}
+
+input,
+select,
+textarea{
+
+    width:100%;
+
+    padding:12px;
+
+    border-radius:10px;
+
+    border:none;
+
+    margin-top:8px;
+
+    box-sizing:border-box;
+
+    font-size:15px;
+}
+
+textarea{
+
+    height:180px;
+
+    resize:none;
+}
+
+button{
+
+    width:100%;
+
+    padding:14px;
+
+    border:none;
+
+    border-radius:12px;
+
+    background:linear-gradient(90deg,#00bfff,#0077ff);
+
+    color:white;
+
+    font-weight:bold;
+
+    cursor:pointer;
+
+    transition:.2s;
+}
+
+button:hover{
+
+    transform:scale(1.03);
+}
+
+.note{
+
+    margin-top:20px;
+
+    color:#9ca3af;
+
+    font-size:13px;
+}
+
+hr{
+
+    border:1px solid #2d3748;
+
+    margin:20px 0;
+}

@@ -4,11 +4,85 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>603blox Web</title>
+    <title>Avora</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
+
+<!-- Login / Create Account Popup -->
+
+<div id="accountOverlay" class="overlay">
+
+<div class="popup">
+
+<img src="logo.jpg" class="popupLogo">
+
+<h1 id="popupTitle">Join Azora</h1>
+
+<p id="popupSubtitle">
+Build games.<br>
+Customize avatars.<br>
+Have fun.
+</p>
+
+<input
+id="username"
+type="text"
+placeholder="Username">
+
+<input
+id="password"
+type="password"
+placeholder="Password">
+
+<input
+id="confirmPassword"
+type="password"
+placeholder="Confirm Password">
+
+<input
+id="email"
+type="email"
+placeholder="Email (Optional)">
+
+<label class="checkbox">
+
+<input type="checkbox">
+
+I agree to the Terms of Service
+
+</label>
+
+<label class="checkbox">
+
+<input type="checkbox">
+
+I agree to follow the Community Rules
+
+</label>
+
+<button id="mainButton">
+
+Create Account
+
+</button>
+
+<p>
+
+Already have an account?
+
+<a href="#" id="switchMode">
+
+Log In
+
+</a>
+
+</p>
+
+</div>
+
+</div>
 
 <div id="serverMessage" class="server-message" style="display:none;">
     ⚠️ The website is currently experiencing heavy traffic.
@@ -19,40 +93,50 @@
 </div>
 
 <div class="community-banner">
-    <p>Community Banner (Coming Soon)</p>
+    <p>🎉 Welcome to Azora!
+
+Build games.
+Customize avatars.
+Have fun.</p>
 </div>
 
 <div class="topbar">
-    <a href="https://www.youtube.com/@603blox" target="_blank">
-    <img src="logo.jpg" alt="603blox Logo" class="logo">
+    <a href="https://www.youtube.com/@Official_Azora" target="_blank">
+    <img src="logo.jpg" alt="Azora Logo" class="logo">
 </a>
 
-    <h2>603blox</h2>
+    <h2>Azora</h2>
 
     <div class="topbar-right">
         <div class="currency-display">
-            💰 603bucks: <span id="bucks">0</span>
+            🪙 AzoraCoins: <span id="bucks">0</span>
         </div>
 
 </div>
 
     <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
-        Home
+        Home <button onclick="openCreateAccount()">
+Create Account
+</button>
+
+<button onclick="openLogin()">
+Log In
+</button>
     </button>
 </div>
 
-<h1>603blox Official Website</h1>
-<p>Welcome to my official website! Here you can visit my Roblox profile, my YouTube channel, and much more coming soon!</p>
+<h1>Welcome to Azora</h1>
+<p>Welcome to Azora! Build games, customize avatars, and have fun!</p>
 <p><strong>Subscribers:</strong> 2.41K</p>
 <hr>
 
 <div class="news-card">
 
-<h2>Latest News</h2>
+<h2>📢 Azora News</h2>
 
 
 <p>
-Welcome to the official 603blox website! This website is currently under construction. More features will be added soon!
+Welcome to the official Avora website! This website is currently under construction. More features will be added soon!
 </p>
 
 <h3>Coming Soon</h3>
@@ -61,9 +145,9 @@ Welcome to the official 603blox website! This website is currently under constru
 
 </div>
 
-<h2>About Me</h2>
+<h2>About Azora</h2>
 
-<p>Hello! I'm 603blox, I'm a Roblox content creator. I make Roblox videos and enjoy creating fun content for everyone to watch. Thanks for visiting my website!</p>
+<p>Azora is a community-focused platform where you can build games, customize avatars, make friends, and explore creations made by players around the world. We're committed to keeping Azora friendly, creative, and fun for everyone.</p>
 
 <div class="menu">
     <div class="dropdown">
@@ -72,7 +156,7 @@ Welcome to the official 603blox website! This website is currently under constru
 </button>
 
     <div class="dropdown-content" id="socialDropdown">
-        <a href="https://www.youtube.com/@603blox" target="_blank">YouTube</a>
+        <a href="https://www.youtube.com/@Official_Azora" target="_blank">YouTube</a>
 
         <a href="YOUR_TWITTER_LINK" target="_blank">Twitter (X)</a>
 

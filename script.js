@@ -41,5 +41,24 @@ function spawnWord() {
     }, 20);
 }
 
-// Spawn a new word every 1.5 seconds (1500 milliseconds)
-setInterval(spawnWord, 1500);
+// Spawn a new word every 10.0 seconds (10000 milliseconds)
+setInterval(spawnWord, 10000);
+function openCreateAccount(){
+
+document.getElementById("accountOverlay").style.display="flex";
+
+document.getElementById("popupTitle").innerHTML="Join Azora";
+
+document.getElementById("mainButton").innerHTML="Create Account";
+
+}
+
+function openLogin(){
+
+document.getElementById("accountOverlay").style.display="flex";
+
+document.getElementById("popupTitle").innerHTML="Welcome Back!";
+
+document.getElementById("mainButton").innerHTML="Log In";
+
+}
