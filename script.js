@@ -116,3 +116,28 @@ document.getElementById("popupTitle").innerHTML="Welcome Back!";
 document.getElementById("mainButton").innerHTML="Log In";
 
 }
+// Check if the user is already logged in
+
+window.onload = function () {
+
+    const loggedIn = localStorage.getItem("loggedIn");
+
+    if (loggedIn === "true") {
+
+        const account = JSON.parse(
+            localStorage.getItem("azoraAccount")
+        );
+
+        if (account) {
+
+            alert(
+                "👋 Welcome back, " +
+                account.username +
+                "!"
+            );
+
+        }
+
+    }
+
+};
