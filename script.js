@@ -58,10 +58,10 @@ function openLogin(){
 function createAccount(){
 
     const username =
-        document.getElementById("usernameBox").value;
+    document.getElementById("username").value;
 
     const password =
-        document.getElementById("passwordBox").value;
+    document.getElementById("password").value;
 
     const account = {
 
@@ -83,7 +83,21 @@ function createAccount(){
 
     };
 
-    console.log(account);
+    localStorage.setItem(
+    "azoraAccount",
+    JSON.stringify(account)
+);
+
+localStorage.setItem(
+    "loggedIn",
+    "true"
+);
+
+alert(
+    "🎉 Welcome to Azora, " +
+    username +
+    "!"
+);
 
 }
 document.getElementById("mainButton").addEventListener("click", function () {
