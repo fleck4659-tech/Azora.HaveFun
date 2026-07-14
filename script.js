@@ -55,6 +55,46 @@ document.getElementById("mainButton").innerHTML="Create Account";
 
 function openLogin(){
 
+function createAccount(){
+
+    const username =
+        document.getElementById("usernameBox").value;
+
+    const password =
+        document.getElementById("passwordBox").value;
+
+    const account = {
+
+        username: username,
+
+        password: password,
+
+        avatar:{
+
+            head:"default",
+
+            shirt:"default",
+
+            pants:"default",
+
+            face:"default"
+
+        }
+
+    };
+
+    console.log(account);
+
+}
+document.getElementById("mainButton").addEventListener("click", function () {
+
+    if (document.getElementById("mainButton").innerHTML === "Create Account") {
+
+        createAccount();
+
+    }
+
+});
 document.getElementById("accountOverlay").style.display="flex";
 
 document.getElementById("popupTitle").innerHTML="Welcome Back!";
