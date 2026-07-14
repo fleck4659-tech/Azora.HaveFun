@@ -130,11 +130,12 @@ window.onload = function () {
 
         if (account) {
 
-            alert(
-                "👋 Welcome back, " +
-                account.username +
-                "!"
-            );
+            document.getElementById("guestButtons").style.display = "none";
+
+            document.getElementById("userPanel").style.display = "block";
+
+            document.getElementById("profileButton").innerHTML =
+                "👤 " + account.username;
 
         }
 

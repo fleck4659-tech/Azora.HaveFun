@@ -114,14 +114,29 @@ Have fun.</p>
 
 </div>
 
-    <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
-        Home <button onclick="openCreateAccount()">
+    <div id="guestButtons">
+
+<button onclick="openCreateAccount()">
 Create Account
 </button>
 
 <button onclick="openLogin()">
 Log In
 </button>
+
+</div>
+
+<div id="userPanel" style="display:none;">
+
+<button id="searchButton">
+🔍 Search
+</button>
+
+<button id="profileButton">
+👤 Username
+</button>
+
+</div>
     </button>
 </div>
 
