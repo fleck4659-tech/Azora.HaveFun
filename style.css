@@ -34,25 +34,24 @@ hr {
 }
 
 button {
-    /* Designed like the logo: white body with a thick electric blue border */
-    background: #ffffff;
+    /* White-to-light-silver gradient with a clean black shadow */
+    background: linear-gradient(180deg, #ffffff 0%, #e6e6e6 100%);
     color: #1e60ff;
-    border: 3px solid #1e60ff;
+    border: none;
     padding: 12px 18px;
     margin: 8px;
     border-radius: 12px;
     cursor: pointer;
     font-weight: bold;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4); /* Solid black-tinted shadow */
     transition: all 0.2s ease;
 }
 
 button:hover {
-    /* Swaps to a cyan-blue hover style */
-    background: #00ebd4;
-    color: #1e60ff;
-    border-color: #1e60ff;
-    transform: scale(1.05);
-    box-shadow: 0 0 15px rgba(0, 235, 212, 0.6);
+    /* Slightly intensifies the gradient and deepens the black shadow on hover */
+    background: linear-gradient(180deg, #ffffff 0%, #dcdcdc 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6); /* Deeper black shadow on hover */
 }
 
 .topbar {
@@ -100,16 +99,6 @@ button:hover {
     padding: 8px 12px;
     margin: 0;
     border-radius: 8px;
-    /* Soft cyan accent button for the topbar */
-    background: #00ebd4;
-    color: #1e60ff;
-    border: none;
-}
-
-.topbar button:hover {
-    background: #ffffff;
-    color: #1e60ff;
-    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
 }
 
 .logo {
@@ -166,8 +155,9 @@ footer {
 }
 
 .dropbtn {
-    background: #ffffff;
+    background: linear-gradient(180deg, #ffffff 0%, #e6e6e6 100%);
     color: #1e60ff;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
 }
 
 .dropdown-content {
@@ -311,13 +301,16 @@ footer {
 .popup button {
     width: 100%;
     margin-top: 20px;
-    background: #1e60ff;
-    color: #ffffff;
+    /* Uses the new white-to-light-silver gradient on the popup button */
+    background: linear-gradient(180deg, #ffffff 0%, #e6e6e6 100%);
+    color: #1e60ff;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
 }
 
 .popup button:hover {
-    background: #00ebd4;
+    background: linear-gradient(180deg, #ffffff 0%, #dcdcdc 100%);
     color: #1e60ff;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6);
 }
 
 .checkbox {
