@@ -26,8 +26,9 @@
         <input id="email" type="email" placeholder="Email (Optional)">
 
         <label class="checkbox">
-            <input type="checkbox"> I agree to the Terms of Service
-        </label>
+          <input type="checkbox" id="tosCheckbox">
+          I agree to the <a href="#" onclick="openTOS(event)" style="color: #1e60ff; text-decoration: underline;">Terms of Service</a>
+         </label>
 
         <label class="checkbox">
             <input type="checkbox"> I agree to follow the Community Rules
@@ -42,6 +43,30 @@
     </div>
 </div>
 
+<div id="tosOverlay" class="overlay" style="display:none;">
+    <div class="popup tos-popup">
+        <h2>Terms of Service</h2>
+        
+        <div class="tos-content">
+            <h3>1. Introduction</h3>
+            <p>Welcome to Azora! By accessing or using our platform, you agree to be bound by these Terms of Service (TOS). Please read them carefully.</p>
+            
+            <h3>2. Code of Conduct</h3>
+            <p>You agree not to exploit, hack, or disrupt Azora services. Toxic behavior, harassment, and cheating are strictly prohibited.</p>
+            
+            <h3>3. Avatar Customization & Moderation</h3>
+            <p>To keep Azora safe, fully naked single-color avatars (such as solid red, solid blue, or solid white) are not allowed. System safeguards may automatically apply a darker torso to your character to ensure appropriate attire.</p>
+            
+            <h3>4. Game Publishing</h3>
+            <p>By publishing games on Azora, you grant players the right to play and explore your creations. You retain the intellectual rights to your code, but must ensure all game content complies with our Community Rules.</p>
+            
+            <h3>5. Account Data</h3>
+            <p>Your account information is stored locally on your device. Azora is not responsible for data loss caused by clearing browser cookies or local storage.</p>
+        </div>
+
+        <button onclick="closeTOS()">Close & Return</button>
+    </div>
+</div>
 <div id="serverMessage" class="server-message" style="display:none;">
     ⚠️ The website is currently experiencing heavy traffic.
     <br>

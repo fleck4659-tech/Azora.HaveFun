@@ -201,3 +201,12 @@ function handleCreateClick() {
         openCreateAccount(); // Opens your signup modal automatically
     }
 }
+// --- TOS Modal Toggle Logic ---
+function openTOS(event) {
+    event.preventDefault(); // Prevents page from jumping back to top when link is clicked
+    document.getElementById("tosOverlay").style.display = "flex";
+}
+
+function closeTOS() {
+    document.getElementById("tosOverlay").style.display = "none";
+}

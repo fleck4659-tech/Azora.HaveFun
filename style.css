@@ -448,3 +448,51 @@ input:checked + .slider:before {
     transform: translateX(26px);
     background: #ffffff;
 }
+/* Custom styling for the scrollable TOS popup */
+.tos-popup {
+    max-width: 480px;
+}
+
+.tos-content {
+    max-height: 260px; /* Keeps the popup from getting too tall */
+    overflow-y: auto;   /* Enables the vertical scrolling */
+    text-align: left;
+    background: rgba(30, 96, 255, 0.05);
+    border: 2px solid #1e60ff;
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+
+.tos-content h3 {
+    color: #1e60ff;
+    font-size: 15px;
+    margin-top: 15px;
+    margin-bottom: 5px;
+}
+
+.tos-content p {
+    color: #333333 !important; /* Dark text for easy reading on the white background */
+    line-height: 1.4;
+    margin-top: 0;
+}
+
+/* Styled scrollbar for the TOS content */
+.tos-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.tos-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.tos-content::-webkit-scrollbar-thumb {
+    background: #00ebd4; /* Matches your bright logo cyan */
+    border-radius: 10px;
+}
+
+.tos-content::-webkit-scrollbar-thumb:hover {
+    background: #00aaff; /* Darker blue scrollbar color on hover */
+}
