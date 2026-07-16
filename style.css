@@ -1,11 +1,11 @@
 body {
     font-family: Arial, sans-serif;
-    /* Adjusted background gradient to echo the logo's deep blue to vibrant cyan transition */
+    /* Uses the exact, vibrant blue-to-cyan gradient background from the logo */
     background: linear-gradient(
         180deg,
-        #061021,
-        #0b1c3a,
-        #0c3156
+        #1e60ff, /* Deep royal/electric blue */
+        #00aaff, /* Mid-tone bright blue */
+        #00ebd4  /* Vivid bottom cyan */
     );
 
     color: #ffffff;
@@ -14,8 +14,9 @@ body {
 }
 
 h1 {
-    /* Bright cyan-blue matching the lighter tones of the logo */
-    color: #00d2ff;
+    /* Pure white like the "A" in the logo */
+    color: #ffffff;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 h2 {
@@ -23,20 +24,20 @@ h2 {
 }
 
 p {
-    /* Shifted to a cool, light blue-gray to blend with the background */
-    color: #e2f1ff;
+    /* Super crisp off-white for readability on bright backgrounds */
+    color: #f0f7ff;
 }
 
 hr {
-    border: 1px solid #142f5c;
+    border: 1px solid rgba(255, 255, 255, 0.3);
     margin: 20px 0;
 }
 
 button {
-    /* Vibrant royal blue to electric cyan gradient inspired by the logo's border and background */
-    background: linear-gradient(90deg, #0052ff, #00d9ff);
-    color: #ffffff;
-    border: none;
+    /* Designed like the logo: white body with a thick electric blue border */
+    background: #ffffff;
+    color: #1e60ff;
+    border: 3px solid #1e60ff;
     padding: 12px 18px;
     margin: 8px;
     border-radius: 12px;
@@ -46,25 +47,29 @@ button {
 }
 
 button:hover {
-    background: linear-gradient(90deg, #003cc2, #00b0d4);
-    transform: scale(1.1);
-    box-shadow: 0 0 20px #00a2ff;
+    /* Swaps to a cyan-blue hover style */
+    background: #00ebd4;
+    color: #1e60ff;
+    border-color: #1e60ff;
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(0, 235, 212, 0.6);
 }
 
 .topbar {
-    /* Dark navy base with a glowing cyber-blue bottom border */
-    background: #081124;
+    /* Matches the bright royal blue outline from your logo */
+    background: #1e60ff;
     padding: 12px 20px;
-    border-bottom: 2px solid #00a2ff;
+    border-bottom: 3px solid #ffffff;
 
     position: sticky;
     top: 0;
     z-index: 1000;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
 }
 
 .topbar h2 {
     margin: 0;
-    color: #00d2ff;
+    color: #ffffff;
 }
 
 .menu {
@@ -75,13 +80,14 @@ button:hover {
 }
 
 .news-card {
-    /* Slightly lighter navy card base with a vivid border shadow */
-    background: #0f2142;
-    border: 1px solid #00a2ff;
+    /* Semi-transparent white card so the beautiful logo gradient shows through softly */
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid #ffffff;
     padding: 15px;
     border-radius: 18px;
     margin-top: 15px;
-    box-shadow: 0 0 18px rgba(0, 162, 255, 0.25);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
 }
 
 .topbar {
@@ -94,6 +100,16 @@ button:hover {
     padding: 8px 12px;
     margin: 0;
     border-radius: 8px;
+    /* Soft cyan accent button for the topbar */
+    background: #00ebd4;
+    color: #1e60ff;
+    border: none;
+}
+
+.topbar button:hover {
+    background: #ffffff;
+    color: #1e60ff;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
 }
 
 .logo {
@@ -136,10 +152,12 @@ footer {
 
     text-align: center;
     font-size: 12px;
-    color: #8faed6;
+    color: #ffffff;
 
-    background: #050b17;
+    /* A solid dark royal blue bar at the bottom to ground the layout */
+    background: #113cb0;
     padding: 8px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .dropdown {
@@ -148,17 +166,18 @@ footer {
 }
 
 .dropbtn {
-    background: linear-gradient(90deg, #0052ff, #00d9ff);
-    color: #ffffff;
+    background: #ffffff;
+    color: #1e60ff;
 }
 
 .dropdown-content {
     display: none;
     position: absolute;
-    background: #0b1730;
+    /* Electric blue dropdown container */
+    background: #1e60ff;
     min-width: 180px;
     border-radius: 10px;
-    border: 1px solid #00d9ff;
+    border: 2px solid #ffffff;
     overflow: hidden;
     z-index: 999;
 }
@@ -168,13 +187,17 @@ footer {
     color: #ffffff;
     text-decoration: none;
     padding: 12px;
+    font-weight: bold;
 }
 
 .dropdown-content a:hover {
-    background: #14284f;
+    /* Hover highlight is the bright logo cyan */
+    background: #00ebd4;
+    color: #1e60ff;
 }
 
 .dropdown:hover .dropdown-content {
+    display: block;
 }
 
 .logo {
@@ -184,26 +207,29 @@ footer {
 .community-banner {
     width: 100%;
     height: 140px;
-    background: #10213d;
-    border-bottom: 2px solid #00d9ff;
+    /* Translucent cyan-blue overlay bar */
+    background: rgba(0, 235, 212, 0.2);
+    border-bottom: 3px solid #ffffff;
+    border-top: 3px solid #ffffff;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #8faed6;
+    color: #ffffff;
     font-size: 18px;
     font-weight: bold;
     overflow-x: auto;
     overflow-y: hidden;
+    backdrop-filter: blur(10px);
 }
 
 .server-message {
-    /* Uses the crisp white of the "A" logo as a background with royal blue text */
     background: #ffffff;
-    color: #0052ff;
+    color: #1e60ff;
     text-align: center;
     padding: 18px;
     font-size: 16px;
-    border-bottom: 1px solid #00d9ff;
+    border-bottom: 3px solid #00ebd4;
+    font-weight: bold;
 }
 
 /* Container for the falling text */
@@ -227,9 +253,10 @@ footer {
     font-size: 24px;
     white-space: nowrap;
     user-select: none;
-    opacity: 0.8;
+    opacity: 0.9;
     transform: rotate(0deg);
     transition: transform 0.1s linear;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Popup */
@@ -239,22 +266,28 @@ footer {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(4, 9, 20, 0.8);
+    background: rgba(30, 96, 255, 0.4); /* Royal blue glass overlay */
     display: none;
     justify-content: center;
     align-items: center;
     z-index: 10000;
-    backdrop-filter: blur(5px);
+    backdrop-filter: blur(8px);
 }
 
 .popup {
     width: 430px;
-    background: #0b1a33;
-    border: 2px solid #00d2ff;
+    /* Soft white glassy container to let the background gradient peak through */
+    background: rgba(255, 255, 255, 0.95);
+    border: 3px solid #1e60ff;
     border-radius: 20px;
     padding: 30px;
     text-align: center;
-    box-shadow: 0 0 35px rgba(0, 210, 255, 0.25);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+/* Text elements inside the white popup are colored electric blue for contrast */
+.popup h2, .popup p, .popup label {
+    color: #1e60ff !important;
 }
 
 .popupLogo {
@@ -267,9 +300,9 @@ footer {
     width: 100%;
     padding: 13px;
     margin-top: 12px;
-    border: 1px solid #0052ff;
-    background-color: #050b17;
-    color: white;
+    border: 2px solid #1e60ff;
+    background-color: #ffffff;
+    color: #1e60ff;
     border-radius: 10px;
     box-sizing: border-box;
     font-size: 15px;
@@ -278,6 +311,13 @@ footer {
 .popup button {
     width: 100%;
     margin-top: 20px;
+    background: #1e60ff;
+    color: #ffffff;
+}
+
+.popup button:hover {
+    background: #00ebd4;
+    color: #1e60ff;
 }
 
 .checkbox {
@@ -293,7 +333,7 @@ footer {
 }
 
 #switchMode {
-    color: #00d2ff;
+    color: #00aaff;
     font-weight: bold;
     text-decoration: none;
 }
