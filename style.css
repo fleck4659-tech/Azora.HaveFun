@@ -1,30 +1,23 @@
 body {
     font-family: Arial, sans-serif;
-    /* Uses the exact, vibrant blue-to-cyan gradient background from the logo */
     background: linear-gradient(
         180deg,
         #1e60ff, /* Deep royal/electric blue */
         #00aaff, /* Mid-tone bright blue */
         #00ebd4  /* Vivid bottom cyan */
     );
-
     color: #ffffff;
     margin: 0;
     padding: 20px;
+    padding-bottom: 80px; /* Space for the fixed footer */
 }
 
-h1 {
-    /* Pure white like the "A" in the logo */
+h1, h2 {
     color: #ffffff;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-h2 {
-    color: #ffffff;
-}
-
 p {
-    /* Super crisp off-white for readability on bright backgrounds */
     color: #f0f7ff;
 }
 
@@ -34,7 +27,6 @@ hr {
 }
 
 button {
-    /* White-to-light-silver gradient with a clean black shadow */
     background: linear-gradient(180deg, #ffffff 0%, #e6e6e6 100%);
     color: #1e60ff;
     border: none;
@@ -43,56 +35,33 @@ button {
     border-radius: 12px;
     cursor: pointer;
     font-weight: bold;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4); /* Solid black-tinted shadow */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
     transition: all 0.2s ease;
 }
 
 button:hover {
-    /* Slightly intensifies the gradient and deepens the black shadow on hover */
     background: linear-gradient(180deg, #ffffff 0%, #dcdcdc 100%);
     transform: translateY(-2px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6); /* Deeper black shadow on hover */
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6);
 }
 
+/* Topbar Design */
 .topbar {
-    /* Matches the bright royal blue outline from your logo */
     background: #1e60ff;
     padding: 12px 20px;
     border-bottom: 3px solid #ffffff;
-
     position: sticky;
     top: 0;
     z-index: 1000;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .topbar h2 {
     margin: 0;
     color: #ffffff;
-}
-
-.menu {
-    margin-top: 20px;
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.news-card {
-    /* Semi-transparent white card so the beautiful logo gradient shows through softly */
-    background: rgba(255, 255, 255, 0.2);
-    border: 2px solid #ffffff;
-    padding: 15px;
-    border-radius: 18px;
-    margin-top: 15px;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-}
-
-.topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
 }
 
 .topbar button {
@@ -105,50 +74,48 @@ button:hover {
     width: 60px;
     height: 60px;
     border-radius: 50%;
+    cursor: pointer;
 }
 
-@media (max-width: 1000px) {
-    body {
-        padding: 15px;
-    }
-
-    .topbar {
-        flex-direction: column;
-        text-align: center;
-    }
-
-    .menu {
-        flex-direction: column;
-        align-items: center;
-    }
-
-    button {
-        width: 100%;
-        max-width: 300px;
-    }
-
-    .logo {
-        width: 60px;
-        height: 60px;
-    }
+/* Page Layout adjustments to frame the sidebar next to contents */
+.main-content-layout {
+    margin-left: 290px; /* Aligns side-by-side with 3D Avatar sidebar */
+    margin-top: 20px;
 }
 
+.menu {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.news-card {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid #ffffff;
+    padding: 15px;
+    border-radius: 18px;
+    margin-top: 15px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Bottom Footer */
 footer {
     position: fixed;
     bottom: 0;
     left: 0;
     width: 100%;
-
     text-align: center;
     font-size: 12px;
     color: #ffffff;
-
-    /* A solid dark royal blue bar at the bottom to ground the layout */
     background: #113cb0;
     padding: 8px 0;
     border-top: 1px solid rgba(255, 255, 255, 0.2);
+    z-index: 10000;
 }
 
+/* Dropdown styling */
 .dropdown {
     position: relative;
     display: inline-block;
@@ -163,7 +130,6 @@ footer {
 .dropdown-content {
     display: none;
     position: absolute;
-    /* Electric blue dropdown container */
     background: #1e60ff;
     min-width: 180px;
     border-radius: 10px;
@@ -181,7 +147,6 @@ footer {
 }
 
 .dropdown-content a:hover {
-    /* Hover highlight is the bright logo cyan */
     background: #00ebd4;
     color: #1e60ff;
 }
@@ -190,25 +155,18 @@ footer {
     display: block;
 }
 
-.logo {
-    cursor: pointer;
-}
-
+/* Translucent Banner styling */
 .community-banner {
     width: 100%;
-    height: 140px;
-    /* Translucent cyan-blue overlay bar */
+    height: 60px;
     background: rgba(0, 235, 212, 0.2);
     border-bottom: 3px solid #ffffff;
-    border-top: 3px solid #ffffff;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #ffffff;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: bold;
-    overflow-x: auto;
-    overflow-y: hidden;
     backdrop-filter: blur(10px);
 }
 
@@ -222,7 +180,7 @@ footer {
     font-weight: bold;
 }
 
-/* Container for the falling text */
+/* Falling Text Engine Containers */
 #falling-text-container {
     position: fixed;
     top: 0;
@@ -234,7 +192,6 @@ footer {
     z-index: 9999;
 }
 
-/* Individual falling words */
 .falling-word {
     position: absolute;
     color: #ffffff;
@@ -249,14 +206,14 @@ footer {
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* Popup */
+/* Overlay and Popup modals */
 .overlay {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(30, 96, 255, 0.4); /* Royal blue glass overlay */
+    background: rgba(30, 96, 255, 0.4);
     display: none;
     justify-content: center;
     align-items: center;
@@ -266,7 +223,6 @@ footer {
 
 .popup {
     width: 430px;
-    /* Soft white glassy container to let the background gradient peak through */
     background: rgba(255, 255, 255, 0.95);
     border: 3px solid #1e60ff;
     border-radius: 20px;
@@ -275,7 +231,6 @@ footer {
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 
-/* Text elements inside the white popup are colored electric blue for contrast */
 .popup h2, .popup p, .popup label {
     color: #1e60ff !important;
 }
@@ -301,16 +256,9 @@ footer {
 .popup button {
     width: 100%;
     margin-top: 20px;
-    /* Uses the new white-to-light-silver gradient on the popup button */
     background: linear-gradient(180deg, #ffffff 0%, #e6e6e6 100%);
     color: #1e60ff;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
-}
-
-.popup button:hover {
-    background: linear-gradient(180deg, #ffffff 0%, #dcdcdc 100%);
-    color: #1e60ff;
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6);
 }
 
 .checkbox {
@@ -330,48 +278,8 @@ footer {
     font-weight: bold;
     text-decoration: none;
 }
-// A list of "restricted" colors that cannot be used as a full naked body suit
-const RESTRICTED_COLORS = {
-    white: ["#ffffff", "#f0f0f0", "#e6e6e6"],
-    red: ["#ff0000", "#e60000", "#cc0000"],
-    blue: ["#0000ff", "#0000e6", "#0000cc"]
-};
 
-/**
- * Checks if the chosen character colors are safe.
- * If the head, torso, and legs are all the same restricted color,
- * it automatically forces the torso to a safe, dark charcoal gray.
- */
-function moderateCharacterColors(headColor, torsoColor, legsColor) {
-    const head = headColor.toLowerCase();
-    const torso = torsoColor.toLowerCase();
-    const legs = legsColor.toLowerCase();
-
-    let safeTorso = torso;
-    let moderated = false;
-
-    // Check if head, torso, and legs are all matching a restricted color
-    for (const colorGroup in RESTRICTED_COLORS) {
-        const restrictedList = RESTRICTED_COLORS[colorGroup];
-        
-        if (restrictedList.includes(head) && 
-            restrictedList.includes(torso) && 
-            restrictedList.includes(legs)) {
-            
-            // Force the torso to a dark, safe neutral color (like charcoal gray)
-            safeTorso = "#1e293b"; 
-            moderated = true;
-            break;
-        }
-    }
-
-    return {
-        head: head,
-        torso: safeTorso,
-        legs: legs,
-        wasModerated: moderated
-    };
-}
+/* Developer Setting Cards */
 .developer-setting-card {
     background: rgba(255, 255, 255, 0.15);
     border: 2px solid #ffffff;
@@ -382,7 +290,7 @@ function moderateCharacterColors(headColor, torsoColor, legsColor) {
     justify-content: space-between;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
     max-width: 500px;
-    margin: 20px auto;
+    margin: 20px 0;
     backdrop-filter: blur(10px);
 }
 
@@ -397,7 +305,7 @@ function moderateCharacterColors(headColor, torsoColor, legsColor) {
     color: #f0f7ff;
 }
 
-/* Toggle Switch Container */
+/* Toggle Switches */
 .switch {
     position: relative;
     display: inline-block;
@@ -411,21 +319,16 @@ function moderateCharacterColors(headColor, torsoColor, legsColor) {
     height: 0;
 }
 
-/* Slider styling using the white-to-silver gradient and black shadows */
 .slider {
     position: absolute;
     cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    top: 0; left: 0; right: 0; bottom: 0;
     background: #e6e6e6;
     transition: .4s;
     border-radius: 34px;
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-/* The round knob inside the slider */
 .slider:before {
     position: absolute;
     content: "";
@@ -434,12 +337,11 @@ function moderateCharacterColors(headColor, torsoColor, legsColor) {
     left: 4px;
     bottom: 4px;
     background: linear-gradient(180deg, #ffffff 0%, #dcdcdc 100%);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); /* Tactile black drop shadow */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
     transition: .4s;
     border-radius: 50%;
 }
 
-/* When the developer enables the switch (Turned ON to bright Cyan) */
 input:checked + .slider {
     background: #00ebd4;
 }
@@ -448,14 +350,15 @@ input:checked + .slider:before {
     transform: translateX(26px);
     background: #ffffff;
 }
-/* Custom styling for the scrollable TOS popup */
+
+/* Terms of Service Custom Popup styles */
 .tos-popup {
     max-width: 480px;
 }
 
 .tos-content {
-    max-height: 260px; /* Keeps the popup from getting too tall */
-    overflow-y: auto;   /* Enables the vertical scrolling */
+    max-height: 260px;
+    overflow-y: auto;
     text-align: left;
     background: rgba(30, 96, 255, 0.05);
     border: 2px solid #1e60ff;
@@ -473,12 +376,11 @@ input:checked + .slider:before {
 }
 
 .tos-content p {
-    color: #333333 !important; /* Dark text for easy reading on the white background */
+    color: #333333 !important;
     line-height: 1.4;
     margin-top: 0;
 }
 
-/* Styled scrollbar for the TOS content */
 .tos-content::-webkit-scrollbar {
     width: 8px;
 }
@@ -489,18 +391,15 @@ input:checked + .slider:before {
 }
 
 .tos-content::-webkit-scrollbar-thumb {
-    background: #00ebd4; /* Matches your bright logo cyan */
+    background: #00ebd4;
     border-radius: 10px;
 }
 
-.tos-content::-webkit-scrollbar-thumb:hover {
-    background: #00aaff; /* Darker blue scrollbar color on hover */
-}
-/* --- 3D Avatar Top-Left Sidebar Style --- */
+/* 3D Avatar Sidebar Container styling */
 .avatar-customizer-container {
     position: absolute;
-    top: 280px; /* Aligns below your banner and topbar */
-    left: 20px; /* Pins to the left side */
+    top: 280px;
+    left: 20px;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -508,7 +407,7 @@ input:checked + .slider:before {
     border: 2px solid #ffffff;
     border-radius: 20px;
     padding: 15px;
-    width: 250px; /* Compact sidebar width */
+    width: 230px;
     backdrop-filter: blur(10px);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
     z-index: 10;
@@ -516,16 +415,11 @@ input:checked + .slider:before {
 
 #avatar3d-canvas {
     width: 100%;
-    height: 240px; /* Keeps the viewport compact and tall */
+    height: 240px;
     background: rgba(0, 0, 0, 0.2);
     border-radius: 12px;
     border: 2px solid #ffffff;
     overflow: hidden;
-}
-
-.customizer-controls {
-    display: flex;
-    flex-direction: column;
 }
 
 .customizer-controls h3 {
@@ -559,18 +453,12 @@ input:checked + .slider:before {
     width: 100%;
 }
 
-/* --- Shift Page Content Right to Prevent Overlap --- */
-h1, h2, p, .news-card, hr {
-    margin-left: 300px; /* Gives the sidebar 300px of clearance */
-}
-
-/* Prevent the topbar and footer from shifting */
-.topbar, footer, .community-banner {
-    margin-left: 0 !important;
-}
-
-/* Ensure mobile layouts stack nicely */
+/* Responsive Mobile Rules */
 @media (max-width: 1000px) {
+    .main-content-layout {
+        margin-left: 0 !important;
+    }
+    
     .avatar-customizer-container {
         position: relative;
         top: 0;
@@ -579,7 +467,14 @@ h1, h2, p, .news-card, hr {
         max-width: 320px;
         margin: 20px auto;
     }
-    h1, h2, p, .news-card, hr {
-        margin-left: 0 !important;
+    
+    .topbar {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    button {
+        width: 100%;
+        max-width: 300px;
     }
 }

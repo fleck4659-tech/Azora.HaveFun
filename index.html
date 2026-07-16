@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Azora.HaveFun</title>
     <link rel="stylesheet" href="style.css">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 
 <body>
@@ -28,7 +29,7 @@
         <label class="checkbox">
           <input type="checkbox" id="tosCheckbox">
           I agree to the <a href="#" onclick="openTOS(event)" style="color: #1e60ff; text-decoration: underline;">Terms of Service</a>
-         </label>
+        </label>
 
         <label class="checkbox">
             <input type="checkbox"> I agree to follow the Community Rules
@@ -67,16 +68,13 @@
         <button onclick="closeTOS()">Close & Return</button>
     </div>
 </div>
+
 <div id="serverMessage" class="server-message" style="display:none;">
     ⚠️ The website is currently experiencing heavy traffic.
     <br>
     Please try again in 10 minutes to 1 hour.
     <br><br>
     We apologize for the inconvenience and appreciate your patience.
-</div>
-
-<div class="community-banner">
-    <p>🎉 Welcome to Azora! Build games. Customize avatars. Have fun.</p>
 </div>
 
 <div class="topbar">
@@ -103,99 +101,86 @@
     </div>
 </div>
 
-<h1>Welcome to Azora</h1>
-<p>Welcome to Azora! Build games, customize avatars, and have fun!</p>
-<p><strong>Subscribers:</strong> 2.41K</p>
-<hr>
-
-<div class="news-card">
-    <h2>📢 Azora News</h2>
-    <p>
-        Welcome to the official Azora website! This website is currently under construction. More features will be added soon!
-    </p>
-    <h3>Coming Soon</h3>
-    <p>More website features are currently being developed.</p>
+<div class="community-banner">
+    <p>🎉 Welcome to Azora! Build games. Customize avatars. Have fun.</p>
 </div>
 
-<h2>About Azora</h2>
-<p>Azora is a community-focused platform where you can build games, customize avatars, make friends, and explore creations made by players around the world. We're committed to keeping Azora friendly, creative, and fun for everyone.</p>
+<div class="avatar-customizer-container">
+    <div id="avatar3d-canvas"></div>
+    <div class="customizer-controls">
+        <h3>My Avatar</h3>
+        
+        <label>Head Color:</label>
+        <input type="color" id="colorHead" value="#ffcc00" onchange="updateAvatarColors()">
 
-<div class="menu">
-    <div class="dropdown">
-        <button class="dropbtn" onclick="toggleDropdown()">Other Socials ▼</button>
-        <div class="dropdown-content" id="socialDropdown">
-            <a href="https://www.youtube.com/@Official_Azora" target="_blank">YouTube</a>
-            <a href="#" target="_blank">Twitter (X)</a> <a href="https://suno.com/@603blox" target="_blank">Suno</a>
-            <a href="https://www.tiktok.com/@603blox" target="_blank">TikTok</a>
-        </div>
+        <label>Torso Color:</label>
+        <input type="color" id="colorTorso" value="#1e60ff" onchange="updateAvatarColors()">
+
+        <label>Legs Color:</label>
+        <input type="color" id="colorLegs" value="#00ebd4" onchange="updateAvatarColors()">
+
+        <button onclick="saveAvatar()">Save Avatar</button>
+        <p id="modWarning" style="color: #ff3b30; display: none; font-size: 11px; font-weight: bold; margin-top: 5px; text-align: center;">
+            ⚠️ Single-tone avatar restricted! Torso updated.
+        </p>
+    </div>
+</div>
+
+<div class="main-content-layout">
+    <h1>Welcome to Azora</h1>
+    <p>Welcome to Azora! Build games, customize avatars, and have fun!</p>
+    <p><strong>Subscribers:</strong> 2.41K</p>
+    <hr>
+
+    <div class="news-card">
+        <h2>📢 Azora News</h2>
+        <p>
+            Welcome to the official Azora website! This website is currently under construction. More features will be added soon!
+        </p>
+        <h3>Coming Soon</h3>
+        <p>More website features are currently being developed.</p>
     </div>
 
-    <button onclick="window.open('https://www.roblox.com/users/9744531169/profile', '_blank')">
-        Roblox Profile
-    </button>
+    <h2>About Azora</h2>
+    <p>Azora is a community-focused platform where you can build games, customize avatars, make friends, and explore creations made by players around the world. We're committed to keeping Azora friendly, creative, and fun for everyone.</p>
+
+    <div class="developer-setting-card">
+        <div class="setting-info">
+            <h3>BasicCharacterService</h3>
+            <p>Forces all players in your game to use your customized character template.</p>
+        </div>
+        
+        <label class="switch">
+            <input type="checkbox" id="charServiceToggle" onchange="toggleCharacterService()">
+            <span class="slider"></span>
+        </label>
+    </div>
+
+    <div class="menu">
+        <div class="dropdown">
+            <button class="dropbtn" onclick="toggleDropdown()">Other Socials ▼</button>
+            <div class="dropdown-content" id="socialDropdown">
+                <a href="https://www.youtube.com/@Official_Azora" target="_blank">YouTube</a>
+                <a href="#" target="_blank">Twitter (X)</a>
+                <a href="https://suno.com/@603blox" target="_blank">Suno</a>
+                <a href="https://www.tiktok.com/@603blox" target="_blank">TikTok</a>
+            </div>
+        </div>
+
+        <button onclick="window.open('https://www.roblox.com/users/9744531169/profile', '_blank')">
+            Roblox Profile
+        </button>
+
+        <button onclick="handleCreateClick()">
+            🛠️ Create a Game
+        </button>
+    </div>
 </div>
 
 <footer>
     <p><strong>Creation date:</strong> June 26, 2026</p>
 </footer>
 
-<script>
-let lockedOpen = false;
-
-function toggleDropdown() {
-    const menu = document.getElementById("socialDropdown");
-    lockedOpen = !lockedOpen;
-    if (lockedOpen) {
-        menu.style.display = "block";
-    } else {
-        menu.style.display = "none";
-    }
-}
-
-const dropdown = document.querySelector(".dropdown");
-
-dropdown.addEventListener("mouseenter", function () {
-    if (!lockedOpen) {
-        document.getElementById("socialDropdown").style.display = "block";
-    }
-});
-
-dropdown.addEventListener("mouseleave", function () {
-    if (!lockedOpen) {
-        document.getElementById("socialDropdown").style.display = "none";
-    }
-});
-</script>
 <script src="script.js"></script>
-<div class="developer-setting-card">
-    <div class="setting-info">
-        <h3>BasicCharacterService</h3>
-        <p>Forces all players in your game to use your customized character template.</p>
-    </div>
-    
-    <label class="switch">
-        <input type="checkbox" id="charServiceToggle" onchange="toggleCharacterService()">
-        <span class="slider"></span>
-    </label>
-</div>
-<div class="menu">
-    <div class="dropdown">
-        <button class="dropbtn" onclick="toggleDropdown()">Other Socials ▼</button>
-        <div class="dropdown-content" id="socialDropdown">
-            <a href="https://www.youtube.com/@Official_Azora" target="_blank">YouTube</a>
-            <a href="#" target="_blank">Twitter (X)</a>
-            <a href="https://suno.com/@603blox" target="_blank">Suno</a>
-            <a href="https://www.tiktok.com/@603blox" target="_blank">TikTok</a>
-        </div>
-    </div>
-
-    <button onclick="window.open('https://www.roblox.com/users/9744531169/profile', '_blank')">
-        Roblox Profile
-    </button>
-
-    <button onclick="handleCreateClick()">
-        🛠️ Create a Game
-    </button>
-</div>
 </body>
 </html>
