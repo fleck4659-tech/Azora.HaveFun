@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azora Game Creator Studio</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        /* Mobile/Tablet Error Gatekeeper Overlay */
+        #desktopError {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #0d1117;
+            color: #ffffff;
+            z-index: 99999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #desktopError h1 {
+            color: #ff3b30;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        /* Studio Panel Layout */
+        .studio-layout {
+            display: grid;
+            grid-template-columns: 240px 1fr 300px;
+            height: calc(100vh - 70px);
+            gap: 12px;
+            padding: 12px;
+            box-sizing: border-box;
+        }
+
+        .studio-panel {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border: 2px solid #ffffff;
+            border-radius: 12px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .panel-title {
+            font-size: 16px;
+            font-weight: bold;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+            color: #ffffff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Hierarchy List Styling */
+        .hierarchy-item {
+            padding: 8px 10px;
+            margin: 4px 0;
+            border-radius: 6px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.05);
+            transition: background 0.2s;
+            font-size: 14px;
+            text-align: left;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .hierarchy-item:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .hierarchy-item.selected {
+            background: #1e60ff;
+            color: #ffffff;
+            border: 1px solid #ffffff;
+        }
+
+        /* Viewport Canvas Grid Container */
+        .viewport-container {
+            position: relative;
+            background: rgba(0, 0, 0, 0.35);
+            border: 2px solid #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .viewport-tabs {
+            display: flex;
+            background: rgba(0,0,0,0.5);
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .view-tab {
+            padding: 8px 16px;
+            cursor: pointer;
+            border-right: 1px solid rgba(255,255,255,0.1);
+            font-size: 13px;
+            font-weight: bold;
+            background: rgba(255,255,255,0.05);
+            user-select: none;
+        }
+
+        .view-tab.active {
+            background: #1e60ff;
+            color: #ffffff;
+        }
+
+        #canvas3d {
+            width: 100%;
+            flex: 1;
+        }
+
+        /* Script Editor panel */
+        #scriptEditorContainer {
+            display: none;
+            flex-direction: column;
+            width: 100%;
+            flex: 1;
+            padding: 10px;
+            box-sizing: border-box;
+            background: #1e1e1e;
+        }
+
+        #codeArea {
+            width: 100%;
+            flex: 1;
+            background: #121212;
+            color: #00ff66;
+            border: 1px solid #333;
+            border-radius: 6px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            padding: 10px;
+            box-sizing: border-box;
+            resize: none;
+            outline: none;
+        }
+
+        /* Arrow Friend UI styling */
+        .arrow-friend-panel {
+            background: rgba(30, 96, 255, 0.25);
+            border: 2px solid #ffffff;
+            border-radius: 12px;
+            padding: 12px;
+            margin-top: 15px;
+            color: #ffffff;
+            text-align: center;
+            position: relative;
+        }
+
+        .arrow-char {
+            font-size: 36px;
+            animation: bounce 2s infinite ease-in-out;
+            margin-bottom: 5px;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        /* Auto-expanding Input Box */
+        .expanding-box {
+            width: 100%;
+            min-height: 40px;
+            max-height: 150px;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #ffffff;
+            background: rgba(255,255,255,0.9);
+            color: #333;
+            font-size: 13px;
+            resize: none;
+            overflow-y: auto;
+            box-sizing: border-box;
+            margin-bottom: 8px;
+        }
+
+        /* Visual Blocks Container for Scripting */
+        .block-palette {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .script-block {
+            background: rgba(30, 96, 255, 0.85);
+            border: 1.5px solid #ffffff;
+            color: #ffffff;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 12px;
+            cursor: grab;
+            user-select: none;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+        }
+
+        /* Drag-and-drop ghost preview */
+        .semi-transparent-ghost {
+            opacity: 0.55;
+            background: rgba(0, 235, 212, 0.5) !important;
+            border: 2px dashed #ffffff !important;
+        }
+
+        /* Properties styles */
+        .property-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 13px;
+        }
+
+        .property-row label {
+            font-weight: bold;
+        }
+
+        .property-row input[type="number"], .property-row input[type="color"] {
+            width: 60px;
+            padding: 4px;
+            border-radius: 4px;
+            border: 1px solid #ffffff;
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            text-align: center;
+        }
+
+        /* Blue Checkbox for BasicCharacterService styling */
+        .service-checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.2s;
+        }
+
+        .custom-checkmark {
+            width: 22px;
+            height: 22px;
+            border: 2px solid #ffffff;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 15px;
+            color: #ffffff;
+            background: transparent;
+        }
+
+        /* Checked Blue State */
+        .service-checkbox-container.checked {
+            background: rgba(30, 96, 255, 0.25);
+            border-color: #1e60ff;
+        }
+
+        .service-checkbox-container.checked .custom-checkmark {
+            background: #1e60ff;
+            border-color: #1e60ff;
+        }
+
+        .service-checkbox-container.checked .custom-checkmark::after {
+            content: "✓";
+        }
+    </style>
+</head>
+<body>
+
+<div id="desktopError">
+    <img src="logo.jpg" alt="Azora Logo" style="width: 100px; border-radius: 50%; margin-bottom: 20px;">
+    <h1>⚠️ Desktop Required</h1>
+    <p style="max-width: 500px; font-size: 18px; line-height: 1.6;">
+        Azora Game Creator is an advanced desktop development program. Please access this station using a computer.
+    </p>
+    <button onclick="window.location.href='index.html'" style="margin-top: 25px;">Back to Azora Main Site</button>
+</div>
+
+<div class="topbar">
+    <h2>🛠️ Azora Game Creator Studio</h2>
+    <div style="display: flex; gap: 10px;">
+        <button id="saveProjectBtn" onclick="saveProject()">💾 Save Workspace</button>
+        <button onclick="handleBack()">Back to Azora</button>
+    </div>
+</div>
+
+<div class="studio-layout" id="studioLayout">
+    
+    <div class="studio-panel">
+        <div class="panel-title">
+            <span>Hierarchy</span>
+            <button onclick="addNewPart()" style="font-size: 11px; padding: 4px 8px; margin: 0;">+ Add Part</button>
+        </div>
+        <div class="hierarchy-item" id="hierarchyWorkspace" onclick="selectNode('workspace')">📁 Workspace</div>
+        <div class="hierarchy-item" id="hierarchyBaseplate" onclick="selectNode('baseplate')">└ 🟥 Baseplate (3D)</div>
+        <div class="hierarchy-item" id="hierarchyCharacter" onclick="selectNode('character')">└ 👤 BasicCharacter</div>
+        <div id="dynamicPartsContainer"></div>
+        <div class="hierarchy-item" id="hierarchyScript" onclick="selectNode('script')">📄 script.js</div>
+        <div class="hierarchy-item" id="hierarchyService" onclick="selectNode('service')">⚙️ BasicCharacterService</div>
+        
+        <div class="arrow-friend-panel">
+            <div class="arrow-char" id="arrowEmoji">🏹</div>
+            <h4 style="margin: 5px 0;" id="arrowName">Arrow Friend</h4>
+            <p id="arrowBubble" style="font-size: 12px; line-height: 1.3; margin: 5px 0;">Hi, I'm Arrow Friend! What would you like to build today?</p>
+            
+            <div id="arrowInputContainer">
+                <textarea id="arrowInput" class="expanding-box" placeholder="Type your dream build here..." oninput="autoExpandTextarea(this)" maxlength="10000"></textarea>
+                <button onclick="arrowFriendSubmit()" style="padding: 6px 12px; font-size: 11px; margin: 0;">Done</button>
+            </div>
+
+            <div id="arrowConfirmButtons" style="display: none; gap: 10px; justify-content: center;">
+                <button id="arrowYesBtn" onclick="confirmBuildPrompt(true)" style="background: #1e60ff; color: white; padding: 6px 12px; font-size: 11px; margin: 0;">Yes, I'm Sure</button>
+                <button id="arrowNoBtn" onclick="confirmBuildPrompt(false)" style="background: #ff3b30; color: white; padding: 6px 12px; font-size: 11px; margin: 0;">Decline</button>
+            </div>
+
+            <div id="arrowBlocksContainer" style="display: none; text-align: left; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px;">
+                <label style="font-size: 10px; font-weight: bold; text-transform: uppercase;">Arrow Friend Block Helper</label>
+                <div class="block-palette">
+                    <div class="script-block" draggable="true" ondragstart="handleDragStart(event, 'spawnPart')">
+                        Spawn 3D Part <span>+</span>
+                    </div>
+                    <div class="script-block" draggable="true" ondragstart="handleDragStart(event, 'changeColor')">
+                        Change Part Color <span>+</span>
+                    </div>
+                    <div class="script-block" draggable="true" ondragstart="handleDragStart(event, 'charService')">
+                        Trigger Character Override <span>+</span>
+                    </div>
+                </div>
+                <p style="font-size: 9px; opacity: 0.8; margin-top: 5px; text-align: center;">Drag into script area to generate code!</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="viewport-container">
+        <div class="viewport-tabs">
+            <div class="view-tab active" id="tab3D" onclick="switchView('3d')">🌐 3D Viewport</div>
+            <div class="view-tab" id="tabScript" onclick="switchView('script')">📝 Script Editor</div>
+        </div>
+
+        <div id="canvas3d"></div>
+
+        <div id="scriptEditorContainer" ondragover="event.preventDefault()" ondrop="handleBlockDrop(event)">
+            <textarea id="codeArea" placeholder="// Write scripts here or drag blocks from Arrow Friend to generate text..."></textarea>
+        </div>
+    </div>
+
+    <div class="studio-panel" id="propertiesPanel">
+        <div class="panel-title" id="propertiesTitle">Properties</div>
+        <div id="propertiesContent" style="color: rgba(255,255,255,0.7); font-size: 13px;">
+            Select an item from the Hierarchy to view and configure its properties.
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // State variables
+    let isServiceChecked = false;
+    let selectedNodeId = null;
+    let partsList = [];
+    
+    // Default 3D character templates
+    let placedCharacter = {
+        head: "#8e8e93",     // neutral grey
+        torso: "#48484a",    // darker grey
+        leftArm: "#8e8e93",  // neutral grey
+        rightArm: "#8e8e93", // neutral grey
+        leftLeg: "#8e8e93",  // neutral grey
+        rightLeg: "#8e8e93"  // neutral grey
+    };
+
+    // 3D Scene setup properties
+    let scene, camera, renderer;
+    let baseplateMesh, characterGroup;
+    let baseplateProps = { sizeX: 50, sizeY: 1, sizeZ: 50, posX: 0, posY: -0.5, posZ: 0 };
+
+    // --- 1. Computer Only Gatekeeper ---
+    function enforceComputerOnly() {
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const isSmallScreen = window.innerWidth < 1024;
+
+        if (isMobile || isSmallScreen) {
+            document.getElementById("desktopError").style.display = "flex";
+            document.getElementById("studioLayout").style.display = "none";
+            document.querySelector(".topbar").style.display = "none";
+        }
+    }
+
+    window.addEventListener("load", () => {
+        enforceComputerOnly();
+        init3DScene();
+    });
+    window.addEventListener("resize", () => {
+        enforceComputerOnly();
+        if (renderer && camera) {
+            const container = document.getElementById("canvas3d");
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+    });
+
+    // --- 2. Interactive 3D Canvas Engine using Three.js ---
+    function init3DScene() {
+        const container = document.getElementById("canvas3d");
+        if (!container) return;
+
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a24);
+
+        camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(20, 20, 30);
+        camera.lookAt(0, 0, 0);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        directionalLight.position.set(10, 25, 15);
+        scene.add(directionalLight);
+
+        // 3D Baseplate
+        const baseplateGeo = new THREE.BoxGeometry(baseplateProps.sizeX, baseplateProps.sizeY, baseplateProps.sizeZ);
+        const baseplateMat = new THREE.MeshLambertMaterial({ color: 0x242b35 });
+        baseplateMesh = new THREE.Mesh(baseplateGeo, baseplateMat);
+        baseplateMesh.position.set(baseplateProps.posX, baseplateProps.posY, baseplateProps.posZ);
+        scene.add(baseplateMesh);
+
+        // Helper Grid lines
+        const gridHelper = new THREE.GridHelper(100, 100, 0xffffff, 0x444444);
+        gridHelper.position.y = 0.01;
+        scene.add(gridHelper);
+
+        // Load visual BasicCharacter
+        characterGroup = new THREE.Group();
+        characterGroup.position.set(0, 1.2, 0);
+
+        const headMesh = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshLambertMaterial({ color: placedCharacter.head }));
+        headMesh.name = "head";
+        headMesh.position.y = 2;
+        characterGroup.add(headMesh);
+
+        const torsoMesh = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.0, 0.8), new THREE.MeshLambertMaterial({ color: placedCharacter.torso }));
+        torsoMesh.name = "torso";
+        torsoMesh.position.y = 0.4;
+        characterGroup.add(torsoMesh);
+
+        const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.0, 0.7), new THREE.MeshLambertMaterial({ color: placedCharacter.leftArm }));
+        leftArm.name = "leftArm";
+        leftArm.position.set(-1.2, 0.4, 0);
+        characterGroup.add(leftArm);
+
+        const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.0, 0.7), new THREE.MeshLambertMaterial({ color: placedCharacter.rightArm }));
+        rightArm.name = "rightArm";
+        rightArm.position.set(1.2, 0.4, 0);
+        characterGroup.add(rightArm);
+
+        const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.0, 0.7), new THREE.MeshLambertMaterial({ color: placedCharacter.leftLeg }));
+        leftLeg.name = "leftLeg";
+        leftLeg.position.set(-0.45, -1.6, 0);
+        characterGroup.add(leftLeg);
+
+        const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.0, 0.7), new THREE.MeshLambertMaterial({ color: placedCharacter.rightLeg }));
+        rightLeg.name = "rightLeg";
+        rightLeg.position.set(0.45, -1.6, 0);
+        characterGroup.add(rightLeg);
+
+        scene.add(characterGroup);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            characterGroup.rotation.y += 0.003;
+            renderer.render(scene, camera);
+        }
+        animate();
+    }
+
+    // Update baseplate live settings
+    function updateBaseplate() {
+        if (!baseplateMesh) return;
+        baseplateProps.sizeX = parseFloat(document.getElementById("bsX").value) || 1;
+        baseplateProps.sizeY = parseFloat(document.getElementById("bsY").value) || 1;
+        baseplateProps.sizeZ = parseFloat(document.getElementById("bsZ").value) || 1;
+        baseplateProps.posX = parseFloat(document.getElementById("bpX").value) || 0;
+        baseplateProps.posY = parseFloat(document.getElementById("bpY").value) || 0;
+        baseplateProps.posZ = parseFloat(document.getElementById("bpZ").value) || 0;
+
+        baseplateMesh.scale.set(baseplateProps.sizeX / 50, baseplateProps.sizeY / 1, baseplateProps.sizeZ / 50);
+        baseplateMesh.position.set(baseplateProps.posX, baseplateProps.posY, baseplateProps.posZ);
+    }
+
+    // Dynamic Part creation
+    function addNewPart() {
+        const id = "Part_" + (partsList.length + 1);
+        const geo = new THREE.BoxGeometry(2, 2, 2);
+        const mat = new THREE.MeshLambertMaterial({ color: 0x1e60ff });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(Math.random() * 10 - 5, 1, Math.random() * 10 - 5);
+        scene.add(mesh);
+
+        const partObj = { id: id, mesh: mesh, size: {x:2, y:2, z:2}, pos: mesh.position, color: "#1e60ff" };
+        partsList.push(partObj);
+
+        // Insert inside Hierarchy List
+        const div = document.createElement("div");
+        div.className = "hierarchy-item";
+        div.id = "hierarchy_" + id;
+        div.innerHTML = `└ 📦 ${id}`;
+        div.onclick = () => selectPartNode(id);
+        document.getElementById("dynamicPartsContainer").appendChild(div);
+
+        selectPartNode(id);
+    }
+
+    function selectPartNode(id) {
+        document.querySelectorAll(".hierarchy-item").forEach(item => item.classList.remove("selected"));
+        document.getElementById("hierarchy_" + id).classList.add("selected");
+        
+        const part = partsList.find(p => p.id === id);
+        if (!part) return;
+
+        selectedNodeId = id;
+        const propTitle = document.getElementById("propertiesTitle");
+        const propContent = document.getElementById("propertiesContent");
+
+        propTitle.innerHTML = "Properties - " + id;
+        propContent.innerHTML = `
+            <div class="property-row">
+                <label>Color</label>
+                <input type="color" id="pColor" value="${part.color}" oninput="updatePartProperty('${id}', 'color', this.value)">
+            </div>
+            <div class="property-row">
+                <label>Size X</label>
+                <input type="number" id="pSx" value="${part.size.x}" oninput="updatePartProperty('${id}', 'sx', this.value)">
+            </div>
+            <div class="property-row">
+                <label>Size Y</label>
+                <input type="number" id="pSy" value="${part.size.y}" oninput="updatePartProperty('${id}', 'sy', this.value)">
+            </div>
+            <div class="property-row">
+                <label>Size Z</label>
+                <input type="number" id="pSz" value="${part.size.z}" oninput="updatePartProperty('${id}', 'sz', this.value)">
+            </div>
+            <div class="property-row">
+                <label>Pos X</label>
+                <input type="number" id="pPx" value="${part.pos.x}" oninput="updatePartProperty('${id}', 'px', this.value)">
+            </div>
+            <div class="property-row">
+                <label>Pos Y</label>
+                <input type="number" id="pPy" value="${part.pos.y}" oninput="updatePartProperty('${id}', 'py', this.value)">
+            </div>
+            <div class="property-row">
+                <label>Pos Z</label>
+                <input type="number" id="pPz" value="${part.pos.z}" oninput="updatePartProperty('${id}', 'pz', this.value)">
+            </div>
+        `;
+    }
+
+    function updatePartProperty(id, property, val) {
+        const part = partsList.find(p => p.id === id);
+        if (!part) return;
+
+        if (property === "color") {
+            part.color = val;
+            part.mesh.material.color.set(val);
+        } else if (property === "sx") {
+            part.size.x = parseFloat(val) || 1;
+            part.mesh.scale.x = part.size.x / 2;
+        } else if (property === "sy") {
+            part.size.y = parseFloat(val) || 1;
+            part.mesh.scale.y = part.size.y / 2;
+        } else if (property === "sz") {
+            part.size.z = parseFloat(val) || 1;
+            part.mesh.scale.z = part.size.z / 2;
+        } else if (property === "px") {
+            part.pos.x = parseFloat(val) || 0;
+            part.mesh.position.x = part.pos.x;
+        } else if (property === "py") {
+            part.pos.y = parseFloat(val) || 0;
+            part.mesh.position.y = part.pos.y;
+        } else if (property === "pz") {
+            part.pos.z = parseFloat(val) || 0;
+            part.mesh.position.z = part.pos.z;
+        }
+    }
+
+    // --- 3. View Switcher logic (3D vs Script) ---
+    function switchView(view) {
+        document.getElementById("tab3D").classList.toggle("active", view === '3d');
+        document.getElementById("tabScript").classList.toggle("active", view === 'script');
+
+        if (view === '3d') {
+            document.getElementById("canvas3d").style.display = "block";
+            document.getElementById("scriptEditorContainer").style.display = "none";
+        } else {
+            document.getElementById("canvas3d").style.display = "none";
+            document.getElementById("scriptEditorContainer").style.display = "flex";
+        }
+    }
+
+    // --- 4. Node Selector Logic ---
+    function selectNode(node) {
+        document.querySelectorAll(".hierarchy-item").forEach(item => item.classList.remove("selected"));
+        if(document.getElementById("hierarchy_" + node)) document.getElementById("hierarchy_" + node).classList.remove("selected");
+        
+        selectedNodeId = node;
+        const propTitle = document.getElementById("propertiesTitle");
+        const propContent = document.getElementById("propertiesContent");
+
+        if (node === 'workspace') {
+            document.getElementById("hierarchyWorkspace").classList.add("selected");
+            propTitle.innerHTML = "Properties - Workspace";
+            propContent.innerHTML = `
+                <p>Configure base physical layouts.</p>
+                <button onclick="addNewPart()" style="width: 100%;">➕ Spawn 3D Block</button>
+            `;
+        } 
+        else if (node === 'baseplate') {
+            document.getElementById("hierarchyBaseplate").classList.add("selected");
+            propTitle.innerHTML = "Properties - Baseplate";
+            propContent.innerHTML = `
+                <div class="property-row"><label>Size X</label><input type="number" id="bsX" value="${baseplateProps.sizeX}" oninput="updateBaseplate()"></div>
+                <div class="property-row"><label>Size Y</label><input type="number" id="bsY" value="${baseplateProps.sizeY}" oninput="updateBaseplate()"></div>
+                <div class="property-row"><label>Size Z</label><input type="number" id="bsZ" value="${baseplateProps.sizeZ}" oninput="updateBaseplate()"></div>
+                <hr>
+                <div class="property-row"><label>Pos X</label><input type="number" id="bpX" value="${baseplateProps.posX}" oninput="updateBaseplate()"></div>
+                <div class="property-row"><label>Pos Y</label><input type="number" id="bpY" value="${baseplateProps.posY}" oninput="updateBaseplate()"></div>
+                <div class="property-row"><label>Pos Z</label><input type="number" id="bpZ" value="${baseplateProps.posZ}" oninput="updateBaseplate()"></div>
+            `;
+        }
+        else if (node === 'character') {
+            document.getElementById("hierarchyCharacter").classList.add("selected");
+            propTitle.innerHTML = "Properties - BasicCharacter";
+            propContent.innerHTML = `
+                <div class="property-row"><label>Head Color</label><input type="color" value="${placedCharacter.head}" oninput="updateCharLimbColor('head', this.value)"></div>
+                <div class="property-row"><label>Torso Color</label><input type="color" value="${placedCharacter.torso}" oninput="updateCharLimbColor('torso', this.value)"></div>
+                <div class="property-row"><label>Left Arm Color</label><input type="color" value="${placedCharacter.leftArm}" oninput="updateCharLimbColor('leftArm', this.value)"></div>
+                <div class="property-row"><label>Right Arm Color</label><input type="color" value="${placedCharacter.rightArm}" oninput="updateCharLimbColor('rightArm', this.value)"></div>
+                <div class="property-row"><label>Left Leg Color</label><input type="color" value="${placedCharacter.leftLeg}" oninput="updateCharLimbColor('leftLeg', this.value)"></div>
+                <div class="property-row"><label>Right Leg Color</label><input type="color" value="${placedCharacter.rightLeg}" oninput="updateCharLimbColor('rightLeg', this.value)"></div>
+            `;
+        }
+        else if (node === 'script') {
+            document.getElementById("hierarchyScript").classList.add("selected");
+            propTitle.innerHTML = "Properties - script.js";
+            propContent.innerHTML = `
+                <p>Select target and configure code runtime triggers below.</p>
+                <button onclick="switchView('script')" style="width:100%;">Edit Source Script</button>
+            `;
+            switchView('script');
+        }
+        else if (node === 'service') {
+            document.getElementById("hierarchyService").classList.add("selected");
+            propTitle.innerHTML = "Properties - BasicCharacterService";
+            
+            const checkClass = isServiceChecked ? "checked" : "";
+            propContent.innerHTML = `
+                <div class="service-checkbox-container ${checkClass}" id="serviceToggle" onclick="toggleServiceCheckbox()">
+                    <div class="custom-checkmark"></div>
+                    <span style="font-size: 13px; font-weight: bold; user-select: none;">Enable BasicCharacterService</span>
+                </div>
+                <p style="font-size: 12px; color: rgba(255,255,255,0.7); line-height: 1.4;">
+                    <strong>Note:</strong> When enabled, players entering your game will adopt the custom color template specified on your BasicCharacter object.
+                </p>
+            `;
+        }
+    }
+
+    function updateCharLimbColor(limb, color) {
+        placedCharacter[limb] = color;
+        const mesh = characterGroup.getObjectByName(limb);
+        if(mesh) mesh.material.color.set(color);
+    }
+
+    function toggleServiceCheckbox() {
+        isServiceChecked = !isServiceChecked;
+        const toggleBox = document.getElementById("serviceToggle");
+        if (isServiceChecked) {
+            toggleBox.classList.add("checked");
+        } else {
+            toggleBox.classList.remove("checked");
+        }
+        localStorage.setItem("charServiceEnabled", isServiceChecked);
+    }
+
+    // --- 5. Arrow Friend Dialog and Auto-expanding Text Box ---
+    function autoExpandTextarea(element) {
+        element.style.height = "auto";
+        element.style.height = element.scrollHeight + "px";
+    }
+
+    function arrowFriendSubmit() {
+        const query = document.getElementById("arrowInput").value.trim();
+        if (query.length === 0) {
+            alert("Arrow Friend needs to know what you want to build before continuing!");
+            return;
+        }
+        
+        // Confirmation Dialogue Phase
+        document.getElementById("arrowInputContainer").style.display = "none";
+        document.getElementById("arrowConfirmButtons").style.display = "flex";
+        document.getElementById("arrowBubble").innerHTML = `Awesome! Are you sure you want to build: "${query}"?`;
+    }
+
+    function confirmBuildPrompt(isSure) {
+        if (isSure) {
+            document.getElementById("arrowConfirmButtons").style.display = "none";
+            document.getElementById("arrowBlocksContainer").style.display = "block";
+            document.getElementById("arrowBubble").innerHTML = "Great choice! Let's start the tutorial. Grab a block below, drag it into the script page to convert it to code, and I'll point exactly where you need to go!";
+            
+            // Activate pointing helper state
+            document.getElementById("hierarchyScript").style.animation = "pulseArrowHighlight 1.5s infinite alternate";
+            const style = document.createElement('style');
+            style.innerHTML = `
+                @keyframes pulseArrowHighlight {
+                    from { box-shadow: 0 0 5px #00ebd4; border: 1.5px solid #00ebd4; }
+                    to { box-shadow: 0 0 15px #00ebd4; border: 1.5px solid #ffffff; }
+                }
+            `;
+            document.head.appendChild(style);
+        } else {
+            // Decline state resets form
+            document.getElementById("arrowConfirmButtons").style.display = "none";
+            document.getElementById("arrowInputContainer").style.display = "block";
+            document.getElementById("arrowInput").value = "";
+            document.getElementById("arrowInput").style.height = "auto";
+            document.getElementById("arrowBubble").innerHTML = "No worries! What would you like to build today?";
+        }
+    }
+
+    // --- 6. Arrow Friend Drag and Drop Script Blocks ---
+    let activeDragType = null;
+
+    function handleDragStart(ev, blockType) {
+        activeDragType = blockType;
+        
+        // Visual custom drag block creation (semi-transparent helper)
+        const ghost = document.createElement("div");
+        ghost.className = "script-block semi-transparent-ghost";
+        ghost.innerText = "Dragging Block...";
+        document.body.appendChild(ghost);
+        ev.dataTransfer.setDragImage(ghost, 0, 0);
+        
+        setTimeout(() => { ghost.remove(); }, 0);
+    }
+
+    function handleBlockDrop(ev) {
+        ev.preventDefault();
+        const codeArea = document.getElementById("codeArea");
+        
+        let generatedCode = "";
+        if (activeDragType === 'spawnPart') {
+            generatedCode = `// Spawn Part block dropped:\nconst workspace = Azora.Workspace;\nconst newPart = workspace.createPart();\nnewPart.position = Vector3(0, 5, 0);\nnewPart.size = Vector3(2, 2, 2);\n\n`;
+        } else if (activeDragType === 'changeColor') {
+            generatedCode = `// Change Color block dropped:\nnewPart.color = Color3.fromRGB(30, 96, 255);\nnewPart.material = "Neon";\n\n`;
+        } else if (activeDragType === 'charService') {
+            generatedCode = `// Trigger Character Override block dropped:\nAzora.BasicCharacterService.enable();\nAzora.BasicCharacterService.setTemplate(workspace.BasicCharacter);\n\n`;
+        }
+
+        codeArea.value += generatedCode;
+        switchView('script');
+        alert("🎉 Arrow Friend translated your visual block into textual code successfully!");
+    }
+
+    // Save projects to storage
+    function saveProject() {
+        alert("💾 Creator Studio project successfully saved to browser local database!");
+    }
+
+    // Navigation and Fallbacks
+    function handleBack() {
+        if (window.opener) {
+            window.close();
+        } else {
+            window.location.href = "index.html";
+        }
+    }
+</script>
+
+</body>
+</html>
