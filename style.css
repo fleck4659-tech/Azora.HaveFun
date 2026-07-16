@@ -496,3 +496,90 @@ input:checked + .slider:before {
 .tos-content::-webkit-scrollbar-thumb:hover {
     background: #00aaff; /* Darker blue scrollbar color on hover */
 }
+/* --- 3D Avatar Top-Left Sidebar Style --- */
+.avatar-customizer-container {
+    position: absolute;
+    top: 280px; /* Aligns below your banner and topbar */
+    left: 20px; /* Pins to the left side */
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid #ffffff;
+    border-radius: 20px;
+    padding: 15px;
+    width: 250px; /* Compact sidebar width */
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+    z-index: 10;
+}
+
+#avatar3d-canvas {
+    width: 100%;
+    height: 240px; /* Keeps the viewport compact and tall */
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+    border: 2px solid #ffffff;
+    overflow: hidden;
+}
+
+.customizer-controls {
+    display: flex;
+    flex-direction: column;
+}
+
+.customizer-controls h3 {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    color: #ffffff;
+    text-align: center;
+}
+
+.customizer-controls label {
+    font-size: 12px;
+    font-weight: bold;
+    color: #ffffff;
+    margin-top: 5px;
+}
+
+.customizer-controls input[type="color"] {
+    width: 100%;
+    height: 30px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 2px;
+    background: none;
+}
+
+.customizer-controls button {
+    margin: 12px 0 0 0;
+    padding: 10px;
+    font-size: 14px;
+    width: 100%;
+}
+
+/* --- Shift Page Content Right to Prevent Overlap --- */
+h1, h2, p, .news-card, hr {
+    margin-left: 300px; /* Gives the sidebar 300px of clearance */
+}
+
+/* Prevent the topbar and footer from shifting */
+.topbar, footer, .community-banner {
+    margin-left: 0 !important;
+}
+
+/* Ensure mobile layouts stack nicely */
+@media (max-width: 1000px) {
+    .avatar-customizer-container {
+        position: relative;
+        top: 0;
+        left: 0;
+        width: 100%;
+        max-width: 320px;
+        margin: 20px auto;
+    }
+    h1, h2, p, .news-card, hr {
+        margin-left: 0 !important;
+    }
+}
