@@ -9,6 +9,14 @@
 </head>
 <body>
 
+<div id="announcement-banner">
+    <h2>📢 Today's Announcement!</h2>
+    <p>Welcome to Azora! Build games. Customize avatars. Have fun!</p>
+</div>
+
+<div id="creation-date">
+    Creation Date: June 26, 2026
+</div>
 <div id="falling-text-container"></div>
 
 <div id="accountOverlay" class="overlay" style="display:none;">
@@ -17,84 +25,47 @@
         <img src="logo.jpg" class="popupLogo" alt="Azora Logo">
         <h1 id="popupTitle">Join Azora</h1>
         <p id="popupSubtitle">Build games. Customize avatars. Have fun.</p>
-
         <input id="username" type="text" placeholder="Username">
         <input id="password" type="password" placeholder="Password">
-        <div id="extendedAuthFields">
-            <input id="confirmPassword" type="password" placeholder="Confirm Password">
-            <input id="email" type="email" placeholder="Email (Optional)">
-        </div>
-
-        <button id="authSubmitBtn" onclick="processAuth()">Create Account</button>
-        <p id="authSwitchText" style="font-size:13px; cursor:pointer; text-decoration:underline;" onclick="toggleAuthMode()">Already have an account? Log In</p>
+        <button id="authSubmitBtn" onclick="handleAuthSubmission()">Instantiate Account</button>
     </div>
 </div>
 
 <div id="convertOverlay" class="overlay" style="display:none;">
     <div class="popup">
         <span class="close-btn" onclick="closeConvertModal()">&times;</span>
-        <h2>💱 Currency Conversion</h2>
-        
-        <p style="font-size: 11px; color: #f0f7ff; margin-bottom: 2px;">What are you converting?</p>
-        <input id="convertAmount" type="number" placeholder="Enter amount to exchange..." min="1">
-
-        <p style="font-size: 11px; color: #f0f7ff; margin-bottom: 2px;">With what currency?</p>
-        <select id="convertSourceCurrency">
-            <option value="DiamondsToCoins">Azora Diamonds ➡️ Azora Coins (1 Dia = 10 Coins)</option>
-            <option value="CubesToCoins">Azora Cubes ➡️ Azora Coins (1 Cube = 100 Coins)</option>
-            <option value="CubesToDiamonds">Azora Cubes ➡️ Azora Diamonds (1 Cube = 10 Diamonds)</option>
-        </select>
-
-        <button id="finishTransactionBtn" onclick="executeConversion()">Finish Transaction</button>
-        <div id="convertLoader" style="display:none; margin-top:15px;">
-            <p>⏳ Processing security verification via ledger arrays...</p>
-            <p style="font-size:12px; color:#ffffe0;">Please wait about a minute...</p>
-        </div>
+        <h2>💱 Resource Exchange Matrix</h2>
+        <p>Convert your hard-earned AzoraCoins into premium AzoraDiamonds.</p>
+        <p style="font-size:12px; color:#ffd700;">Rate Matrix: 10 Coins ➔ 1 Diamond</p>
+        <input id="convertAmount" type="number" placeholder="Amount of Coins to convert" min="10">
+        <button onclick="processAssetConversion()" style="margin-top:15px; background:#00ebd4; color:#000; font-weight:bold;">Execute Swap</button>
     </div>
 </div>
 
-<div id="subsOverlay" class="overlay" style="display:none;">
-    <div class="popup" style="width: 500px;">
-        <span class="close-btn" onclick="toggleSubsModal(false)">&times;</span>
-        <h2>💎 Premium Membership Hub</h2>
-        <p>Unlock extra value assets delivered to your wallet profile!</p>
-        
-        <div class="sub-card">
-            <h4>🥉 Lite Tier Pass — $3.00</h4>
-            <p>🎁 Includes: +30 AzoraCoins & +30 AzoraDiamonds</p>
-            <p>⏱️ Delivery Schedule: Disbursed after 30 days matrix verification.</p>
-            <button onclick="purchaseSubscription('lite')">Subscribe ($3)</button>
+<div id="azafnPopup" class="overlay" style="display:none; z-index: 10000; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.7); justify-content: center; align-items: center;">
+    <div style="background: #0b0f19; border: 2px solid #00bfff; width: 450px; border-radius: 12px; padding: 20px; color: #fff; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 0 20px rgba(0,191,255,0.4);">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 8px;">
+            <h3 style="margin:0; color:#00bfff;">🤖 AzaFn-1.0 Co-Creator</h3>
+            <span onclick="toggleAzaFnPopup()" style="cursor: pointer; font-size: 20px; font-weight: bold; color: #aaa;">&times;</span>
         </div>
-
-        <div class="sub-card">
-            <h4>🥈 Elite Tier Pass — $10.00</h4>
-            <p>🎁 Includes: +100 AzoraCoins & +100 AzoraDiamonds</p>
-            <p>⏱️ Delivery Schedule: Disbursed after 30 days matrix verification.</p>
-            <button onclick="purchaseSubscription('elite')">Subscribe ($10)</button>
+        <div id="azafnChatStream" style="height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: #070a12; border: 1px solid #1e293b; border-radius: 8px; padding: 10px;"></div>
+        <div id="azafnInteractions"></div>
+        <div id="azafnInputContainer" style="display: none; gap: 8px;">
+            <input id="azafnUserPrompt" type="text" placeholder="Type prompt parameters..." style="flex:1; padding:10px; border-radius:6px; border:1px solid #1e293b; background:#070a12; color:#fff;">
+            <button onclick="processUserTextPrompt()" style="padding: 10px 16px; background:#00bfff; color:#000; font-weight:bold; border:none; border-radius:6px; cursor:pointer;">Send</button>
         </div>
-
-        <div class="sub-card">
-            <h4>🥇 Ultimate Mythic Bundle — $100.00</h4>
-            <p>🎁 Includes: +1,000 Coins, +1,000 Diamonds & 10,000 Ultra Scarce Cubes!</p>
-            <p>⏱️ Delivery Schedule: Coins/Diamonds load in 30 days. Cubes arrive in 1 YEAR!</p>
-            <button onclick="purchaseSubscription('mythic')">Subscribe ($100)</button>
-        </div>
+        <button id="launchStudioBtn" onclick="window.location.href='creator.html'" style="display:none; width:100%; padding:12px; background:linear-gradient(180deg, #ffd700, #ffae00); color:#000; font-weight:bold; border:none; border-radius:6px; cursor:pointer; box-shadow: 0 4px 10px rgba(255,215,0,0.3);">🛠️ Launch Main Workspace Studio</button>
     </div>
 </div>
-
-<div id="marketOverlay" class="overlay" style="display:none;">
-    <div class="popup" style="width: 550px;">
-        <span class="close-btn" onclick="toggleMarketModal(false)">&times;</span>
-        <h2>🛍️ Azora AI Official Catalog</h2>
-        <p style="font-size:12px; color:#ffffe0;">⚠️ Items managed by the safety supervisor profile "Azora". Caution advised.</p>
-        
-        <div class="market-grid" id="aiMarketGrid">
-            </div>
-    </div>
-</div>
-
 <div class="panel-main">
     <div class="sidebar-card">
+        <h3>🤖 AzaFn-1.0 AI Co-Creator</h3>
+        <p>Let our custom engine help design your next viral hit or standard masterpiece.</p>
+        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <button onclick="toggleAzaFnPopup()" style="background: #00bfff; color: #000; font-weight: bold;">💬 Talk to AzaFn-1.0</button>
+            <button onclick="window.location.href='creator.html'" style="background: #00ebd4; color: #000; font-weight: bold;">🛠️ Open Creator Studio</button>
+        </div>
+        <hr>
         <div id="guestButtons">
             <button onclick="openAuthModal('create')">Sign Up</button>
             <button onclick="openAuthModal('login')">Log In</button>
@@ -118,14 +89,19 @@
     </div>
 </div>
 
+<div class="container" style="margin-top:20px;">
+    <h2>🛒 Azora Official AI Wardrobe Catalog</h2>
+    <div id="marketGrid" class="market-grid"></div>
+</div>
+
 <div class="footer-nav">
     <div>
         <span class="online-dot"></span>
         <span>Azora Core Engine Live</span>
     </div>
-    <div>
-        <button onclick="toggleSubsModal(true)">💎 Azora Members</button>
-        <button onclick="toggleMarketModal(true)">🛍️ Marketplace</button>
+    <div style="display:flex; gap:15px;">
+        <a href="appeal.html" style="color:#fff; text-decoration:none; font-size:13px;">⚖️ Submit Safety Appeal</a>
+        <span>Platform Security: Active</span>
     </div>
 </div>
 

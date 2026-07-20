@@ -83,28 +83,5 @@ function submitAppeal() {
     document.getElementById("appealText").value = "";
 }
 </script>
-<script>
-function submitAppeal() {
-    const username = document.getElementById("appealUsername").value.trim();
-    const appealText = document.getElementById("appealText").value.trim();
-
-    if (!username) {
-        alert("Please enter your username before submitting!");
-        return;
-    }
-
-    if (!appealText || appealText.length < 10) {
-        alert("Please write a detailed appeal before sending.");
-        return;
-    }
-
-    alert("✉️ Appeal successfully sent right to account: [System]. Please wait for automated decision array...");
-
-    // Simulate transmission directly to the "System" moderation queue
-    setTimeout(() => {
-        alert("🤖 [System Account Verdict Notification]\n\nYour appeal data has been verified. The moderation strike has been accepted and overturned! Your profile is safe.");
-    }, 2000);
-}
-</script>
 </body>
 </html>

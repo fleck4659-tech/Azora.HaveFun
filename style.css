@@ -194,3 +194,37 @@ input::placeholder {
     box-sizing: border-box;
     z-index: 5000;
 }
+/* Announcement Banner */
+
+#announcement-banner {
+    width: 100%;
+    background: #0077aa;
+    border: 2px solid white;
+    border-radius: 15px;
+    padding: 15px;
+    box-sizing: border-box;
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+#announcement-banner h2 {
+    margin-top: 0;
+    color: white;
+}
+
+#announcement-banner p {
+    margin-bottom: 0;
+    font-size: 16px;
+}
+
+
+/* Creation Date */
+
+#creation-date {
+    width: 100%;
+    text-align: center;
+    font-size: 14px;
+    color: white;
+    margin-bottom: 20px;
+    padding: 10px;
+}

@@ -523,23 +523,23 @@ basePart.Touched:Connect(function(otherPart) {
         }
 
         function executeCodeBlockAppend(blockType) {
-            const codeArea = document.getElementById("codeArea");
-            let generatedCode = "";
+    const codeArea = document.getElementById("codeArea");
+    let generatedCode = "";
 
-            if (blockType === 'spawnPart') {
-                generatedCode = `\n// Spawn Part block translated:\nconst workspace = Azora.Workspace;\nconst newPart = workspace.createPart();\nnewPart.position = Vector3(0, 5, 0);\nnewPart.size = Vector3(2, 2, 2);\n`;
-            } else if (blockType === 'changeColor') {
-                generatedCode = `\n// Change Color block translated:\nnewPart.color = Color3.fromRGB(30, 96, 255);\nnewPart.material = "Neon";\n`;
-            } else if (blockType === 'charService') {
-                generatedCode = `\n// Trigger Character Override block translated:\nAzora.BasicCharacterService.enable();\nAzora.BasicCharacterService.setTemplate(workspace.BasicCharacter);\n`;
-            }
+    if (blockType === 'spawnPart') {
+        generatedCode = `\n// Spawn Part block translated:\nconst workspace = Azora.Workspace;\nconst newPart = workspace.createPart();\nnewPart.position = new THREE.Vector3(0, 5, 0);\nnewPart.size = new THREE.Vector3(2, 2, 2);\n`;
+    } else if (blockType === 'changeColor') {
+        generatedCode = `\n// Change Color block translated:\nnewPart.color = new THREE.Color(0x1e60ff);\nnewPart.material = "Neon";\n`;
+    } else if (blockType === 'charService') {
+        generatedCode = `\n// Trigger Character Override block translated:\nAzora.BasicCharacterService.enable();\nAzora.BasicCharacterService.setTemplate(workspace.BasicCharacter);\n`;
+    }
 
-            if (codeArea) {
-                codeArea.value += generatedCode;
-                switchView('script');
-                alert("🎉 Arrow Friend translated your visual block into textual code successfully!");
-            }
-        }
+    if (codeArea) {
+        codeArea.value += generatedCode;
+        switchView('script');
+        alert("🎉 Arrow Friend translated your visual block into textual code successfully!");
+    }
+}
 
         // --- Arrow Friend Prompt and Text Area Auto-Resizer ---
         function autoExpandTextarea(element) {
