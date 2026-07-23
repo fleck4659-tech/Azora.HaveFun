@@ -31,252 +31,106 @@ document.body.appendChild(container);
 // Function to spawn a random word
 function spawnWord() {
     if (!fallingTextActive) return;
-    const word = document.createElement('div');
-    word.className = 'falling-word';
-    word.innerText = phrases[Math.floor(Math.random() * phrases.length)];
-    
-    word.style.left = Math.random() * 90 + 'vw';
-    word.style.top = '-50px'; // Start just above the screen
-    
-    container.appendChild(word);
-    
-    let currentTop = -50;
-    let currentRotation = 0;
-    const rotationDirection = Math.random() > 0.5 ? 1 : -1; 
 
-    const interval = setInterval(() => {
-        currentTop += fallSpeed;
-        currentRotation += rotationSpeed * rotationDirection;
-        
-        word.style.top = currentTop + 'px';
+    const word = document.createElement('div');
+    word.classList.add('falling-word');
+    word.innerText = phrases[Math.floor(Math.random() * phrases.length)];
+
+    const startX = Math.random() * (window.innerWidth - 100);
+    const fontSize = Math.random() * 16 + 16;
+    
+    word.style.left = startX + 'px';
+    word.style.top = '-50px';
+    word.style.fontSize = fontSize + 'px';
+
+    container.appendChild(word);
+
+    let currentY = -50;
+    let currentRotation = Math.random() * 360;
+    const rotSpeed = (Math.random() - 0.5) * rotationSpeed * 2;
+
+    function animate() {
+        if (!fallingTextActive) {
+            word.remove();
+            return;
+        }
+
+        currentY += fallSpeed;
+        currentRotation += rotSpeed;
+
+        word.style.top = currentY + 'px';
         word.style.transform = `rotate(${currentRotation}deg)`;
-        
-        if (currentTop > window.innerHeight) {
-            clearInterval(interval);
+
+        if (currentY < window.innerHeight) {
+            requestAnimationFrame(animate);
+        } else {
             word.remove();
         }
-    }, 20);
-}
-
-// Spawn a new word every 10.0 seconds
-function startFallingPhrases() {
-    if (spawnInterval) clearInterval(spawnInterval);
-    spawnInterval = setInterval(spawnWord, 10000);
-}
-startFallingPhrases();
-
-// --- Settings Logic ---
-function openSettings() {
-    document.getElementById("settingsOverlay").style.display = "flex";
-}
-function closeSettings() {
-    document.getElementById("settingsOverlay").style.display = "none";
-}
-function toggleFallingText() {
-    fallingTextActive = document.getElementById("fallingTextToggle").checked;
-    if (!fallingTextActive) {
-        container.innerHTML = ""; // instantly clear screen of phrases
-    }
-}
-function logoutUser() {
-    localStorage.removeItem("loggedIn");
-    localStorage.removeItem("azoraAccount");
-    alert("Logged out successfully.");
-    location.reload();
-}
-
-// --- Search Logic ---
-function openSearch() {
-    document.getElementById("searchOverlay").style.display = "flex";
-    document.getElementById("searchInput").focus();
-    performSearch();
-}
-function closeSearch() {
-    document.getElementById("searchOverlay").style.display = "none";
-}
-function setSearchTab(tab) {
-    currentSearchTab = tab;
-    document.getElementById("searchUsersTab").classList.toggle("active", tab === "users");
-    document.getElementById("searchGamesTab").classList.toggle("active", tab === "games");
-    document.getElementById("searchInput").placeholder = tab === "users" ? "Search usernames..." : "Search games...";
-    performSearch();
-}
-function performSearch() {
-    const query = document.getElementById("searchInput").value.trim().toLowerCase();
-    const resultsContainer = document.getElementById("searchResultsContainer");
-    resultsContainer.innerHTML = "";
-
-    // Load custom dynamic profiles from local storage to include newly made accounts in user searches!
-    let localUsers = [];
-    const localAcc = localStorage.getItem("azoraAccount");
-    if (localAcc) {
-        try {
-            const parsed = JSON.parse(localAcc);
-            localUsers.push({ username: parsed.username, profileLink: "#" });
-        } catch (e) {}
     }
 
-    const allUsers = [...database.users, ...localUsers];
-    // Remove duplicates from demo array
-    const uniqueUsers = Array.from(new Map(allUsers.map(item => [item.username.toLowerCase(), item])).values());
+    requestAnimationFrame(animate);
+}
 
-    let results = [];
-    if (currentSearchTab === "users") {
-        results = uniqueUsers.filter(u => u.username.toLowerCase().includes(query));
-    } else {
-        results = database.games.filter(g => g.title.toLowerCase().includes(query) || g.author.toLowerCase().includes(query));
+function startFallingText() {
+    if (!spawnInterval) {
+        spawnInterval = setInterval(spawnWord, 800);
     }
-
-    if (results.length === 0) {
-        resultsContainer.innerHTML = "<div class='no-results'>No results found.</div>";
-        return;
-    }
-
-    results.forEach(item => {
-        const row = document.createElement("div");
-        row.className = "search-result-item";
-        if (currentSearchTab === "users") {
-            row.innerHTML = `👤 <strong>${item.username}</strong> <a href="${item.profileLink}" class="search-action-btn">View</a>`;
-        } else {
-            row.innerHTML = `🎮 <strong>${item.title}</strong> <span class="creator-by">by ${item.author}</span> <a href="${item.link}" class="search-action-btn">Play</a>`;
-        }
-        resultsContainer.appendChild(row);
-    });
 }
 
-// --- Dropdown Socials logic ---
-let lockedOpen = false;
-function toggleDropdown() {
-    const menu = document.getElementById("socialDropdown");
-    lockedOpen = !lockedOpen;
-    menu.style.display = lockedOpen ? "block" : "none";
+function stopFallingText() {
+    clearInterval(spawnInterval);
+    spawnInterval = null;
+    container.innerHTML = '';
 }
 
-const dropdown = document.querySelector(".dropdown");
-if (dropdown) {
-    dropdown.addEventListener("mouseenter", function () {
-        if (!lockedOpen) {
-            document.getElementById("socialDropdown").style.display = "block";
-        }
-    });
+// ------------------------------------
+// Authentication & Account System Mode
+// ------------------------------------
+let isLoginMode = false;
 
-    dropdown.addEventListener("mouseleave", function () {
-        if (!lockedOpen) {
-            document.getElementById("socialDropdown").style.display = "none";
-        }
-    });
-}
-
-// --- Account Popup Modal Logic ---
 function openCreateAccount() {
-    document.getElementById("accountOverlay").style.display = "flex";
-    document.getElementById("popupTitle").innerHTML = "Join Azora";
+    isLoginMode = false;
+    document.getElementById("popupTitle").innerText = "Join Azora";
     document.getElementById("popupSubtitle").style.display = "block";
     document.getElementById("confirmPassword").style.display = "block";
     document.getElementById("email").style.display = "block";
-    document.querySelectorAll("#accountOverlay .checkbox").forEach(el => el.style.display = "block");
-    document.getElementById("mainButton").innerHTML = "Create Account";
-    document.getElementById("switchMode").innerHTML = "Log In";
-    document.querySelector(".popup p").childNodes[0].textContent = "Already have an account? ";
+    document.querySelector(".checkbox").style.display = "flex";
+    document.getElementById("accountSubmitBtn").innerText = "Create Account";
+    document.getElementById("switchText").innerText = "Already have an account?";
+    document.getElementById("switchLink").innerText = "Log In";
+    document.getElementById("accountError").innerText = "";
+    document.getElementById("accountOverlay").style.display = "flex";
 }
 
 function openLogin() {
-    document.getElementById("accountOverlay").style.display = "flex";
-    document.getElementById("popupTitle").innerHTML = "Welcome Back!";
+    isLoginMode = true;
+    document.getElementById("popupTitle").innerText = "Log In to Azora";
     document.getElementById("popupSubtitle").style.display = "none";
     document.getElementById("confirmPassword").style.display = "none";
     document.getElementById("email").style.display = "none";
-    document.querySelectorAll("#accountOverlay .checkbox").forEach(el => el.style.display = "none");
-    document.getElementById("mainButton").innerHTML = "Log In";
-    document.getElementById("switchMode").innerHTML = "Create Account";
-    document.querySelector(".popup p").childNodes[0].textContent = "Don't have an account? ";
+    document.querySelector(".checkbox").style.display = "none";
+    document.getElementById("accountSubmitBtn").innerText = "Log In";
+    document.getElementById("switchText").innerText = "Don't have an account?";
+    document.getElementById("switchLink").innerText = "Sign Up";
+    document.getElementById("accountError").innerText = "";
+    document.getElementById("accountOverlay").style.display = "flex";
 }
 
-function createAccount() {
-    const username = document.getElementById("username").value.trim();
-    const password = document.getElementById("password").value;
-
-    if (!username || !password) {
-        alert("Please fill out all required fields!");
-        return;
-    }
-
-    // Default character customization template matching the 6-joint setup
-    const account = {
-        username: username,
-        password: password,
-        avatar: {
-            head: "#ffcc00",
-            torso: "#1e60ff",
-            leftArm: "#ffcc00",
-            rightArm: "#ffcc00",
-            leftLeg: "#00ebd4",
-            rightLeg: "#00ebd4",
-            face: "default"
-        }
-    };
-
-    localStorage.setItem("azoraAccount", JSON.stringify(account));
-    localStorage.setItem("loggedIn", "true");
-
-    alert("🎉 Welcome to Azora, " + username + "!");
-    location.reload(); 
-}
-
-// Attach main account modal button action
-document.getElementById("mainButton").addEventListener("click", function () {
-    if (this.innerHTML === "Create Account") {
-        createAccount();
-    } else {
-        const username = document.getElementById("username").value.trim();
-        if (username) {
-            localStorage.setItem("loggedIn", "true");
-            alert("✨ Welcome back, " + username + "!");
-            location.reload();
-        }
-    }
-});
-
-// Switch Mode Toggle link inside the popup
-document.getElementById("switchMode").addEventListener("click", function (e) {
+function toggleAccountMode(e) {
     e.preventDefault();
-    if (this.innerHTML === "Log In") {
+    if (isLoginMode) {
+        openCreateAccount();
+    } else {
         openLogin();
-    } else {
-        openCreateAccount();
-    }
-});
-
-// Close popups when clicking outside the box
-document.querySelectorAll(".overlay").forEach(overlay => {
-    overlay.addEventListener("click", function (e) {
-        if (e.target === this) {
-            this.style.display = "none";
-        }
-    });
-});
-
-// --- Creator site handling ---
-function handleCreateClick() {
-    const loggedIn = localStorage.getItem("loggedIn");
-    if (loggedIn === "true") {
-        window.open("creator.html", "_blank");
-    } else {
-        alert("Please sign up first to access the Creator Studio!");
-        openCreateAccount();
     }
 }
 
-// --- BasicCharacterService toggle ---
-function toggleCharacterService() {
-    const isChecked = document.getElementById("charServiceToggle").checked;
-    localStorage.setItem("charServiceEnabled", isChecked);
-    alert(`BasicCharacterService is now ${isChecked ? "ENABLED" : "DISABLED"}!`);
+function closeAccountModal() {
+    document.getElementById("accountOverlay").style.display = "none";
 }
 
-// --- TOS Modal Toggle Logic ---
-function openTOS(event) {
-    event.preventDefault();
+function openTOS(e) {
+    e.preventDefault();
     document.getElementById("tosOverlay").style.display = "flex";
 }
 
@@ -284,187 +138,248 @@ function closeTOS() {
     document.getElementById("tosOverlay").style.display = "none";
 }
 
-// --- 3D Avatar Global Variables ---
+function handleAccountSubmit() {
+    const user = document.getElementById("username").value.trim();
+    const pass = document.getElementById("password").value;
+    const confirmPass = document.getElementById("confirmPassword").value;
+    const tos = document.getElementById("tosCheckbox").checked;
+    const err = document.getElementById("accountError");
+
+    if (!user || !pass) {
+        err.innerText = "Please fill in all required fields.";
+        return;
+    }
+
+    if (!isLoginMode) {
+        if (pass !== confirmPass) {
+            err.innerText = "Passwords do not match.";
+            return;
+        }
+        if (!tos) {
+            err.innerText = "You must agree to the Terms of Service.";
+            return;
+        }
+
+        // Store account mock details
+        const accountData = {
+            username: user,
+            avatar: { head: "#ffcc00", torso: "#1e60ff", leftArm: "#ffcc00", rightArm: "#ffcc00", leftLeg: "#00ebd4", rightLeg: "#00ebd4" }
+        };
+        localStorage.setItem("azoraAccount", JSON.stringify(accountData));
+        localStorage.setItem("loggedIn", "true");
+    } else {
+        localStorage.setItem("loggedIn", "true");
+    }
+
+    closeAccountModal();
+    location.reload();
+}
+
+function handleLogout() {
+    localStorage.removeItem("loggedIn");
+    location.reload();
+}
+
+// ------------------------------------
+// Social Dropdown & Developer Settings
+// ------------------------------------
+function toggleDropdown() {
+    document.getElementById("socialDropdown").classList.toggle("show");
+}
+
+window.onclick = function(event) {
+    if (!event.target.matches('.dropbtn')) {
+        const dropdowns = document.getElementsByClassName("dropdown-content");
+        for (let i = 0; i < dropdowns.length; i++) {
+            const openDropdown = dropdowns[i];
+            if (openDropdown.classList.contains('show')) {
+                openDropdown.classList.remove('show');
+            }
+        }
+    }
+}
+
+function toggleCharacterService() {
+    const toggle = document.getElementById("charServiceToggle");
+    localStorage.setItem("charServiceEnabled", toggle.checked);
+    alert(toggle.checked ? "BasicCharacterService Enabled!" : "BasicCharacterService Disabled!");
+}
+
+function handleCreateClick() {
+    if (window.innerWidth <= 1024) {
+        window.location.href = "creator.html";
+    } else {
+        window.open("creator.html", "_blank");
+    }
+}
+
+// ------------------------------------
+// Search Modal System
+// ------------------------------------
+function openSearchModal() {
+    document.getElementById("searchOverlay").style.display = "flex";
+    filterSearchResults();
+}
+
+function closeSearchModal() {
+    document.getElementById("searchOverlay").style.display = "none";
+}
+
+function switchSearchTab(tab) {
+    currentSearchTab = tab;
+    document.getElementById("tabUsers").classList.toggle("active", tab === 'users');
+    document.getElementById("tabGames").classList.toggle("active", tab === 'games');
+    filterSearchResults();
+}
+
+function filterSearchResults() {
+    const query = document.getElementById("searchInput").value.toLowerCase();
+    const resultsContainer = document.getElementById("searchResults");
+    resultsContainer.innerHTML = "";
+
+    const items = database[currentSearchTab];
+    const filtered = items.filter(item => {
+        const title = item.username || item.title;
+        return title.toLowerCase().includes(query);
+    });
+
+    if (filtered.length === 0) {
+        resultsContainer.innerHTML = `<div class="search-result-item">No ${currentSearchTab} found.</div>`;
+        return;
+    }
+
+    filtered.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "search-result-item";
+        if (currentSearchTab === "users") {
+            div.innerHTML = `<span>👤 <strong>${item.username}</strong></span><a href="${item.profileLink}" target="_blank">View Profile</a>`;
+        } else {
+            div.innerHTML = `<span>🎮 <strong>${item.title}</strong> <small>by ${item.author}</small></span><a href="${item.link}">Play</a>`;
+        }
+        resultsContainer.appendChild(div);
+    });
+}
+
+// ------------------------------------
+// Settings Modal System
+// ------------------------------------
+function openSettingsModal() {
+    document.getElementById("settingsOverlay").style.display = "flex";
+}
+
+function closeSettingsModal() {
+    document.getElementById("settingsOverlay").style.display = "none";
+}
+
+function toggleFallingTextSetting() {
+    const enabled = document.getElementById("fallingTextToggle").checked;
+    fallingTextActive = enabled;
+    if (enabled) {
+        startFallingText();
+    } else {
+        stopFallingText();
+    }
+}
+
+// ------------------------------------
+// 3D Avatar Customizer Studio (Three.js)
+// ------------------------------------
 let scene, camera, renderer;
-let headMesh, torsoMesh, leftArmMesh, rightArmMesh, leftLegMesh, rightLegMesh;
+let avatarParts = {};
+
+function openAvatarCustomizer() {
+    const studio = document.getElementById("avatarStudio");
+    studio.style.display = studio.style.display === "none" ? "block" : "none";
+
+    if (studio.style.display === "block" && !scene) {
+        init3DAvatar();
+    }
+}
 
 function init3DAvatar() {
-    const container = document.getElementById("avatar3d-canvas");
-    if (!container) return;
-
+    const container = document.getElementById("avatarCanvasContainer");
+    
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
-    camera.position.set(0, 1.3, 4.2);
+    camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+    camera.position.set(0, 1, 8);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setSize(300, 300);
     container.appendChild(renderer.domElement);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-    scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
-    directionalLight.position.set(5, 10, 7);
-    scene.add(directionalLight);
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(2, 4, 5);
+    scene.add(light);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
-    const characterGroup = new THREE.Group();
+    // Create Blocky Character
+    const headGeo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+    const torsoGeo = new THREE.BoxGeometry(1.4, 1.8, 0.8);
+    const limbGeo = new THREE.BoxGeometry(0.6, 1.8, 0.6);
 
-    const headGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
-    const headMat = new THREE.MeshLambertMaterial({ color: 0xffcc00 });
-    headMesh = new THREE.Mesh(headGeo, headMat);
-    headMesh.position.y = 1.1;
-    characterGroup.add(headMesh);
+    avatarParts.head = new THREE.Mesh(headGeo, new THREE.MeshLambertMaterial({ color: 0xffcc00 }));
+    avatarParts.head.position.y = 1.5;
 
-    const torsoGeo = new THREE.BoxGeometry(0.8, 1.0, 0.4);
-    const torsoMat = new THREE.MeshLambertMaterial({ color: 0x1e60ff });
-    torsoMesh = new THREE.Mesh(torsoGeo, torsoMat);
-    torsoMesh.position.y = 0.3;
-    characterGroup.add(torsoMesh);
+    avatarParts.torso = new THREE.Mesh(torsoGeo, new THREE.MeshLambertMaterial({ color: 0x1e60ff }));
+    avatarParts.torso.position.y = 0;
 
-    const armGeo = new THREE.BoxGeometry(0.35, 1.0, 0.35);
-    const armMat = new THREE.MeshLambertMaterial({ color: 0xffcc00 });
+    avatarParts.leftArm = new THREE.Mesh(limbGeo, new THREE.MeshLambertMaterial({ color: 0xffcc00 }));
+    avatarParts.leftArm.position.set(-1.1, 0, 0);
 
-    leftArmMesh = new THREE.Mesh(armGeo, armMat);
-    leftArmMesh.position.set(-0.6, 0.3, 0);
-    characterGroup.add(leftArmMesh);
+    avatarParts.rightArm = new THREE.Mesh(limbGeo, new THREE.MeshLambertMaterial({ color: 0xffcc00 }));
+    avatarParts.rightArm.position.set(1.1, 0, 0);
 
-    rightArmMesh = new THREE.Mesh(armGeo, armMat);
-    rightArmMesh.position.set(0.6, 0.3, 0);
-    characterGroup.add(rightArmMesh);
+    avatarParts.leftLeg = new THREE.Mesh(limbGeo, new THREE.MeshLambertMaterial({ color: 0x00ebd4 }));
+    avatarParts.leftLeg.position.set(-0.4, -1.8, 0);
 
-    const legGeo = new THREE.BoxGeometry(0.35, 1.0, 0.35);
-    const legMat = new THREE.MeshLambertMaterial({ color: 0x00ebd4 });
+    avatarParts.rightLeg = new THREE.Mesh(limbGeo, new THREE.MeshLambertMaterial({ color: 0x00ebd4 }));
+    avatarParts.rightLeg.position.set(0.4, -1.8, 0);
 
-    leftLegMesh = new THREE.Mesh(legGeo, legMat);
-    leftLegMesh.position.set(-0.2, -0.7, 0);
-    characterGroup.add(leftLegMesh);
-
-    rightLegMesh = new THREE.Mesh(legGeo, legMat);
-    rightLegMesh.position.set(0.2, -0.7, 0);
-    characterGroup.add(rightLegMesh);
-
-    scene.add(characterGroup);
+    const avatarGroup = new THREE.Group();
+    Object.values(avatarParts).forEach(part => avatarGroup.add(part));
+    scene.add(avatarGroup);
 
     function animate() {
         requestAnimationFrame(animate);
-        characterGroup.rotation.y += 0.008;
+        avatarGroup.rotation.y += 0.01;
         renderer.render(scene, camera);
     }
     animate();
 }
 
-// --- Dynamic Color Moderation Rules ---
-const RESTRICTED_COLORS = {
-    white: ["#ffffff", "#f0f0f0", "#e6e6e6"],
-    red: ["#ff0000", "#e60000", "#cc0000"],
-    blue: ["#0000ff", "#0000e6", "#0000cc"]
-};
-
-function moderateCharacterColors(head, torso, leftArm, rightArm, leftLeg, rightLeg) {
-    const cHead = head.toLowerCase();
-    const cTorso = torso.toLowerCase();
-    const cLeftArm = leftArm.toLowerCase();
-    const cRightArm = rightArm.toLowerCase();
-    const cLeftLeg = leftLeg.toLowerCase();
-    const cRightLeg = rightLeg.toLowerCase();
-
-    let safeTorso = cTorso;
-    let moderated = false;
-
-    for (const colorGroup in RESTRICTED_COLORS) {
-        const restrictedList = RESTRICTED_COLORS[colorGroup];
-        if (
-            restrictedList.includes(cHead) && 
-            restrictedList.includes(cTorso) && 
-            restrictedList.includes(cLeftArm) &&
-            restrictedList.includes(cRightArm) &&
-            restrictedList.includes(cLeftLeg) &&
-            restrictedList.includes(cRightLeg)
-        ) {
-            safeTorso = "#1e293b"; 
-            moderated = true;
-            break;
-        }
-    }
-
-    return {
-        head: cHead,
-        torso: safeTorso,
-        leftArm: cLeftArm,
-        rightArm: cRightArm,
-        leftLeg: cLeftLeg,
-        rightLeg: cRightLeg,
-        wasModerated: moderated
-    };
-}
-
 function updateAvatarColors() {
-    const rawHead = document.getElementById("colorHead").value;
-    const rawTorso = document.getElementById("colorTorso").value;
-    const rawLeftArm = document.getElementById("colorLeftArm").value;
-    const rawRightArm = document.getElementById("colorRightArm").value;
-    const rawLeftLeg = document.getElementById("colorLeftLeg").value;
-    const rawRightLeg = document.getElementById("colorRightLeg").value;
-
-    const validated = moderateCharacterColors(rawHead, rawTorso, rawLeftArm, rawRightArm, rawLeftLeg, rawRightLeg);
-
-    headMesh.material.color.set(validated.head);
-    torsoMesh.material.color.set(validated.torso);
-    leftArmMesh.material.color.set(validated.leftArm);
-    rightArmMesh.material.color.set(validated.rightArm);
-    leftLegMesh.material.color.set(validated.leftLeg);
-    rightLegMesh.material.color.set(validated.rightLeg);
-
-    const warning = document.getElementById("modWarning");
-    if (validated.wasModerated) {
-        warning.style.display = "block";
-    } else {
-        warning.style.display = "none";
-    }
+    if (!avatarParts.head) return;
+    avatarParts.head.material.color.set(document.getElementById("colorHead").value);
+    avatarParts.torso.material.color.set(document.getElementById("colorTorso").value);
+    avatarParts.leftArm.material.color.set(document.getElementById("colorLeftArm").value);
+    avatarParts.rightArm.material.color.set(document.getElementById("colorRightArm").value);
+    avatarParts.leftLeg.material.color.set(document.getElementById("colorLeftLeg").value);
+    avatarParts.rightLeg.material.color.set(document.getElementById("colorRightLeg").value);
 }
 
-function saveAvatar() {
-    const account = JSON.parse(localStorage.getItem("azoraAccount"));
-    if (!account) {
-        alert("Please log in or create an account to save your custom 3D avatar!");
-        return;
-    }
-
-    const validated = moderateCharacterColors(
-        document.getElementById("colorHead").value,
-        document.getElementById("colorTorso").value,
-        document.getElementById("colorLeftArm").value,
-        document.getElementById("colorRightArm").value,
-        document.getElementById("colorLeftLeg").value,
-        document.getElementById("colorRightLeg").value
-    );
-
+function saveAvatarState() {
+    const account = JSON.parse(localStorage.getItem("azoraAccount")) || {};
     account.avatar = {
-        head: validated.head,
-        torso: validated.torso,
-        leftArm: validated.leftArm,
-        rightArm: validated.rightArm,
-        leftLeg: validated.leftLeg,
-        rightLeg: validated.rightLeg,
-        face: "default"
+        head: document.getElementById("colorHead").value,
+        torso: document.getElementById("colorTorso").value,
+        leftArm: document.getElementById("colorLeftArm").value,
+        rightArm: document.getElementById("colorRightArm").value,
+        leftLeg: document.getElementById("colorLeftLeg").value,
+        rightLeg: document.getElementById("colorRightLeg").value
     };
-
     localStorage.setItem("azoraAccount", JSON.stringify(account));
-    alert("3D Avatar saved successfully to your Azora account!");
+    alert("Avatar colors saved successfully!");
 }
 
-// --- App Start ---
-window.addEventListener("DOMContentLoaded", () => {
-    init3DAvatar();
-    
+// ------------------------------------
+// Initialization
+// ------------------------------------
+document.addEventListener("DOMContentLoaded", () => {
+    startFallingText();
+
+    // Check if user is logged in & load state
     const loggedIn = localStorage.getItem("loggedIn");
-    const introOverlay = document.getElementById("introOverlay");
-
     if (loggedIn === "true") {
-        // Skip intro entirely if already logged in
-        if (introOverlay) {
-            introOverlay.style.display = "none";
-        }
-
         const account = JSON.parse(localStorage.getItem("azoraAccount"));
         if (account) {
             document.getElementById("guestButtons").style.display = "none";

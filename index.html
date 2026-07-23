@@ -10,12 +10,14 @@
 </head>
 
 <body>
+
 <div id="introOverlay" class="intro-curtain">
     <div class="intro-content">
         <h2 class="text-welcome">Welcome to</h2>
         <h1 class="text-azora">Azora</h1>
     </div>
 </div>
+
 <div id="accountOverlay" class="overlay" style="display:none;">
     <div class="popup">
         <img src="logo.jpg" class="popupLogo" alt="Azora Logo">
@@ -36,40 +38,32 @@
           I agree to the <a href="#" onclick="openTOS(event)" style="color: #1e60ff; text-decoration: underline;">Terms of Service</a>
         </label>
 
-        <label class="checkbox">
-            <input type="checkbox"> I agree to follow the Community Rules
-        </label>
+        <p id="accountError" class="error-msg"></p>
 
-        <button id="mainButton">Create Account</button>
+        <button id="accountSubmitBtn" onclick="handleAccountSubmit()">Create Account</button>
 
-        <p>
-            Already have an account? 
-            <a href="#" id="switchMode">Log In</a>
-        </p>
+        <div class="account-switch">
+            <span id="switchText">Already have an account?</span>
+            <a href="#" id="switchLink" onclick="toggleAccountMode(event)">Log In</a>
+        </div>
+
+        <p class="closePopup" onclick="closeAccountModal()">Close</p>
     </div>
 </div>
 
 <div id="tosOverlay" class="overlay" style="display:none;">
     <div class="popup tos-popup">
-        <h2>Terms of Service</h2>
-        
+        <h1>Terms of Service</h1>
         <div class="tos-content">
-            <h3>1. Introduction</h3>
-            <p>Welcome to Azora! By accessing or using our platform, you agree to be bound by these Terms of Service (TOS). Please read them carefully.</p>
-            
-            <h3>2. Code of Conduct</h3>
-            <p>You agree not to exploit, hack, or disrupt Azora services. Toxic behavior, harassment, and cheating are strictly prohibited.</p>
-            
-            <h3>3. Avatar Customization & Moderation</h3>
-            <p>To keep Azora safe, fully naked single-color avatars (such as solid red, solid blue, or solid white) are not allowed. System safeguards may automatically apply a darker torso to your character to ensure appropriate attire.</p>
-            
-            <h3>4. Game Publishing</h3>
-            <p>By publishing games on Azora, you grant players the right to play and explore your creations. You retain the intellectual rights to your code, but must ensure all game content complies with our Community Rules.</p>
-            
-            <h3>5. Account Data</h3>
-            <p>Your account information is stored locally on your device. Azora is not responsible for data loss caused by clearing browser cookies or local storage.</p>
+            <h3>1. Acceptance of Terms</h3>
+            <p>By creating an account or using Azora, you agree to follow these rules and guidelines.</p>
+            <h3>2. Community & Behavior</h3>
+            <p>Be respectful to all creators and players. Bullying, harassment, or offensive content will result in moderation actions.</p>
+            <h3>3. Games & Creations</h3>
+            <p>You own your creations, but you grant Azora permission to display and render them within the platform.</p>
+            <h3>4. Account Safety</h3>
+            <p>Keep your password secure. Azora staff will never ask for your password.</p>
         </div>
-
         <button onclick="closeTOS()">Close & Return</button>
     </div>
 </div>
@@ -78,126 +72,97 @@
     <div class="popup search-popup">
         <h2>🔍 Search Azora</h2>
         <div class="search-tabs">
-            <button id="searchUsersTab" class="tab-btn active" onclick="setSearchTab('users')">Users</button>
-            <button id="searchGamesTab" class="tab-btn" onclick="setSearchTab('games')">Games</button>
+            <button id="tabUsers" class="tab-btn active" onclick="switchSearchTab('users')">Users</button>
+            <button id="tabGames" class="tab-btn" onclick="switchSearchTab('games')">Games</button>
         </div>
-        <input id="searchInput" type="text" placeholder="Search usernames..." oninput="performSearch()">
         
-        <div class="search-results" id="searchResultsContainer">
+        <input id="searchInput" type="text" placeholder="Search..." oninput="filterSearchResults()">
+        
+        <div id="searchResults" class="search-results">
             </div>
-        <button onclick="closeSearch()">Close</button>
+
+        <button class="close-btn" onclick="closeSearchModal()">Close</button>
     </div>
 </div>
 
 <div id="settingsOverlay" class="overlay" style="display:none;">
     <div class="popup settings-popup">
         <h2>⚙️ Settings</h2>
-        <div style="text-align: left; margin: 15px 0;">
-            <label style="color: #1e60ff; font-weight: bold; display: block; margin-bottom: 5px;">Visual Effects</label>
-            <label class="checkbox" style="color: #333 !important;">
-                <input type="checkbox" id="fallingTextToggle" checked onchange="toggleFallingText()"> Enable Falling Phrases
+        
+        <div class="setting-row">
+            <span>Falling Text Effects</span>
+            <label class="switch">
+                <input type="checkbox" id="fallingTextToggle" checked onchange="toggleFallingTextSetting()">
+                <span class="slider"></span>
             </label>
         </div>
-        <hr>
-        <button onclick="logoutUser()" style="background: #ff3b30; color: #ffffff;">Log Out</button>
-        <button onclick="closeSettings()">Close</button>
+
+        <button class="close-btn" onclick="closeSettingsModal()">Save & Close</button>
     </div>
 </div>
 
-<div id="serverMessage" class="server-message" style="display:none;">
-    ⚠️ The website is currently experiencing heavy traffic.
-    <br>
-    Please try again in 10 minutes to 1 hour.
-    <br><br>
-    We apologize for the inconvenience and appreciate your patience.
-</div>
-
-<div class="topbar">
-    <a href="https://www.youtube.com/@Official_Azora" target="_blank">
-        <img src="logo.jpg" alt="Azora Logo" class="logo">
-    </a>
-
-    <h2>Azora</h2>
-
-    <div class="topbar-right">
-        <div class="currency-display">
-            🪙 AzoraCoins: <span id="bucks">0</span>
+<header>
+    <h1>Azora.HaveFun</h1>
+    
+    <div class="auth-buttons">
+        <div id="guestButtons">
+            <button onclick="openCreateAccount()">Create Account</button>
+            <button onclick="openLogin()">Log In</button>
         </div>
+
+        <div id="userPanel" style="display: none; align-items: center; gap: 10px;">
+            <button id="profileButton" onclick="openAvatarCustomizer()">👤 Profile</button>
+            <button onclick="handleLogout()" class="logout-btn">Log Out</button>
+        </div>
+
+        <button onclick="openSearchModal()" style="padding: 10px 14px;">🔍</button>
+        <button onclick="openSettingsModal()" style="padding: 10px 14px;">⚙️</button>
+    </div>
+</header>
+
+<main>
+    <div class="hero">
+        <h2>Build. Play. Explore.</h2>
+        <p>Welcome to Azora, the place to create custom 3D games, customize unique blocky avatars, and hang out with friends!</p>
     </div>
 
-    <div id="guestButtons">
-        <button onclick="openCreateAccount()">Create Account</button>
-        <button onclick="openLogin()">Log In</button>
-    </div>
-
-    <div id="userPanel" style="display:none;">
-        <button id="searchButton" onclick="openSearch()">🔍 Search</button>
-        <button id="profileButton">👤 Username</button>
-        <button id="settingsButton" onclick="openSettings()">⚙️ Settings</button>
-    </div>
-</div>
-
-<div class="community-banner">
-    <p>🎉 Welcome to Azora! Build games. Customize avatars. Have fun.</p>
-</div>
-
-<div class="avatar-customizer-container">
-    <div id="avatar3d-canvas"></div>
-    <div class="customizer-controls">
-        <h3>My Avatar</h3>
+    <div id="avatarStudio" class="avatar-container" style="display:none;">
+        <h2>🎨 Avatar Customizer Studio</h2>
         
-        <label>Head:</label>
-        <input type="color" id="colorHead" value="#ffcc00" onchange="updateAvatarColors()">
+        <div class="avatar-editor-layout">
+            <div id="avatarCanvasContainer"></div>
 
-        <label>Torso:</label>
-        <input type="color" id="colorTorso" value="#1e60ff" onchange="updateAvatarColors()">
+            <div class="color-controls">
+                <h3>Color Palette</h3>
+                <div class="color-picker-group">
+                    <label>Head</label>
+                    <input type="color" id="colorHead" value="#ffcc00" onchange="updateAvatarColors()">
+                </div>
+                <div class="color-picker-group">
+                    <label>Torso</label>
+                    <input type="color" id="colorTorso" value="#1e60ff" onchange="updateAvatarColors()">
+                </div>
+                <div class="color-picker-group">
+                    <label>Left Arm</label>
+                    <input type="color" id="colorLeftArm" value="#ffcc00" onchange="updateAvatarColors()">
+                </div>
+                <div class="color-picker-group">
+                    <label>Right Arm</label>
+                    <input type="color" id="colorRightArm" value="#ffcc00" onchange="updateAvatarColors()">
+                </div>
+                <div class="color-picker-group">
+                    <label>Left Leg</label>
+                    <input type="color" id="colorLeftLeg" value="#00ebd4" onchange="updateAvatarColors()">
+                </div>
+                <div class="color-picker-group">
+                    <label>Right Leg</label>
+                    <input type="color" id="colorRightLeg" value="#00ebd4" onchange="updateAvatarColors()">
+                </div>
 
-        <div style="display: flex; gap: 8px;">
-            <div style="flex: 1;">
-                <label>Left Arm:</label>
-                <input type="color" id="colorLeftArm" value="#ffcc00" onchange="updateAvatarColors()">
-            </div>
-            <div style="flex: 1;">
-                <label>Right Arm:</label>
-                <input type="color" id="colorRightArm" value="#ffcc00" onchange="updateAvatarColors()">
+                <button onclick="saveAvatarState()" style="margin-top: 15px; width: 100%;">💾 Save Avatar</button>
             </div>
         </div>
-
-        <div style="display: flex; gap: 8px;">
-            <div style="flex: 1;">
-                <label>Left Leg:</label>
-                <input type="color" id="colorLeftLeg" value="#00ebd4" onchange="updateAvatarColors()">
-            </div>
-            <div style="flex: 1;">
-                <label>Right Leg:</label>
-                <input type="color" id="colorRightLeg" value="#00ebd4" onchange="updateAvatarColors()">
-            </div>
-        </div>
-
-        <button onclick="saveAvatar()">Save Avatar</button>
-        <p id="modWarning" style="color: #ff3b30; display: none; font-size: 11px; font-weight: bold; margin-top: 5px; text-align: center;">
-            ⚠️ Single-tone avatar restricted! Torso updated.
-        </p>
     </div>
-</div>
-
-<div class="main-content-layout">
-    <h1>Welcome to Azora</h1>
-    <p>Welcome to Azora! Build games, customize avatars, and have fun!</p>
-    <p><strong>Subscribers:</strong> 2.41K</p>
-    <hr>
-
-    <div class="news-card">
-        <h2>📢 Azora News</h2>
-        <p>
-            Welcome to the official Azora website! This website is currently under construction. More features will be added soon!
-        </p>
-        <h3>Coming Soon</h3>
-        <p>More website features are currently being developed.</p>
-    </div>
-
-    <h2>About Azora</h2>
-    <p>Azora is a community-focused platform where you can build games, customize avatars, make friends, and explore creations made by players around the world. We're committed to keeping Azora friendly, creative, and fun for everyone.</p>
 
     <div class="developer-setting-card">
         <div class="setting-info">
@@ -230,13 +195,13 @@
             🛠️ Create a Game
         </button>
     </div>
-</div>
+</main>
 
 <footer>
-    <p><strong>Creation date:</strong> June 26, 2026</p>
+    <a href="appeal.html" target="_blank">Banned or Terminated? Appeal Here</a>
 </footer>
 
 <script src="script.js"></script>
-<script src="script.js" defer></script>
 </body>
+</html>
 </html>
