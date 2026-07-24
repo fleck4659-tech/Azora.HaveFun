@@ -29,8 +29,18 @@
           I agree to the <a href="#" onclick="openTOS(event)" style="color:#1e60ff;text-decoration:underline;">Terms of Service</a>
         </label>
         <label class="checkbox"><input type="checkbox"> I agree to follow the Community Rules</label>
+        <p id="accountError" class="account-error" style="display:none;"></p>
         <button id="mainButton">Create Account</button>
-        <p>Already have an account? <a href="#" id="switchMode">Log In</a></p>
+
+        <div class="guest-divider">or</div>
+
+        <button type="button" id="guestContinueBtn" class="guest-main-btn" onclick="continueAsGuest()">
+            👤 Continue as Guest
+        </button>
+        <p class="guest-hint">No username · No password · No email<br>Avatar &amp; progress will <strong>not</strong> be saved</p>
+
+        <p>Already have an account? <a href="#" id="switchMode">Log In</a>
+           &nbsp;·&nbsp; <a href="#" onclick="continueAsGuest();return false;" style="color:#64748b;font-weight:bold;">Continue as Guest</a></p>
     </div>
 </div>
 
@@ -67,26 +77,65 @@
 </div>
 
 <div id="settingsOverlay" class="overlay" style="display:none;">
-    <div class="popup settings-popup">
-        <h2>⚙️ Settings</h2>
-        <div style="text-align:left;margin:15px 0;">
-            <label style="color:#1e60ff;font-weight:bold;display:block;margin-bottom:8px;">Theme</label>
-            <select id="themeSelect" onchange="changeTheme(this.value)" style="width:100%;padding:10px;border-radius:8px;border:2px solid #1e60ff;font-size:15px;">
-                <option value="auto">Automatic (Time-based)</option>
-                <option value="light">Light Mode</option>
-                <option value="dark">Dark Mode</option>
-            </select>
-            <small style="color:#666;display:block;margin-top:5px;">Default: Automatic (bright during day, dark at night)</small>
+    <div class="popup settings-popup" style="max-width:460px;text-align:left;">
+        <h2 style="text-align:center;">⚙️ Settings</h2>
+
+        <div class="settings-tabs">
+            <button type="button" class="settings-tab active" id="settingsTabBasic" onclick="switchSettingsTab('basic')">Basic Settings</button>
+            <button type="button" class="settings-tab" id="settingsTabSecurity" onclick="switchSettingsTab('security')">Security</button>
         </div>
-        <div style="text-align:left;margin:15px 0;">
-            <label style="color:#1e60ff;font-weight:bold;display:block;margin-bottom:5px;">Visual Effects</label>
-            <label class="checkbox" style="color:#333 !important;">
-                <input type="checkbox" id="fallingTextToggle" checked onchange="toggleFallingText()"> Enable Falling Phrases
-            </label>
+
+        <!-- BASIC SETTINGS -->
+        <div id="settingsPanelBasic" class="settings-panel">
+            <div class="settings-section">
+                <label class="settings-label">Theme</label>
+                <select id="themeSelect" onchange="changeTheme(this.value)" class="settings-input">
+                    <option value="auto">Automatic (Time-based)</option>
+                    <option value="light">Light Mode</option>
+                    <option value="dark">Dark Mode</option>
+                </select>
+                <small class="settings-hint">Default: Automatic (bright during day, dark at night)</small>
+            </div>
+            <div class="settings-section">
+                <label class="settings-label">Visual Effects</label>
+                <label class="checkbox" style="color:#333 !important;margin-top:6px;">
+                    <input type="checkbox" id="fallingTextToggle" checked onchange="toggleFallingText()"> Enable Falling Phrases
+                </label>
+            </div>
+            <div class="settings-section">
+                <label class="settings-label">Status</label>
+                <select id="statusSelect" onchange="setManualStatus(this.value)" class="settings-input">
+                    <option value="online">🟢 Online</option>
+                    <option value="afk">🟡 AFK</option>
+                    <option value="building">🔵 Building</option>
+                    <option value="playing">🟣 Playing</option>
+                    <option value="busy">🔴 Busy</option>
+                    <option value="offline">⚫ Offline</option>
+                </select>
+                <small class="settings-hint">Auto: AFK after 5 min idle, Offline after 10 min</small>
+            </div>
         </div>
-        <hr>
-        <button onclick="logoutUser()" style="background:#ff3b30;color:#ffffff;">Log Out</button>
-        <button onclick="closeSettings()">Close</button>
+
+        <!-- SECURITY -->
+        <div id="settingsPanelSecurity" class="settings-panel" style="display:none;">
+            <div class="settings-section">
+                <label class="settings-label">Change Password</label>
+                <input type="password" id="currentPassword" class="settings-input" placeholder="Current password">
+                <input type="password" id="newPassword" class="settings-input" placeholder="New password">
+                <input type="password" id="confirmNewPassword" class="settings-input" placeholder="Confirm new password">
+                <p id="securityError" class="account-error" style="display:none;margin-top:10px;"></p>
+                <p id="securitySuccess" class="security-success" style="display:none;margin-top:10px;"></p>
+                <button type="button" onclick="changePassword()" style="width:100%;margin-top:12px;background:linear-gradient(180deg,#3b82f6,#1e60ff);color:#fff;">Update Password</button>
+            </div>
+            <div class="settings-section">
+                <label class="settings-label">Account</label>
+                <p id="securityAccountInfo" class="settings-hint" style="margin-top:6px;">Sign in with a full account to manage security.</p>
+            </div>
+        </div>
+
+        <hr style="margin:18px 0;">
+        <button onclick="logoutUser()" style="background:#ff3b30;color:#ffffff;width:100%;">Log Out</button>
+        <button onclick="closeSettings()" style="width:100%;">Close</button>
     </div>
 </div>
 
@@ -105,14 +154,18 @@
         <div class="currency-display">🪙 AzoraCoins: <span id="bucks">0</span></div>
     </div>
     <button id="publicFeedButton" onclick="openPublicFeed()" style="margin:0;">🎮 Feed</button>
-    <div id="guestButtons">
-        <button onclick="openCreateAccount()">Create Account</button>
-        <button onclick="openLogin()">Log In</button>
+    <div id="guestButtons" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <button onclick="openCreateAccount()" style="margin:0;">Create Account</button>
+        <button onclick="openLogin()" style="margin:0;">Log In</button>
+        <button type="button" id="topbarGuestBtn" onclick="continueAsGuest()" style="margin:0;background:linear-gradient(180deg,#64748b,#475569);color:#fff;border:2px solid #94a3b8;">Continue as Guest</button>
     </div>
     <div id="userPanel" style="display:none;">
         <button id="searchButton" onclick="openSearch()">🔍 Search</button>
         <button id="azafnButton" onclick="openAzaFn()">🤖 AzaFn</button>
         <button id="chatButton" onclick="openChatPanel()">💬 Chat</button>
+        <button id="notifButton" class="notif-bell-btn" onclick="toggleNotifPanel()">
+            🔔<span id="notifBadge" class="notif-badge" style="display:none;">0</span>
+        </button>
         <button id="profileButton" onclick="openMyProfile()">👤 Username</button>
         <button id="settingsButton" onclick="openSettings()">⚙️ Settings</button>
     </div>
@@ -138,7 +191,13 @@
             <div style="flex:1;"><label>Left Leg:</label><input type="color" id="colorLeftLeg" value="#00ebd4" onchange="updateAvatarColors()"></div>
             <div style="flex:1;"><label>Right Leg:</label><input type="color" id="colorRightLeg" value="#00ebd4" onchange="updateAvatarColors()"></div>
         </div>
-        <button onclick="saveAvatar()">Save Avatar</button>
+        <button onclick="saveAvatar()" id="saveAvatarBtn">Save Avatar</button>
+        <p id="guestAvatarLock" style="display:none;color:#ffcc00;font-size:12px;font-weight:bold;text-align:center;margin-top:8px;">
+            🔒 Log in or create an account to customize your avatar.<br>
+            <a href="#" onclick="openCreateAccount();return false;" style="color:#fff;text-decoration:underline;">Create Account</a>
+            &nbsp;·&nbsp;
+            <a href="#" onclick="openLogin();return false;" style="color:#fff;text-decoration:underline;">Log In</a>
+        </p>
         <p id="modWarning" style="color:#ff3b30;display:none;font-size:11px;font-weight:bold;margin-top:5px;text-align:center;">
             ⚠️ Single-tone avatar restricted! Torso updated.
         </p>
@@ -227,10 +286,17 @@
     <div class="popup profile-popup" style="max-width:420px;">
         <img src="logo.jpg" class="popupLogo" alt="Avatar" id="profileAvatarImg">
         <h2 id="profileUsername">Username</h2>
+        <div id="profileUserId" class="profile-user-id"></div>
+        <div id="profileStatus" class="profile-status"><span class="status-dot offline"></span> Offline</div>
+        <p id="profileBio" class="profile-bio"></p>
         <p id="profileStats" style="color:#666;font-size:14px;">0 Followers · 0 Following · 0 Friends</p>
-        <div id="profileActions" style="display:flex;flex-direction:column;gap:10px;margin-top:15px;">
-            <!-- Follow / Add Friend / Message buttons injected by JS -->
+        <div id="profileBioEdit" style="display:none;text-align:left;margin:12px 0;">
+            <label style="color:#1e60ff;font-weight:bold;font-size:13px;">Profile Description</label>
+            <textarea id="bioInput" maxlength="250" placeholder="Hi! I love making games and exploring Azora!" style="width:100%;min-height:70px;margin-top:6px;padding:10px;border-radius:10px;border:2px solid #1e60ff;font-size:14px;box-sizing:border-box;resize:vertical;"></textarea>
+            <small id="bioCount" style="color:#666;">0 / 250</small>
+            <button onclick="saveProfileBio()" style="width:100%;margin-top:8px;">Save Description</button>
         </div>
+        <div id="profileActions" style="display:flex;flex-direction:column;gap:10px;margin-top:15px;"></div>
         <button onclick="closeProfile()" style="margin-top:15px;">Close</button>
     </div>
 </div>
@@ -256,6 +322,19 @@
                 <input type="text" id="chatInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendChatMessage()">
                 <button onclick="sendChatMessage()">Send</button>
             </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Notifications Panel -->
+<div id="notifOverlay" class="overlay" style="display:none;">
+    <div class="popup" style="max-width:420px;text-align:left;">
+        <h2 style="text-align:center;">🔔 Notifications</h2>
+        <div id="notifList" class="notif-list"></div>
+        <div style="display:flex;gap:8px;margin-top:15px;">
+            <button onclick="markAllNotifsRead()" style="flex:1;">Mark all read</button>
+            <button onclick="closeNotifPanel()" style="flex:1;">Close</button>
         </div>
     </div>
 </div>

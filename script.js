@@ -68,6 +68,13 @@ startFallingPhrases();
 // --- Settings Logic ---
 function openSettings() {
     document.getElementById("settingsOverlay").style.display = "flex";
+    var me = typeof getMyUsername === "function" ? getMyUsername() : "";
+    var sel = document.getElementById("statusSelect");
+    if (sel && me && typeof getUserStatus === "function") {
+        sel.value = getUserStatus(me) || "online";
+    }
+    if (typeof switchSettingsTab === "function") switchSettingsTab("basic");
+    if (typeof refreshSecurityPanel === "function") refreshSecurityPanel();
 }
 function closeSettings() {
     document.getElementById("settingsOverlay").style.display = "none";
@@ -168,48 +175,82 @@ if (dropdown) {
 }
 
 // --- Account Popup Modal Logic ---
-function openCreateAccount() {
-    document.getElementById("accountOverlay").style.display = "flex";
-    document.getElementById("popupTitle").innerHTML = "Join Azora";
-    document.getElementById("popupSubtitle").style.display = "block";
-    document.getElementById("confirmPassword").style.display = "block";
-    document.getElementById("email").style.display = "block";
-    document.querySelectorAll("#accountOverlay .checkbox").forEach(el => el.style.display = "block");
-    document.getElementById("mainButton").innerHTML = "Create Account";
-    document.getElementById("switchMode").innerHTML = "Log In";
-    document.querySelector(".popup p").childNodes[0].textContent = "Already have an account? ";
+
+
+
+function ensureGuestButtonsVisible() {
+    var loggedIn = localStorage.getItem("loggedIn");
+    var gb = document.getElementById("guestButtons");
+    var up = document.getElementById("userPanel");
+    var guestBtn = document.getElementById("topbarGuestBtn");
+    if (loggedIn === "true" || loggedIn === "guest") {
+        if (gb) gb.style.setProperty("display", "none", "important");
+        if (up) up.style.setProperty("display", "flex", "important");
+    } else {
+        // Logged out → ALWAYS show Create Account, Log In, Continue as Guest
+        if (gb) gb.style.setProperty("display", "flex", "important");
+        if (up) up.style.setProperty("display", "none", "important");
+        if (guestBtn) {
+            guestBtn.style.setProperty("display", "inline-block", "important");
+            guestBtn.style.setProperty("visibility", "visible", "important");
+        }
+    }
 }
 
-function openLogin() {
-    document.getElementById("accountOverlay").style.display = "flex";
-    document.getElementById("popupTitle").innerHTML = "Welcome Back!";
-    document.getElementById("popupSubtitle").style.display = "none";
-    document.getElementById("confirmPassword").style.display = "none";
-    document.getElementById("email").style.display = "none";
-    document.querySelectorAll("#accountOverlay .checkbox").forEach(el => el.style.display = "none");
-    document.getElementById("mainButton").innerHTML = "Log In";
-    document.getElementById("switchMode").innerHTML = "Create Account";
-    document.querySelector(".popup p").childNodes[0].textContent = "Don't have an account? ";
+
+function getPublicUserId(username, accountHint) {
+    // 1) From account object if provided
+    if (accountHint && accountHint.userId) return accountHint.userId;
+    // 2) Current logged-in account
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+        if (acc.userId && (
+            (username && acc.username === username) ||
+            (acc.isGuest && (!username || username === "Guest" || username === ""))
+        )) {
+            return acc.userId;
+        }
+    } catch (e) {}
+    // 3) Registry lookup by username
+    try {
+        var registry = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+        if (username) {
+            for (var i = 0; i < registry.length; i++) {
+                if (registry[i].username === username) return registry[i].userId;
+            }
+        }
+    } catch (e) {}
+    return null;
 }
 
-function createAccount() {
-    const username = document.getElementById("username").value.trim();
-    const password = document.getElementById("password").value;
-
-    if (!username || !password) {
-        alert("Please fill out all required fields!");
+function setProfileUserIdDisplay(userId, isGuest) {
+    var el = document.getElementById("profileUserId");
+    if (!el) return;
+    if (!userId) {
+        el.textContent = "";
+        el.className = "profile-user-id";
+        el.style.display = "none";
         return;
     }
+    el.style.display = "block";
+    el.textContent = userId;
+    el.className = "profile-user-id " + (isGuest ? "guest" : "normal");
+}
 
-    // Assign unique user ID: Aza: 0, Aza: 1, Aza: 2, ...
+function continueAsGuest() {
+    var sessionId = "guest_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+
+    // Guests also get a public User ID (Aza: N)
     var registry = [];
     try { registry = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]"); } catch (e) {}
     var nextId = registry.length;
     var userId = "Aza: " + nextId;
 
-    const account = {
-        username: username,
-        password: password,
+    var account = {
+        isGuest: true,
+        username: "",
+        displayName: "Guest",
+        guestId: sessionId,
         userId: userId,
         avatar: {
             head: "#ffcc00",
@@ -224,15 +265,220 @@ function createAccount() {
 
     registry.push({
         userId: userId,
-        username: username,
+        username: "",
+        displayName: "Guest",
+        isGuest: true,
         createdAt: Date.now()
     });
     localStorage.setItem("azoraUserRegistry", JSON.stringify(registry));
     localStorage.setItem("azoraAccount", JSON.stringify(account));
-    localStorage.setItem("loggedIn", "true");
+    localStorage.setItem("loggedIn", "guest");
 
-    alert("🎉 Welcome to Azora, " + username + "!\nYour User ID is " + userId);
-    location.reload(); 
+    alert("Welcome, Guest!\n\nYour public User ID is " + userId + "\n\n• No username or password\n• Avatar cannot be saved\n• Progress is not saved\n\nCreate an account anytime to unlock everything.");
+    location.reload();
+}
+
+function openCreateAccount() {
+    if (typeof clearAccountError === "function") clearAccountError();
+    document.getElementById("accountOverlay").style.display = "flex";
+    document.getElementById("popupTitle").innerHTML = "Join Azora";
+    document.getElementById("popupSubtitle").style.display = "block";
+    document.getElementById("confirmPassword").style.display = "block";
+    document.getElementById("email").style.display = "block";
+    document.querySelectorAll("#accountOverlay .checkbox").forEach(el => el.style.display = "block");
+    document.getElementById("mainButton").innerHTML = "Create Account";
+    document.getElementById("switchMode").innerHTML = "Log In";
+    var switchP = document.querySelector("#accountOverlay .popup p:last-of-type");
+    if (switchP && switchP.childNodes[0]) switchP.childNodes[0].textContent = "Already have an account? ";
+    var gBtn = document.getElementById("guestContinueBtn");
+    if (gBtn) gBtn.style.display = "block";
+}
+
+function openLogin() {
+    if (typeof clearAccountError === "function") clearAccountError();
+    document.getElementById("accountOverlay").style.display = "flex";
+    document.getElementById("popupTitle").innerHTML = "Welcome Back!";
+    document.getElementById("popupSubtitle").style.display = "none";
+    document.getElementById("confirmPassword").style.display = "none";
+    document.getElementById("email").style.display = "none";
+    document.querySelectorAll("#accountOverlay .checkbox").forEach(el => el.style.display = "none");
+    document.getElementById("mainButton").innerHTML = "Log In";
+    document.getElementById("switchMode").innerHTML = "Create Account";
+    var switchP = document.querySelector("#accountOverlay .popup p:last-of-type");
+    if (switchP && switchP.childNodes[0]) switchP.childNodes[0].textContent = "Don't have an account? ";
+    // Keep Guest visible on login screen too
+    var gBtn = document.getElementById("guestContinueBtn");
+    if (gBtn) gBtn.style.display = "block";
+    var divider = document.querySelector(".guest-divider");
+    if (divider) divider.style.display = "block";
+    var hint = document.querySelector(".guest-hint");
+    if (hint) hint.style.display = "block";
+}
+
+function getSavedAccounts() {
+    try {
+        return JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+    } catch (e) {
+        return {};
+    }
+}
+
+function saveSavedAccounts(map) {
+    localStorage.setItem("azoraAccounts", JSON.stringify(map));
+}
+
+// Import single legacy account into multi-account store if needed
+function migrateLegacyAccount() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (!acc || !acc.username || acc.isGuest) return;
+        var map = getSavedAccounts();
+        if (!map[acc.username]) {
+            map[acc.username] = acc;
+            saveSavedAccounts(map);
+        }
+    } catch (e) {}
+}
+
+function setLoggedInAccount(account) {
+    // Persist full account + session flag so topbar switches after reload
+    localStorage.setItem("azoraAccount", JSON.stringify(account));
+    localStorage.setItem("loggedIn", "true");
+}
+
+function createAccount() {
+    if (typeof clearAccountError === "function") clearAccountError();
+    var username = document.getElementById("username").value.trim();
+    var password = document.getElementById("password").value;
+    var confirm = document.getElementById("confirmPassword").value;
+
+    if (!username || !password) {
+        alert("Please fill out username and password!");
+        return;
+    }
+    if (password !== confirm) {
+        alert("Passwords do not match!");
+        return;
+    }
+
+    migrateLegacyAccount();
+    var map = getSavedAccounts();
+    if (map[username]) {
+        alert("That username is already taken. Try another, or Log In.");
+        return;
+    }
+
+    // Assign unique public User ID
+    var registry = [];
+    try { registry = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]"); } catch (e) {}
+    var userId = "Aza: " + registry.length;
+
+    var account = {
+        username: username,
+        password: password,
+        userId: userId,
+        isGuest: false,
+        avatar: {
+            head: "#ffcc00",
+            torso: "#1e60ff",
+            leftArm: "#ffcc00",
+            rightArm: "#ffcc00",
+            leftLeg: "#00ebd4",
+            rightLeg: "#00ebd4",
+            face: "default"
+        }
+    };
+
+    map[username] = account;
+    saveSavedAccounts(map);
+
+    registry.push({
+        userId: userId,
+        username: username,
+        isGuest: false,
+        createdAt: Date.now()
+    });
+    localStorage.setItem("azoraUserRegistry", JSON.stringify(registry));
+
+    setLoggedInAccount(account);
+
+    alert("Welcome to Azora, " + username + "!\nYour User ID is " + userId + "\nYour account has been saved.");
+    location.reload();
+}
+
+function showAccountError(msg) {
+    var el = document.getElementById("accountError");
+    if (!el) {
+        alert(msg);
+        return;
+    }
+    el.textContent = msg;
+    el.style.display = "block";
+}
+
+function clearAccountError() {
+    var el = document.getElementById("accountError");
+    if (el) {
+        el.textContent = "";
+        el.style.display = "none";
+    }
+}
+
+function findAccountByUsername(username) {
+    var map = getSavedAccounts();
+    // Exact key first
+    if (map[username]) return map[username];
+    // Case-insensitive username match (password still exact)
+    var lower = username.toLowerCase();
+    var keys = Object.keys(map);
+    for (var i = 0; i < keys.length; i++) {
+        if (keys[i].toLowerCase() === lower) return map[keys[i]];
+    }
+    return null;
+}
+
+function loginAccount() {
+    clearAccountError();
+
+    var username = document.getElementById("username").value.trim();
+    // Do NOT trim password — must match 100% exactly as stored
+    var password = document.getElementById("password").value;
+
+    if (!username) {
+        showAccountError("Please enter your username.");
+        return;
+    }
+    if (password.length === 0) {
+        showAccountError("Please enter your password.");
+        return;
+    }
+
+    migrateLegacyAccount();
+    var account = findAccountByUsername(username);
+
+    if (!account) {
+        showAccountError("No account found with that username. Create an account first.");
+        return;
+    }
+
+    // 100% exact password match (case-sensitive, character-for-character)
+    var saved = account.password;
+    if (typeof saved !== "string" || saved !== password) {
+        showAccountError("The password is incorrect. Please type the correct password");
+        // Clear password field so they re-type
+        var pw = document.getElementById("password");
+        if (pw) {
+            pw.value = "";
+            pw.focus();
+        }
+        return;
+    }
+
+    // Password matched — restore full saved progress and log in
+    setLoggedInAccount(account);
+    clearAccountError();
+    alert("Welcome back, " + account.username + "!\nYour progress has been restored.");
+    location.reload();
 }
 
 // Attach main account modal button action
@@ -240,12 +486,7 @@ document.getElementById("mainButton").addEventListener("click", function () {
     if (this.innerHTML === "Create Account") {
         createAccount();
     } else {
-        const username = document.getElementById("username").value.trim();
-        if (username) {
-            localStorage.setItem("loggedIn", "true");
-            alert("✨ Welcome back, " + username + "!");
-            location.reload();
-        }
+        loginAccount();
     }
 });
 
@@ -273,6 +514,9 @@ function handleCreateClick() {
     const loggedIn = localStorage.getItem("loggedIn");
     if (loggedIn === "true") {
         window.open("creator.html", "_blank");
+    } else if (loggedIn === "guest") {
+        alert("Guests can't use Creator Studio. Create a free account first!");
+        openCreateAccount();
     } else {
         alert("Please sign up first to access the Creator Studio!");
         openCreateAccount();
@@ -409,7 +653,36 @@ function moderateCharacterColors(head, torso, leftArm, rightArm, leftLeg, rightL
     };
 }
 
+
+
+function applyGuestAvatarLock(locked) {
+    // locked = true when user is guest OR not logged in at all
+    var box = document.querySelector(".avatar-customizer-container");
+    var lockMsg = document.getElementById("guestAvatarLock");
+    var saveBtn = document.getElementById("saveAvatarBtn");
+    if (box) {
+        if (locked) box.classList.add("avatar-locked");
+        else box.classList.remove("avatar-locked");
+    }
+    if (lockMsg) lockMsg.style.display = locked ? "block" : "none";
+    if (saveBtn) saveBtn.style.display = locked ? "none" : "block";
+    ["colorHead","colorTorso","colorLeftArm","colorRightArm","colorLeftLeg","colorRightLeg"].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.disabled = !!locked;
+    });
+}
+
+function isAvatarUnlocked() {
+    return localStorage.getItem("loggedIn") === "true";
+}
+
+function refreshAvatarLock() {
+    // Only real accounts can customize; guests and logged-out users cannot
+    applyGuestAvatarLock(!isAvatarUnlocked());
+}
+
 function updateAvatarColors() {
+    if (localStorage.getItem("loggedIn") !== "true") return;
     const rawHead = document.getElementById("colorHead").value;
     const rawTorso = document.getElementById("colorTorso").value;
     const rawLeftArm = document.getElementById("colorLeftArm").value;
@@ -435,6 +708,11 @@ function updateAvatarColors() {
 }
 
 function saveAvatar() {
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("You need an account to customize or save avatars.\nCreate an account or log in to unlock this!");
+        openCreateAccount();
+        return;
+    }
     const account = JSON.parse(localStorage.getItem("azoraAccount"));
     if (!account) {
         alert("Please log in or create an account to save your custom 3D avatar!");
@@ -461,6 +739,14 @@ function saveAvatar() {
     };
 
     localStorage.setItem("azoraAccount", JSON.stringify(account));
+    // Keep multi-account store in sync so progress survives log out / log in
+    try {
+        if (account.username && !account.isGuest) {
+            var map = getSavedAccounts();
+            map[account.username] = account;
+            saveSavedAccounts(map);
+        }
+    } catch (e) {}
     alert("3D Avatar saved successfully to your Azora account!");
 }
 
@@ -519,7 +805,7 @@ window.addEventListener("DOMContentLoaded", function () {
     var splash = document.getElementById("introSplash");
     var loggedIn = localStorage.getItem("loggedIn");
 
-    if (loggedIn === "true") {
+    if (loggedIn === "true" || loggedIn === "guest") {
         if (splash) splash.style.display = "none";
     } else if (splash) {
         splash.style.display = "flex";
@@ -537,7 +823,10 @@ window.addEventListener("DOMContentLoaded", function () {
         }, 6400);
     }
 
-    if (loggedIn === "true") {
+    ensureGuestButtonsVisible();
+    if (typeof refreshAvatarLock === "function") refreshAvatarLock();
+
+    if (loggedIn === "true" || loggedIn === "guest") {
         try {
             var account = JSON.parse(localStorage.getItem("azoraAccount"));
             if (account) {
@@ -546,7 +835,16 @@ window.addEventListener("DOMContentLoaded", function () {
                 var pb = document.getElementById("profileButton");
                 if (gb) gb.style.display = "none";
                 if (up) up.style.display = "flex";
-                if (pb) pb.innerHTML = "👤 " + account.username;
+                if (pb) {
+                    if (account.isGuest || !account.username) {
+                        pb.innerHTML = "👤 Guest";
+                    } else {
+                        pb.innerHTML = "👤 " + account.username;
+                    }
+                }
+                // Only full accounts can customize avatars
+                refreshAvatarLock();
+
 
                 if (account.avatar) {
                     var map = {
@@ -584,6 +882,11 @@ let azaFnPendingDescription = "";
 let azaFnGames = [];
 
 function openAzaFn() {
+    if (localStorage.getItem("loggedIn") === "guest") {
+        alert("Guests can't use AzaFn. Create a free account to build games!");
+        openCreateAccount();
+        return;
+    }
     if (localStorage.getItem("loggedIn") !== "true") {
         alert("Please log in to use AzaFn-1.0!");
         openCreateAccount();
@@ -966,8 +1269,26 @@ let currentChatFriend = null;
 function getMyUsername() {
     try {
         var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+        if (acc.isGuest) return ""; // guests have no username
         return acc.username || "";
     } catch (e) { return ""; }
+}
+
+function getDisplayName() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+        if (acc.isGuest) return "Guest";
+        return acc.username || "Guest";
+    } catch (e) { return "Guest"; }
+}
+
+function isGuestSession() {
+    return localStorage.getItem("loggedIn") === "guest";
+}
+
+function isLoggedInAny() {
+    var v = localStorage.getItem("loggedIn");
+    return v === "true" || v === "guest";
 }
 
 function getSocialData() {
@@ -988,6 +1309,10 @@ function ensureUserSocial(data, username) {
 }
 
 function openMyProfile() {
+    if (isGuestSession()) {
+        openGuestProfile();
+        return;
+    }
     var me = getMyUsername();
     if (!me) {
         alert("Please log in first!");
@@ -997,14 +1322,62 @@ function openMyProfile() {
     openUserProfile(me);
 }
 
+function openGuestProfile() {
+    // Guests have no username — User ID is shown at username size
+    document.getElementById("profileUsername").textContent = "";
+    document.getElementById("profileUsername").style.display = "none";
+
+    var acc = {};
+    try { acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}"); } catch (e) {}
+    var uid = acc.userId || getPublicUserId("", acc) || "Aza: ?";
+    setProfileUserIdDisplay(uid, true);
+
+    var statusEl = document.getElementById("profileStatus");
+    if (statusEl) statusEl.innerHTML = '<span class="status-dot online"></span> Online';
+    var bioEl = document.getElementById("profileBio");
+    if (bioEl) {
+        bioEl.textContent = "Exploring Azora as a guest — no username.";
+        bioEl.style.display = "block";
+    }
+    var bioEdit = document.getElementById("profileBioEdit");
+    if (bioEdit) bioEdit.style.display = "none";
+    document.getElementById("profileStats").textContent = "Guest · Public ID only";
+    var actions = document.getElementById("profileActions");
+    actions.innerHTML =
+        '<p style="color:#666;font-size:14px;">Guests don\'t have usernames, followers, or friends. Their public User ID is shown above.</p>' +
+        '<button onclick="closeProfile(); openCreateAccount();" style="background:linear-gradient(180deg,#3b82f6,#1e60ff);color:#fff;">Create a real account</button>';
+    document.getElementById("profileOverlay").style.display = "flex";
+}
+
 function openUserProfile(username) {
     if (!username) return;
     var data = getSocialData();
     var u = ensureUserSocial(data, username);
-    // Persist if newly created
     saveSocialData(data);
 
     document.getElementById("profileUsername").textContent = username;
+    document.getElementById("profileUsername").style.display = "block";
+
+    // Public User ID (smaller, below username for normal accounts)
+    var pubId = getPublicUserId(username);
+    setProfileUserIdDisplay(pubId, false);
+
+    // Status (below username)
+    var st = getUserStatus(username);
+    var statusEl = document.getElementById("profileStatus");
+    if (statusEl) {
+        statusEl.innerHTML = '<span class="status-dot ' + st + '"></span> ' + statusLabel(st);
+    }
+
+    // Bio (below status)
+    var profiles = getProfileData();
+    var bio = (profiles[username] && profiles[username].bio) ? profiles[username].bio : "";
+    var bioEl = document.getElementById("profileBio");
+    if (bioEl) {
+        bioEl.textContent = bio || "";
+        bioEl.style.display = bio ? "block" : "none";
+    }
+
     document.getElementById("profileStats").textContent =
         (u.followers.length) + " Followers · " +
         (u.following.length) + " Following · " +
@@ -1014,6 +1387,18 @@ function openUserProfile(username) {
     actions.innerHTML = "";
     var me = getMyUsername();
     var loggedIn = localStorage.getItem("loggedIn") === "true";
+    var bioEdit = document.getElementById("profileBioEdit");
+
+    if (bioEdit) {
+        if (loggedIn && me === username) {
+            bioEdit.style.display = "block";
+            var bioInput = document.getElementById("bioInput");
+            bioInput.value = bio;
+            updateBioCount();
+        } else {
+            bioEdit.style.display = "none";
+        }
+    }
 
     if (!loggedIn) {
         actions.innerHTML = '<p style="color:#666;">Log in to follow or add friends.</p>';
@@ -1096,6 +1481,10 @@ function toggleFollow(username) {
         if (fIdx !== -1) theirData.followers.splice(fIdx, 1);
     }
     saveSocialData(data);
+    // Notify the followed user
+    if (myData.following.indexOf(username) !== -1) {
+        pushNotification(username, me + " followed you.", "follow");
+    }
     openUserProfile(username);
 }
 
@@ -1127,6 +1516,7 @@ function sendFriendRequest(username) {
 
     // For accept: when I view X and X.friendRequests includes me, I can accept.
     saveSocialData(data);
+    pushNotification(username, me + " sent you a friend request.", "friend");
     alert("Friend request sent to " + username + "!");
     openUserProfile(username);
 }
@@ -1156,6 +1546,11 @@ function acceptFriend(username) {
 
 // --- Chat ---
 function openChatPanel() {
+    if (localStorage.getItem("loggedIn") === "guest") {
+        alert("Guests can't use Chat. Create an account to add friends and message!");
+        openCreateAccount();
+        return;
+    }
     if (localStorage.getItem("loggedIn") !== "true") {
         alert("Please log in to use Chat!");
         openCreateAccount();
@@ -1307,7 +1702,20 @@ function performSearch() {
     });
 }
 
+window.ensureGuestButtonsVisible = ensureGuestButtonsVisible;
+window.getPublicUserId = getPublicUserId;
+window.setProfileUserIdDisplay = setProfileUserIdDisplay;
+window.createAccount = createAccount;
+window.loginAccount = loginAccount;
+window.getSavedAccounts = getSavedAccounts;
+window.continueAsGuest = continueAsGuest;
+window.applyGuestAvatarLock = applyGuestAvatarLock;
+window.refreshAvatarLock = refreshAvatarLock;
+window.isAvatarUnlocked = isAvatarUnlocked;
 window.openMyProfile = openMyProfile;
+window.openGuestProfile = openGuestProfile;
+window.isGuestSession = isGuestSession;
+window.getDisplayName = getDisplayName;
 window.openUserProfile = openUserProfile;
 window.closeProfile = closeProfile;
 window.toggleFollow = toggleFollow;
@@ -1317,3 +1725,435 @@ window.openChatPanel = openChatPanel;
 window.closeChatPanel = closeChatPanel;
 window.selectChatFriend = selectChatFriend;
 window.sendChatMessage = sendChatMessage;
+
+
+// ============================================================
+// Azora 3.9 — Profile Bio, Status, Notifications
+// ============================================================
+
+var STATUS_LABELS = {
+    online: "Online",
+    offline: "Offline",
+    afk: "AFK",
+    building: "Building",
+    playing: "Playing",
+    busy: "Busy"
+};
+
+var lastActivity = Date.now();
+var manualStatusOverride = null; // if set, auto-idle won't override until user goes idle again after choosing online
+var statusIdleTimer = null;
+
+function statusLabel(key) {
+    return STATUS_LABELS[key] || "Offline";
+}
+
+function getProfileData() {
+    try { return JSON.parse(localStorage.getItem("azoraProfiles") || "{}"); }
+    catch (e) { return {}; }
+}
+
+function saveProfileData(data) {
+    localStorage.setItem("azoraProfiles", JSON.stringify(data));
+}
+
+function getStatusData() {
+    try { return JSON.parse(localStorage.getItem("azoraStatuses") || "{}"); }
+    catch (e) { return {}; }
+}
+
+function saveStatusData(data) {
+    localStorage.setItem("azoraStatuses", JSON.stringify(data));
+}
+
+function getUserStatus(username) {
+    var data = getStatusData();
+    if (data[username] && data[username].status) return data[username].status;
+    return "offline";
+}
+
+function setUserStatus(username, status) {
+    var data = getStatusData();
+    data[username] = { status: status, updatedAt: Date.now() };
+    saveStatusData(data);
+}
+
+function updateBioCount() {
+    var input = document.getElementById("bioInput");
+    var count = document.getElementById("bioCount");
+    if (input && count) {
+        count.textContent = input.value.length + " / 250";
+    }
+}
+
+function saveProfileBio() {
+    var me = getMyUsername();
+    if (!me) return;
+    var input = document.getElementById("bioInput");
+    var bio = (input.value || "").trim().slice(0, 250);
+    var profiles = getProfileData();
+    if (!profiles[me]) profiles[me] = {};
+    profiles[me].bio = bio;
+    saveProfileData(profiles);
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+        if (acc.username === me) {
+            acc.bio = bio;
+            localStorage.setItem("azoraAccount", JSON.stringify(acc));
+            var map = getSavedAccounts();
+            if (map[me]) {
+                map[me].bio = bio;
+                saveSavedAccounts(map);
+            }
+        }
+    } catch (e) {}
+    alert("Profile description saved!");
+    openUserProfile(me);
+}
+
+function setManualStatus(value) {
+    var me = getMyUsername();
+    if (!me) return;
+    setUserStatus(me, value);
+    manualStatusOverride = value;
+    lastActivity = Date.now();
+    // If they pick online/building/playing/busy, treat as active
+    if (value !== "offline" && value !== "afk") {
+        lastActivity = Date.now();
+    }
+}
+
+function touchActivity() {
+    lastActivity = Date.now();
+    var me = getMyUsername();
+    if (!me) return;
+    var current = getUserStatus(me);
+    // Only auto-bump to online if currently offline/afk and no busy/building/playing override
+    if (current === "offline" || current === "afk") {
+        if (!manualStatusOverride || manualStatusOverride === "online" || manualStatusOverride === "offline" || manualStatusOverride === "afk") {
+            setUserStatus(me, "online");
+            manualStatusOverride = "online";
+            var sel = document.getElementById("statusSelect");
+            if (sel) sel.value = "online";
+        }
+    }
+}
+
+function checkIdleStatus() {
+    var me = getMyUsername();
+    if (!me || localStorage.getItem("loggedIn") !== "true") return;
+
+    var idleMs = Date.now() - lastActivity;
+    var current = getUserStatus(me);
+
+    // Don't auto-change busy / building / playing unless idle long enough for AFK/offline
+    // After 5 min → AFK (unless already offline)
+    // After 10 min → Offline
+    if (idleMs >= 10 * 60 * 1000) {
+        if (current !== "offline") {
+            setUserStatus(me, "offline");
+            manualStatusOverride = "offline";
+            var sel = document.getElementById("statusSelect");
+            if (sel) sel.value = "offline";
+        }
+    } else if (idleMs >= 5 * 60 * 1000) {
+        if (current !== "afk" && current !== "offline") {
+            setUserStatus(me, "afk");
+            var sel2 = document.getElementById("statusSelect");
+            if (sel2) sel2.value = "afk";
+        }
+    }
+}
+
+function initStatusSystem() {
+    ["mousemove", "keydown", "click", "scroll", "touchstart"].forEach(function (evt) {
+        document.addEventListener(evt, touchActivity, { passive: true });
+    });
+    setInterval(checkIdleStatus, 15000);
+
+    var me = getMyUsername();
+    if (me && localStorage.getItem("loggedIn") === "true") {
+        // Coming online on page load
+        var cur = getUserStatus(me);
+        if (cur === "offline" || cur === "afk" || !cur) {
+            setUserStatus(me, "online");
+        }
+        var sel = document.getElementById("statusSelect");
+        if (sel) sel.value = getUserStatus(me);
+    }
+}
+
+// --- Notifications ---
+function getNotifications(username) {
+    try {
+        var all = JSON.parse(localStorage.getItem("azoraNotifications") || "{}");
+        return all[username] || [];
+    } catch (e) { return []; }
+}
+
+function saveNotifications(username, list) {
+    var all = {};
+    try { all = JSON.parse(localStorage.getItem("azoraNotifications") || "{}"); } catch (e) {}
+    all[username] = list.slice(0, 50); // keep last 50
+    localStorage.setItem("azoraNotifications", JSON.stringify(all));
+}
+
+function pushNotification(toUsername, message, type) {
+    if (!toUsername) return;
+    var list = getNotifications(toUsername);
+    list.unshift({
+        id: "n_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+        message: message,
+        type: type || "info",
+        read: false,
+        at: Date.now()
+    });
+    saveNotifications(toUsername, list);
+    // Update badge if it's me
+    if (toUsername === getMyUsername()) updateNotifBadge();
+}
+
+function updateNotifBadge() {
+    var me = getMyUsername();
+    var badge = document.getElementById("notifBadge");
+    if (!badge || !me) return;
+    var list = getNotifications(me);
+    var unread = list.filter(function (n) { return !n.read; }).length;
+    if (unread > 0) {
+        badge.style.display = "flex";
+        badge.textContent = unread > 9 ? "9+" : String(unread);
+    } else {
+        badge.style.display = "none";
+    }
+}
+
+function toggleNotifPanel() {
+    var ov = document.getElementById("notifOverlay");
+    if (ov.style.display === "flex") {
+        closeNotifPanel();
+    } else {
+        openNotifPanel();
+    }
+}
+
+function openNotifPanel() {
+    if (localStorage.getItem("loggedIn") === "guest") {
+        alert("Guests don't receive notifications. Create an account to stay updated!");
+        return;
+    }
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Please log in to see notifications!");
+        return;
+    }
+    document.getElementById("notifOverlay").style.display = "flex";
+    renderNotifList();
+}
+
+function closeNotifPanel() {
+    document.getElementById("notifOverlay").style.display = "none";
+}
+
+function renderNotifList() {
+    var listEl = document.getElementById("notifList");
+    if (!listEl) return;
+    var me = getMyUsername();
+    var list = getNotifications(me);
+    if (list.length === 0) {
+        listEl.innerHTML = '<div class="notif-empty">No notifications yet.</div>';
+        return;
+    }
+    listEl.innerHTML = "";
+    list.forEach(function (n) {
+        var div = document.createElement("div");
+        div.className = "notif-item" + (n.read ? "" : " unread");
+        var timeStr = new Date(n.at).toLocaleString();
+        div.innerHTML = escapeHtml(n.message) + '<span class="notif-time">' + timeStr + '</span>';
+        div.onclick = function () {
+            n.read = true;
+            saveNotifications(me, list);
+            updateNotifBadge();
+            renderNotifList();
+        };
+        listEl.appendChild(div);
+    });
+}
+
+function markAllNotifsRead() {
+    var me = getMyUsername();
+    var list = getNotifications(me);
+    list.forEach(function (n) { n.read = true; });
+    saveNotifications(me, list);
+    updateNotifBadge();
+    renderNotifList();
+}
+
+// Milestone helper (call when games hit play counts etc.)
+function notifyGameMilestone(creatorUsername, gameTitle, milestone) {
+    pushNotification(creatorUsername, gameTitle + " reached " + milestone + "!", "milestone");
+}
+
+// Wire bio counter
+document.addEventListener("input", function (e) {
+    if (e.target && e.target.id === "bioInput") updateBioCount();
+});
+
+// Init on DOM ready (append to existing flow)
+(function initV39() {
+    function run() {
+        initStatusSystem();
+        updateNotifBadge();
+        var bioInput = document.getElementById("bioInput");
+        if (bioInput) bioInput.addEventListener("input", updateBioCount);
+    }
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", run);
+    } else {
+        run();
+    }
+})();
+
+window.saveProfileBio = saveProfileBio;
+window.setManualStatus = setManualStatus;
+window.toggleNotifPanel = toggleNotifPanel;
+window.openNotifPanel = openNotifPanel;
+window.closeNotifPanel = closeNotifPanel;
+window.markAllNotifsRead = markAllNotifsRead;
+window.pushNotification = pushNotification;
+window.notifyGameMilestone = notifyGameMilestone;
+
+
+// Keep guest buttons correct even if something else toggles the topbar
+setTimeout(function () {
+    if (typeof ensureGuestButtonsVisible === "function") ensureGuestButtonsVisible();
+    if (typeof refreshAvatarLock === "function") refreshAvatarLock();
+}, 100);
+setTimeout(function () {
+    if (typeof ensureGuestButtonsVisible === "function") ensureGuestButtonsVisible();
+    if (typeof refreshAvatarLock === "function") refreshAvatarLock();
+}, 1000);
+
+
+function switchSettingsTab(tab) {
+    var basic = document.getElementById("settingsPanelBasic");
+    var security = document.getElementById("settingsPanelSecurity");
+    var tabBasic = document.getElementById("settingsTabBasic");
+    var tabSecurity = document.getElementById("settingsTabSecurity");
+    if (!basic || !security) return;
+
+    if (tab === "security") {
+        basic.style.display = "none";
+        security.style.display = "block";
+        if (tabBasic) tabBasic.classList.remove("active");
+        if (tabSecurity) tabSecurity.classList.add("active");
+        refreshSecurityPanel();
+    } else {
+        basic.style.display = "block";
+        security.style.display = "none";
+        if (tabBasic) tabBasic.classList.add("active");
+        if (tabSecurity) tabSecurity.classList.remove("active");
+    }
+}
+
+function refreshSecurityPanel() {
+    var info = document.getElementById("securityAccountInfo");
+    var err = document.getElementById("securityError");
+    var ok = document.getElementById("securitySuccess");
+    if (err) { err.style.display = "none"; err.textContent = ""; }
+    if (ok) { ok.style.display = "none"; ok.textContent = ""; }
+
+    var loggedIn = localStorage.getItem("loggedIn");
+    var acc = {};
+    try { acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}"); } catch (e) {}
+
+    if (info) {
+        if (loggedIn === "true" && acc.username) {
+            info.innerHTML = "Signed in as <strong>" + escapeHtml(acc.username) + "</strong>" +
+                (acc.userId ? " · " + escapeHtml(acc.userId) : "");
+        } else if (loggedIn === "guest") {
+            info.textContent = "Guests cannot change a password. Create an account to use Security settings.";
+        } else {
+            info.textContent = "Sign in with a full account to manage security.";
+        }
+    }
+}
+
+function changePassword() {
+    var err = document.getElementById("securityError");
+    var ok = document.getElementById("securitySuccess");
+    if (err) { err.style.display = "none"; err.textContent = ""; }
+    if (ok) { ok.style.display = "none"; ok.textContent = ""; }
+
+    function fail(msg) {
+        if (err) {
+            err.textContent = msg;
+            err.style.display = "block";
+        } else {
+            alert(msg);
+        }
+    }
+
+    if (localStorage.getItem("loggedIn") !== "true") {
+        fail("You must be logged in with a full account to change your password.");
+        return;
+    }
+
+    var acc = {};
+    try { acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}"); } catch (e) {}
+    if (!acc.username || acc.isGuest) {
+        fail("Guests cannot change a password. Create an account first.");
+        return;
+    }
+
+    var current = document.getElementById("currentPassword").value;
+    var next = document.getElementById("newPassword").value;
+    var confirm = document.getElementById("confirmNewPassword").value;
+
+    // Current password must match 100%
+    if (typeof acc.password !== "string" || acc.password !== current) {
+        fail("The password is incorrect. Please type the correct password");
+        document.getElementById("currentPassword").value = "";
+        document.getElementById("currentPassword").focus();
+        return;
+    }
+    if (!next) {
+        fail("Please enter a new password.");
+        return;
+    }
+    if (next !== confirm) {
+        fail("New passwords do not match.");
+        return;
+    }
+    if (next === current) {
+        fail("New password must be different from your current password.");
+        return;
+    }
+
+    // Update account + multi-account store
+    acc.password = next;
+    localStorage.setItem("azoraAccount", JSON.stringify(acc));
+    try {
+        var map = getSavedAccounts();
+        if (map[acc.username]) {
+            map[acc.username].password = next;
+            saveSavedAccounts(map);
+        } else {
+            map[acc.username] = acc;
+            saveSavedAccounts(map);
+        }
+    } catch (e) {}
+
+    document.getElementById("currentPassword").value = "";
+    document.getElementById("newPassword").value = "";
+    document.getElementById("confirmNewPassword").value = "";
+
+    if (ok) {
+        ok.textContent = "Password updated successfully!";
+        ok.style.display = "block";
+    } else {
+        alert("Password updated successfully!");
+    }
+}
+
+window.switchSettingsTab = switchSettingsTab;
+window.changePassword = changePassword;
+window.refreshSecurityPanel = refreshSecurityPanel;

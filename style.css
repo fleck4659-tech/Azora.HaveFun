@@ -450,6 +450,17 @@ input:checked + .slider:before {
         width: 100%;
         max-width: 300px;
     }
+
+    /* Keep topbar account buttons side by side */
+    #guestButtons {
+        justify-content: center;
+        width: 100%;
+    }
+    #guestButtons button {
+        width: auto !important;
+        max-width: none !important;
+        flex: 0 0 auto;
+    }
 }
 /* Search and Settings Modals Styling */
 .search-tabs {
@@ -966,4 +977,264 @@ html[data-theme="dark"] .chat-input-row input {
 
 @media (max-width: 700px) {
     .chat-sidebar { width: 140px; padding: 10px; }
+}
+
+
+/* === Azora 3.9 — Bio, Status, Notifications === */
+.profile-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: bold;
+    margin: 4px 0 8px;
+    color: #333;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-dot.online { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+.status-dot.offline { background: #9ca3af; }
+.status-dot.afk { background: #eab308; box-shadow: 0 0 6px #eab308; }
+.status-dot.building { background: #3b82f6; box-shadow: 0 0 6px #3b82f6; }
+.status-dot.playing { background: #a855f7; box-shadow: 0 0 6px #a855f7; }
+.status-dot.busy { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+
+.profile-bio {
+    color: #555 !important;
+    font-size: 14px;
+    line-height: 1.4;
+    margin: 0 0 10px;
+    font-style: italic;
+    max-width: 100%;
+    word-wrap: break-word;
+}
+
+.notif-bell-btn {
+    position: relative;
+    padding: 8px 12px !important;
+}
+
+.notif-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #ef4444;
+    color: #fff !important;
+    font-size: 11px;
+    font-weight: bold;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    line-height: 1;
+}
+
+.notif-list {
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.notif-item {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+    font-size: 14px;
+    color: #333;
+    cursor: pointer;
+    border-radius: 8px;
+    margin-bottom: 4px;
+}
+
+.notif-item:hover { background: #f0f7ff; }
+.notif-item.unread { background: #eff6ff; font-weight: 600; }
+.notif-item .notif-time {
+    display: block;
+    font-size: 11px;
+    color: #999;
+    font-weight: normal;
+    margin-top: 4px;
+}
+
+.notif-empty {
+    text-align: center;
+    color: #999;
+    padding: 30px 10px;
+    font-size: 14px;
+}
+
+
+/* Guest mode UI */
+.guest-divider {
+    margin: 14px 0 8px;
+    color: #888;
+    font-size: 13px;
+    font-weight: bold;
+    position: relative;
+}
+/* Modal only — full width */
+#guestContinueBtn,
+.popup .guest-main-btn {
+    width: 100% !important;
+    margin-top: 6px !important;
+    background: linear-gradient(180deg, #64748b 0%, #475569 100%) !important;
+    color: #ffffff !important;
+    border: 2px solid #94a3b8 !important;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.25) !important;
+}
+#guestContinueBtn:hover,
+.popup .guest-main-btn:hover {
+    background: linear-gradient(180deg, #78869a 0%, #556379 100%) !important;
+}
+
+/* Topbar account buttons — JS controls show/hide (no !important on display) */
+.topbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    overflow: visible;
+}
+#guestButtons {
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+#topbarGuestBtn {
+    width: auto !important;
+    max-width: none !important;
+    white-space: nowrap !important;
+    padding: 8px 14px !important;
+    background: linear-gradient(180deg, #64748b 0%, #475569 100%) !important;
+    color: #ffffff !important;
+    border: 2px solid #94a3b8 !important;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.35) !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+#topbarGuestBtn:hover {
+    background: linear-gradient(180deg, #78869a 0%, #556379 100%) !important;
+}
+
+
+.guest-hint {
+    margin-top: 8px !important;
+    font-size: 12px !important;
+    color: #666 !important;
+    line-height: 1.4;
+}
+.avatar-locked input[type="color"] {
+    pointer-events: none;
+    opacity: 0.45;
+    filter: grayscale(0.4);
+}
+
+
+/* Public User ID */
+.profile-user-id {
+    text-align: center;
+    margin: 2px 0 8px;
+    word-break: break-all;
+}
+/* Normal accounts: smaller, under username */
+.profile-user-id.normal {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e60ff;
+    opacity: 0.85;
+    font-family: 'Courier New', monospace;
+}
+/* Guests: same size as username (h2-like) */
+.profile-user-id.guest {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #1e60ff;
+    font-family: 'Courier New', monospace;
+    margin-top: 0;
+}
+html[data-theme="dark"] .profile-user-id.normal,
+html[data-theme="dark"] .profile-user-id.guest {
+    color: #60a5fa;
+}
+
+
+.account-error {
+    display: none;
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    background: #fef2f2;
+    border: 2px solid #ef4444;
+    border-radius: 10px;
+    color: #dc2626 !important;
+    font-weight: bold;
+    font-size: 14px;
+    text-align: center;
+    line-height: 1.35;
+}
+
+
+/* Settings categories */
+.settings-tabs {
+    display: flex;
+    gap: 8px;
+    margin: 12px 0 16px;
+}
+.settings-tab {
+    flex: 1;
+    margin: 0 !important;
+    width: auto !important;
+    padding: 10px 8px !important;
+    font-size: 13px !important;
+    background: #e8eefc !important;
+    color: #1e60ff !important;
+    border: 2px solid transparent !important;
+    box-shadow: none !important;
+}
+.settings-tab.active {
+    background: #1e60ff !important;
+    color: #ffffff !important;
+    border-color: #1e60ff !important;
+}
+.settings-panel { margin-top: 4px; }
+.settings-section { margin-bottom: 16px; }
+.settings-label {
+    display: block;
+    color: #1e60ff !important;
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 6px;
+}
+.settings-input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 2px solid #1e60ff;
+    font-size: 15px;
+    box-sizing: border-box;
+    margin-top: 6px;
+    color: #1e60ff;
+    background: #fff;
+}
+.settings-hint {
+    display: block;
+    color: #666 !important;
+    font-size: 12px;
+    margin-top: 5px;
+}
+.security-success {
+    padding: 10px 12px;
+    background: #ecfdf5;
+    border: 2px solid #10b981;
+    border-radius: 10px;
+    color: #047857 !important;
+    font-weight: bold;
+    font-size: 14px;
+    text-align: center;
 }
