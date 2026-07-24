@@ -91,6 +91,18 @@
 <div id="settingsOverlay" class="overlay" style="display:none;">
     <div class="popup settings-popup">
         <h2>⚙️ Settings</h2>
+        
+        <!-- New Theme Section -->
+        <div style="text-align: left; margin: 15px 0;">
+            <label style="color: #1e60ff; font-weight: bold; display: block; margin-bottom: 8px;">Theme</label>
+            <select id="themeSelect" onchange="changeTheme(this.value)" style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #1e60ff; background: white; color: #1e60ff; font-size: 15px;">
+                <option value="auto">Automatic (Time-based)</option>
+                <option value="light">Light Mode</option>
+                <option value="dark">Dark Mode</option>
+            </select>
+            <small style="color: #666; display: block; margin-top: 5px;">Default: Automatic (bright during day, dark at night)</small>
+        </div>
+
         <div style="text-align: left; margin: 15px 0;">
             <label style="color: #1e60ff; font-weight: bold; display: block; margin-bottom: 5px;">Visual Effects</label>
             <label class="checkbox" style="color: #333 !important;">
@@ -102,7 +114,6 @@
         <button onclick="closeSettings()">Close</button>
     </div>
 </div>
-
 <div id="serverMessage" class="server-message" style="display:none;">
     ⚠️ The website is currently experiencing heavy traffic.
     <br>

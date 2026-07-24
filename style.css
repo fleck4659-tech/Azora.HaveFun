@@ -646,3 +646,101 @@ input:checked + .slider:before {
     transition: opacity 0.5s ease;
     pointer-events: none;
 }
+/* === THEME SYSTEM === */
+:root {
+    /* Light / Default (Bright Azora) */
+    --bg-gradient-start: #1e60ff;
+    --bg-gradient-mid: #00aaff;
+    --bg-gradient-end: #00ebd4;
+    --text-primary: #ffffff;
+    --text-secondary: #f0f7ff;
+    --accent: #1e60ff;
+    --card-bg: rgba(255, 255, 255, 0.2);
+    --card-border: #ffffff;
+    --topbar-bg: #1e60ff;
+    --popup-bg: rgba(255, 255, 255, 0.95);
+    --button-text: #1e60ff;
+    --footer-bg: #113cb0;
+}
+
+[data-theme="dark"] {
+    --bg-gradient-start: #0f172a;
+    --bg-gradient-mid: #1e2937;
+    --bg-gradient-end: #334155;
+    --text-primary: #e2e8f0;
+    --text-secondary: #cbd5e1;
+    --accent: #60a5fa;
+    --card-bg: rgba(15, 23, 42, 0.85);
+    --card-border: #475569;
+    --topbar-bg: #1e2937;
+    --popup-bg: rgba(30, 41, 59, 0.98);
+    --button-text: #60a5fa;
+    --footer-bg: #0f172a;
+}
+
+/* Apply variables */
+body {
+    background: linear-gradient(
+        180deg,
+        var(--bg-gradient-start),
+        var(--bg-gradient-mid),
+        var(--bg-gradient-end)
+    );
+    color: var(--text-primary);
+}
+
+h1, h2, .customizer-controls h3, .setting-info h3 {
+    color: var(--text-primary);
+}
+
+p, .setting-info p {
+    color: var(--text-secondary);
+}
+
+.topbar {
+    background: var(--topbar-bg);
+}
+
+.community-banner {
+    background: rgba(96, 165, 250, 0.2); /* softer blue for dark */
+    border-bottom: 3px solid var(--card-border);
+    color: var(--text-primary);
+}
+
+.news-card, .developer-setting-card, .avatar-customizer-container {
+    background: var(--card-bg);
+    border: 2px solid var(--card-border);
+}
+
+footer {
+    background: var(--footer-bg);
+    color: var(--text-primary);
+}
+
+.popup {
+    background: var(--popup-bg);
+    border: 3px solid var(--accent);
+}
+
+.popup h2, .popup p, .popup label, .checkbox {
+    color: var(--accent) !important;
+}
+
+button, .dropbtn, .tab-btn {
+    color: var(--button-text);
+}
+
+.falling-word {
+    color: var(--text-primary);
+}
+
+/* Dark mode specific tweaks */
+[data-theme="dark"] .search-results,
+[data-theme="dark"] .tos-content {
+    background: #1e2937;
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] input[type="color"] {
+    filter: brightness(0.9);
+}

@@ -454,6 +454,47 @@ function saveAvatar() {
 
 // --- App Start ---
 window.addEventListener("DOMContentLoaded", () => {
+    // === THEME SYSTEM ===
+function getCurrentHour() {
+    return new Date().getHours();
+}
+
+function isNightTime() {
+    const hour = getCurrentHour();
+    return hour < 7 || hour >= 20; // Night from 8 PM to 7 AM
+}
+
+function applyTheme(theme) {
+    const body = document.documentElement;
+    let effectiveTheme = theme;
+
+    if (theme === "auto") {
+        effectiveTheme = isNightTime() ? "dark" : "light";
+    }
+
+    body.setAttribute("data-theme", effectiveTheme === "dark" ? "dark" : "light");
+    localStorage.setItem("azoraTheme", theme); // save preference
+}
+
+function changeTheme(selected) {
+    applyTheme(selected);
+}
+
+// Load theme preference on start
+function loadTheme() {
+    const savedTheme = localStorage.getItem("azoraTheme") || "auto";
+    const select = document.getElementById("themeSelect");
+    if (select) select.value = savedTheme;
+    applyTheme(savedTheme);
+}
+
+// Update theme every hour in case of auto mode
+setInterval(() => {
+    const currentPref = localStorage.getItem("azoraTheme") || "auto";
+    if (currentPref === "auto") {
+        applyTheme("auto");
+    }
+}, 3600000); // every hour
     // 1. Initialize 3D Avatar
     init3DAvatar();
 
