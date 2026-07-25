@@ -1276,6 +1276,17 @@ function isGameRemovedFromFeed(game) {
     return Date.now() >= removeAt;
 }
 
+function canViewerSeeGameOnFeed(game, viewerUsername) {
+    if (!game || !game.published) return false;
+    // Not deleted → always ok
+    if (!game.deleted && !game.deletedAt) return true;
+    // Deleted: creator loses it instantly
+    if (viewerUsername && game.creator === viewerUsername) return false;
+    // Everyone else: algorithm still recommends until feedRemoveAt (1–2 min)
+    return !isGameRemovedFromFeed(game);
+}
+
+
 function purgeDeletedGames() {
     loadAzaFnGames();
     var before = azaFnGames.length;
@@ -1302,7 +1313,7 @@ function azaFnDeleteGame(gameId) {
         alert("Only the creator can delete this game.");
         return;
     }
-    if (!confirm("Delete \"" + game.title + "\" permanently?\n\nIt will be removed from your profile now.\nThe Feed algorithm will stop recommending it within about 1–2 minutes.")) {
+    if (!confirm("Delete \"" + game.title + "\" permanently?\n\n• Removed for YOU instantly\n• Other players: algorithm stops recommending it in about 1–2 minutes")) {
         return;
     }
 
@@ -1318,7 +1329,7 @@ function azaFnDeleteGame(gameId) {
         try { closeGamePreview(); } catch (e) {}
     }
 
-    alert("Game deleted.\n\nIt is gone from your profile.\nThe algorithm will stop showing it on Feed within ~" + Math.round(delayMs / 1000) + " seconds.");
+    alert("Deleted for you instantly.\n\nYour game is gone from your profile and your Feed right now.\n\nOther players may still see it for about " + Math.round(delayMs / 1000) + " seconds while the algorithm catches up — then it stops being recommended.");
 
     if (typeof renderAzaFnFeed === "function") renderAzaFnFeed();
     if (typeof renderPublicFeed === "function") renderPublicFeed();
@@ -1353,7 +1364,15 @@ function renderAzaFnFeed() {
     var account = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
     var myName = account.username || "";
     panel.innerHTML = "";
-    azaFnGames.forEach(function (game) {
+    azaFnGames.filter(function (g) {
+        // Same rule: creator loses deleted games instantly; others after algorithm delay
+        if (g.deleted || g.deletedAt) {
+            if (myName && g.creator === myName) return false;
+            if (isGameRemovedFromFeed(g)) return false;
+            return g.published === true;
+        }
+        return true;
+    }).forEach(function (game) {
         var isOwner = game.creator === myName;
         var liked = (game.likedBy || []).indexOf(myName) !== -1;
         var saved = (game.savedBy || []).indexOf(myName) !== -1;
@@ -1513,26 +1532,21 @@ function renderPublicFeed() {
     loadAzaFnGames();
 
     // Only published games appear on the public Feed
+    var account = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+    var myName = account.username || "";
+    var loggedIn = localStorage.getItem("loggedIn") === "true";
+    var isGuest = localStorage.getItem("loggedIn") === "guest";
+
+    // Instant for the creator; algorithm needs 1–2 min to stop recommending to others
     var publicGames = azaFnGames.filter(function (g) {
-        if (!g.published) return false;
-        // Deleted games are phased out of recommendations over 1–2 minutes
-        if (g.deleted || g.deletedAt) {
-            if (isGameRemovedFromFeed(g)) return false;
-            return true; // still within algorithm delay window
-        }
-        return true;
+        return canViewerSeeGameOnFeed(g, myName);
     });
     if (publicGames.length === 0) {
         panel.innerHTML = '<div class="empty-feed">No games yet! Please come back later!</div>';
         return;
     }
 
-    var account = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
-    var myName = account.username || "";
-    var loggedIn = localStorage.getItem("loggedIn") === "true";
     panel.innerHTML = "";
-
-    var isGuest = localStorage.getItem("loggedIn") === "guest";
     publicGames.forEach(function (game) {
         var isOwner = loggedIn && game.creator === myName;
         var liked = loggedIn && (game.likedBy || []).indexOf(myName) !== -1;
