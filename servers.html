@@ -78,7 +78,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 24px;
+            margin-bottom: 16px;
             flex-wrap: wrap;
             gap: 12px;
         }
@@ -94,6 +94,17 @@
             width: 40px;
             border-radius: 50%;
         }
+        .device-note {
+            background: #21262d;
+            border: 1px solid #f59e0b;
+            border-radius: 12px;
+            padding: 12px 14px;
+            font-size: 13px;
+            color: #fbbf24;
+            margin-bottom: 18px;
+            line-height: 1.45;
+        }
+        .device-note strong { color: #fef3c7; }
         .stat-cards {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -161,13 +172,18 @@
             display: flex;
             gap: 10px;
             margin-top: 16px;
+            flex-wrap: wrap;
         }
         .actions button {
             flex: 1;
+            min-width: 120px;
         }
         .btn-secondary {
             background: #21262d !important;
             border: 1px solid #30363d !important;
+        }
+        .btn-import {
+            background: linear-gradient(90deg, #10b981, #059669) !important;
         }
         .note {
             margin-top: 20px;
@@ -176,6 +192,36 @@
             text-align: center;
             line-height: 1.5;
         }
+        .guest-tag {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-left: 6px;
+        }
+        #importBox {
+            display: none;
+            margin-top: 14px;
+            background: #161b22;
+            border: 2px solid #30363d;
+            border-radius: 12px;
+            padding: 14px;
+        }
+        #importBox textarea {
+            width: 100%;
+            min-height: 100px;
+            background: #0d1117;
+            color: #e2e8f0;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        #importMsg {
+            font-size: 13px;
+            margin-top: 8px;
+            display: none;
+        }
         @media (max-width: 500px) {
             .stat-cards { grid-template-columns: 1fr; }
         }
@@ -183,7 +229,6 @@
 </head>
 <body>
 
-<!-- LOCK SCREEN — restricted access -->
 <div class="lock-screen" id="lockScreen">
     <div class="lock-box">
         <img src="logo.jpg" alt="Azora">
@@ -195,21 +240,26 @@
     </div>
 </div>
 
-<!-- DASHBOARD -->
 <div class="dashboard" id="dashboard">
     <div class="dash-header">
         <h1><img src="logo.jpg" alt=""> Azora Have Fun Servers</h1>
         <button class="btn-secondary" style="width:auto;padding:8px 16px;" onclick="lockServers()">Lock</button>
     </div>
 
+    <div class="device-note">
+        <strong>Important:</strong> Accounts are saved in each device’s browser only (localStorage).
+        A username created on your <strong>phone</strong> will not appear here on your <strong>computer</strong> until you export from the phone and import below.
+        This panel only sees data on <em>this</em> browser.
+    </div>
+
     <div class="stat-cards">
         <div class="stat-card">
             <div class="num" id="totalUsers">0</div>
-            <div class="label">Total Users Created</div>
+            <div class="label">Total Users (this device)</div>
         </div>
         <div class="stat-card">
             <div class="num" id="nextId">Aza: 0</div>
-            <div class="label">Next User ID</div>
+            <div class="label">Next User ID (this device)</div>
         </div>
     </div>
 
@@ -231,17 +281,25 @@
 
     <div class="actions">
         <button onclick="refreshRegistry()">🔄 Refresh</button>
+        <button class="btn-secondary" onclick="exportRegistry()">📤 Export registry</button>
+        <button class="btn-import" onclick="toggleImport()">📥 Import registry</button>
         <button class="btn-secondary" onclick="window.location.href='index.html'">← Back to Azora</button>
     </div>
 
+    <div id="importBox">
+        <p style="margin:0 0 8px;font-size:13px;color:#8b949e;">Paste the JSON exported from another device, then click Merge import.</p>
+        <textarea id="importText" placeholder='[{"userId":"Aza: 1","username":"Example",...}]'></textarea>
+        <button class="btn-import" onclick="importRegistry()">Merge import into this device</button>
+        <div id="importMsg"></div>
+    </div>
+
     <p class="note">
-        This panel reads the local user registry on this device.<br>
-        User IDs are assigned as <strong>Aza: 0</strong>, <strong>Aza: 1</strong>, <strong>Aza: 2</strong>… when accounts are created.
+        User IDs are assigned as <strong>Aza: 0</strong>, <strong>Aza: 1</strong>, <strong>Aza: 2</strong>… on each device separately.<br>
+        Import merges missing users so staff can see accounts from phones and other browsers.
     </p>
 </div>
 
 <script>
-// Change this key to whatever you want for staff access
 var SERVER_ACCESS_KEY = "azora-servers-2026";
 
 function unlockServers() {
@@ -264,32 +322,157 @@ function lockServers() {
     document.getElementById("lockError").style.display = "none";
 }
 
-function refreshRegistry() {
+function readRegistry() {
     var registry = [];
+    try { registry = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]"); } catch (e) {}
+    if (!Array.isArray(registry)) registry = [];
+
+    // Also pull full accounts stored on this device (in case registry was incomplete)
     try {
-        registry = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+        var map = JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+        Object.keys(map).forEach(function (uname) {
+            var acc = map[uname];
+            if (!acc) return;
+            var uid = acc.userId || null;
+            var exists = registry.some(function (u) {
+                return (uid && u.userId === uid) || (u.username && u.username.toLowerCase() === uname.toLowerCase());
+            });
+            if (!exists) {
+                registry.push({
+                    userId: uid || ("Aza: " + registry.length),
+                    username: acc.username || uname,
+                    isGuest: !!acc.isGuest,
+                    createdAt: acc.createdAt || Date.now()
+                });
+            }
+        });
     } catch (e) {}
+
+    // Current session account
+    try {
+        var cur = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (cur && (cur.username || cur.userId)) {
+            var exists2 = registry.some(function (u) {
+                return (cur.userId && u.userId === cur.userId) ||
+                    (cur.username && u.username && u.username.toLowerCase() === cur.username.toLowerCase());
+            });
+            if (!exists2) {
+                registry.push({
+                    userId: cur.userId || ("Aza: " + registry.length),
+                    username: cur.username || (cur.isGuest ? "" : ""),
+                    displayName: cur.displayName || "",
+                    isGuest: !!cur.isGuest,
+                    createdAt: cur.createdAt || Date.now()
+                });
+            }
+        }
+    } catch (e) {}
+
+    return registry;
+}
+
+function saveRegistry(registry) {
+    localStorage.setItem("azoraUserRegistry", JSON.stringify(registry));
+}
+
+function refreshRegistry() {
+    var registry = readRegistry();
+    // Persist merged view so next ID stays consistent on this device
+    saveRegistry(registry);
 
     document.getElementById("totalUsers").textContent = registry.length;
     document.getElementById("nextId").textContent = "Aza: " + registry.length;
 
     var tbody = document.getElementById("userTableBody");
     if (registry.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="empty-row">No users registered yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" class="empty-row">No users registered yet on this device.</td></tr>';
         return;
     }
 
     tbody.innerHTML = "";
-    // Newest first
     registry.slice().reverse().forEach(function (user) {
         var tr = document.createElement("tr");
         var dateStr = user.createdAt ? new Date(user.createdAt).toLocaleString() : "—";
+        var name = user.username || user.displayName || "—";
+        if (user.isGuest || name === "") {
+            name = (user.displayName || "Guest") + ' <span class="guest-tag">guest</span>';
+        } else {
+            name = escapeHtml(name);
+        }
         tr.innerHTML =
             '<td class="uid">' + escapeHtml(user.userId || "—") + '</td>' +
-            '<td>' + escapeHtml(user.username || "—") + '</td>' +
+            '<td>' + name + '</td>' +
             '<td>' + dateStr + '</td>';
         tbody.appendChild(tr);
     });
+}
+
+function exportRegistry() {
+    var registry = readRegistry();
+    var blob = new Blob([JSON.stringify(registry, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "azora-user-registry.json";
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function toggleImport() {
+    var box = document.getElementById("importBox");
+    box.style.display = box.style.display === "block" ? "none" : "block";
+}
+
+function importRegistry() {
+    var msg = document.getElementById("importMsg");
+    msg.style.display = "none";
+    var raw = document.getElementById("importText").value.trim();
+    if (!raw) {
+        msg.style.display = "block";
+        msg.style.color = "#ff7b72";
+        msg.textContent = "Paste exported JSON first.";
+        return;
+    }
+    var incoming;
+    try {
+        incoming = JSON.parse(raw);
+    } catch (e) {
+        msg.style.display = "block";
+        msg.style.color = "#ff7b72";
+        msg.textContent = "Invalid JSON. Copy the full export file contents.";
+        return;
+    }
+    if (!Array.isArray(incoming)) {
+        msg.style.display = "block";
+        msg.style.color = "#ff7b72";
+        msg.textContent = "Export should be a JSON array of users.";
+        return;
+    }
+
+    var registry = readRegistry();
+    var added = 0;
+    incoming.forEach(function (user) {
+        if (!user || typeof user !== "object") return;
+        var exists = registry.some(function (u) {
+            return (user.userId && u.userId === user.userId) ||
+                (user.username && u.username && u.username.toLowerCase() === String(user.username).toLowerCase());
+        });
+        if (!exists) {
+            registry.push({
+                userId: user.userId || ("Aza: " + registry.length),
+                username: user.username || "",
+                displayName: user.displayName || "",
+                isGuest: !!user.isGuest,
+                createdAt: user.createdAt || Date.now()
+            });
+            added++;
+        }
+    });
+    saveRegistry(registry);
+    refreshRegistry();
+    msg.style.display = "block";
+    msg.style.color = "#34d399";
+    msg.textContent = "Merged. Added " + added + " user(s). Total on this device: " + registry.length + ".";
 }
 
 function escapeHtml(str) {
@@ -300,7 +483,6 @@ function escapeHtml(str) {
         .replace(/"/g, "&quot;");
 }
 
-// Auto-unlock if already unlocked this session
 if (sessionStorage.getItem("azoraServerUnlocked") === "true") {
     document.getElementById("lockScreen").style.display = "none";
     document.getElementById("dashboard").style.display = "block";
