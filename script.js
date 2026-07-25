@@ -73,6 +73,10 @@ function openSettings() {
     if (sel && me && typeof getUserStatus === "function") {
         sel.value = getUserStatus(me) || "online";
     }
+    // Sync appearance controls
+    if (typeof loadBrowserAppearance === "function") loadBrowserAppearance();
+    var themeSel = document.getElementById("themeSelect");
+    if (themeSel) themeSel.value = localStorage.getItem("azoraTheme") || "auto";
     if (typeof switchSettingsTab === "function") switchSettingsTab("basic");
     if (typeof refreshSecurityPanel === "function") refreshSecurityPanel();
 }
@@ -797,6 +801,83 @@ setInterval(function () {
 }, 3600000);
 
 // ============================================================
+// BROWSER APPEARANCE (color + style)
+// ============================================================
+function normalizeHexColor(value) {
+    if (!value) return "#1e60ff";
+    var v = String(value).trim();
+    if (v.charAt(0) !== "#") v = "#" + v;
+    if (/^#[0-9a-fA-F]{3}$/.test(v)) {
+        v = "#" + v[1] + v[1] + v[2] + v[2] + v[3] + v[3];
+    }
+    if (!/^#[0-9a-fA-F]{6}$/.test(v)) return null;
+    return v.toLowerCase();
+}
+
+function hexToRgb(hex) {
+    var h = normalizeHexColor(hex) || "#1e60ff";
+    return {
+        r: parseInt(h.slice(1, 3), 16),
+        g: parseInt(h.slice(3, 5), 16),
+        b: parseInt(h.slice(5, 7), 16)
+    };
+}
+
+function applyBrowserColor(hex) {
+    var color = normalizeHexColor(hex) || "#1e60ff";
+    var rgb = hexToRgb(color);
+    var root = document.documentElement;
+    root.style.setProperty("--browser-color", color);
+    root.style.setProperty("--browser-color-rgb", rgb.r + ", " + rgb.g + ", " + rgb.b);
+    root.style.setProperty("--accent", color);
+    // Soft tint for cards/borders derived from the pick
+    root.style.setProperty("--browser-tint", "rgba(" + rgb.r + ", " + rgb.g + ", " + rgb.b + ", 0.18)");
+    root.style.setProperty("--browser-glow", "rgba(" + rgb.r + ", " + rgb.g + ", " + rgb.b + ", 0.45)");
+    localStorage.setItem("azoraBrowserColor", color);
+    var picker = document.getElementById("browserColorPicker");
+    var hexInput = document.getElementById("browserColorHex");
+    if (picker) picker.value = color;
+    if (hexInput) hexInput.value = color;
+}
+
+function changeBrowserColor(value) {
+    var color = normalizeHexColor(value);
+    if (!color) {
+        alert("Please use a valid color like #1e60ff");
+        var saved = localStorage.getItem("azoraBrowserColor") || "#1e60ff";
+        applyBrowserColor(saved);
+        return;
+    }
+    applyBrowserColor(color);
+}
+
+function applyBrowserStyle(style) {
+    var allowed = ["normal", "glossy", "metallic", "matte", "neon", "soft"];
+    if (allowed.indexOf(style) === -1) style = "normal";
+    document.documentElement.setAttribute("data-browser-style", style);
+    localStorage.setItem("azoraBrowserStyle", style);
+    var sel = document.getElementById("browserStyleSelect");
+    if (sel) sel.value = style;
+    var preview = document.getElementById("browserStylePreview");
+    if (preview) preview.setAttribute("data-preview-style", style);
+}
+
+function changeBrowserStyle(value) {
+    applyBrowserStyle(value || "normal");
+}
+
+function loadBrowserAppearance() {
+    applyBrowserColor(localStorage.getItem("azoraBrowserColor") || "#1e60ff");
+    applyBrowserStyle(localStorage.getItem("azoraBrowserStyle") || "normal");
+}
+
+window.changeBrowserColor = changeBrowserColor;
+window.applyBrowserColor = applyBrowserColor;
+window.changeBrowserStyle = changeBrowserStyle;
+window.applyBrowserStyle = applyBrowserStyle;
+window.loadBrowserAppearance = loadBrowserAppearance;
+
+// ============================================================
 // APP START
 // ============================================================
 function dismissIntroSplash(openAccount) {
@@ -906,6 +987,7 @@ window.addEventListener("DOMContentLoaded", function () {
     }
 
     loadTheme();
+    if (typeof loadBrowserAppearance === "function") loadBrowserAppearance();
 });
 
 

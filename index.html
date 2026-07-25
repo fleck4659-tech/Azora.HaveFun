@@ -97,6 +97,31 @@
                 <small class="settings-hint">Default: Automatic (bright during day, dark at night)</small>
             </div>
             <div class="settings-section">
+                <label class="settings-label">Browser Color</label>
+                <div class="browser-color-row">
+                    <input type="color" id="browserColorPicker" value="#1e60ff" onchange="changeBrowserColor(this.value)" class="browser-color-input">
+                    <input type="text" id="browserColorHex" value="#1e60ff" maxlength="7" class="settings-input browser-color-hex" onchange="changeBrowserColor(this.value)" placeholder="#1e60ff">
+                    <button type="button" class="browser-color-reset" onclick="changeBrowserColor('#1e60ff')">Reset</button>
+                </div>
+                <small class="settings-hint">Changes topbar, buttons, accents, and borders across Azora</small>
+            </div>
+            <div class="settings-section">
+                <label class="settings-label">Browser Style</label>
+                <select id="browserStyleSelect" onchange="changeBrowserStyle(this.value)" class="settings-input">
+                    <option value="normal">Normal (Default)</option>
+                    <option value="glossy">Glossy</option>
+                    <option value="metallic">Metallic</option>
+                    <option value="matte">Matte</option>
+                    <option value="neon">Neon</option>
+                    <option value="soft">Soft</option>
+                </select>
+                <small class="settings-hint">How cards, buttons, and panels look — only you see this on your device</small>
+                <div class="browser-style-preview" id="browserStylePreview">
+                    <div class="bsp-card">Preview</div>
+                    <button type="button" class="bsp-btn">Button</button>
+                </div>
+            </div>
+            <div class="settings-section">
                 <label class="settings-label">Visual Effects</label>
                 <label class="checkbox" style="color:#333 !important;margin-top:6px;">
                     <input type="checkbox" id="fallingTextToggle" checked onchange="toggleFallingText()"> Enable Falling Phrases
