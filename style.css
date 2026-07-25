@@ -1433,3 +1433,31 @@ html[data-theme="dark"] .profile-user-id.guest {
 }
 .pg-badge.private { background: #fef3c7; color: #b45309; }
 .pg-badge.live { background: #d1fae5; color: #047857; }
+
+
+/* Creator-only delete */
+.game-delete-btn {
+    background: rgba(239, 68, 68, 0.35) !important;
+    border-color: #ef4444 !important;
+    color: #fff !important;
+}
+.game-delete-btn:hover {
+    background: #ef4444 !important;
+}
+.profile-game-delete {
+    display: inline-block;
+    margin-top: 6px;
+    margin-left: 0;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    background: #fee2e2;
+    color: #b91c1c;
+    cursor: pointer;
+}
+.profile-game-delete:hover {
+    background: #ef4444;
+    color: #fff;
+}

@@ -1065,6 +1065,12 @@ function sendAzaFnMessage() {
 var currentPreviewGameId = null;
 
 function azaFnBuild(msgIndex) {
+    if (window._azaFnBuilding) {
+        addAzaFnAIMessage("I'm still constructing your game — about a minute total. Hang tight!");
+        renderAzaFnMessages();
+        return;
+    }
+
     var description = azaFnPendingDescription;
     for (var i = msgIndex - 1; i >= 0; i--) {
         if (azaFnConversation[i].role === "user") { description = azaFnConversation[i].text; break; }
@@ -1088,38 +1094,75 @@ function azaFnBuild(msgIndex) {
     }
 
     var account = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+    if (account.isGuest || localStorage.getItem("loggedIn") !== "true") {
+        addAzaFnAIMessage("Only full accounts can build games. Create an account first!");
+        renderAzaFnMessages();
+        return;
+    }
     var username = account.username || "Player";
-    var words = description.trim().split(/\s+/).slice(0, 5).join(" ");
-    var title = (words.length > 40 ? words.slice(0, 40) + "…" : words) + " (" + finalDims + ")";
 
-    // Private draft — NOT on public Feed until published
-    var game = {
-        id: "game_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
-        title: title,
-        description: description,
-        dimensions: finalDims,
-        creator: username,
-        createdAt: Date.now(),
-        likes: 0,
-        likedBy: [],
-        savedBy: [],
-        comments: [],
-        published: false
-    };
-    loadAzaFnGames();
-    azaFnGames.unshift(game);
-    saveAzaFnGames();
+    window._azaFnBuilding = true;
+    showAzaFnTyping();
+    // Upgrade typing label to "constructing"
+    var typing = document.getElementById("azafnTyping");
+    if (typing) {
+        typing.innerHTML = '<div class="azafn-msg-label">AzaFn-1.0</div>🛠️ Constructing your ' + finalDims + ' game… (~1 min)';
+    }
 
-    addAzaFnAIMessage(
-        "✅ <strong>Game built!</strong><br><br>🎮 <strong>" + escapeHtml(game.title) +
-        "</strong><br>📐 " + finalDims +
-        "<br><br>Opening a <strong>private preview</strong> now. Only you can see this game under your profile until you press <strong>Publish to Feed</strong>."
-    );
-    renderAzaFnMessages();
+    var progressSteps = [
+        { at: 15000, msg: "Sketching the " + finalDims + " world layout…" },
+        { at: 30000, msg: "Placing core systems and player controls…" },
+        { at: 45000, msg: "Polishing visuals and play-testing…" }
+    ];
+    progressSteps.forEach(function (step) {
+        setTimeout(function () {
+            if (!window._azaFnBuilding) return;
+            hideAzaFnTyping();
+            addAzaFnAIMessage(step.msg);
+            renderAzaFnMessages();
+            showAzaFnTyping();
+            var t = document.getElementById("azafnTyping");
+            if (t) t.innerHTML = '<div class="azafn-msg-label">AzaFn-1.0</div>🛠️ Still constructing…';
+        }, step.at);
+    });
 
-    // Teleport to preview
-    openGamePreview(game.id);
+    // Full build completes after 60 seconds
+    setTimeout(function () {
+        hideAzaFnTyping();
+        window._azaFnBuilding = false;
+
+        var words = description.trim().split(/\s+/).slice(0, 5).join(" ");
+        var title = (words.length > 40 ? words.slice(0, 40) + "…" : words) + " (" + finalDims + ")";
+
+        var game = {
+            id: "game_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+            title: title,
+            description: description,
+            dimensions: finalDims,
+            creator: username,
+            createdAt: Date.now(),
+            likes: 0,
+            likedBy: [],
+            savedBy: [],
+            comments: [],
+            published: false,
+            deleted: false
+        };
+        loadAzaFnGames();
+        azaFnGames.unshift(game);
+        saveAzaFnGames();
+
+        addAzaFnAIMessage(
+            "Ok I have created the game for you! Check it out — explore this <strong>" + finalDims +
+            "</strong> game!<br><br>🎮 <strong>" + escapeHtml(game.title) +
+            "</strong><br><br>Opening your <strong>private preview</strong> now. Only you can see it under your profile until you press <strong>Publish to Feed</strong>. " +
+            "Other people cannot edit your game."
+        );
+        renderAzaFnMessages();
+        openGamePreview(game.id);
+    }, 60000);
 }
+
 
 function openGamePreview(gameId) {
     loadAzaFnGames();
@@ -1158,6 +1201,25 @@ function openGamePreview(gameId) {
             player.className = "preview-player";
             mock.appendChild(plat);
             mock.appendChild(player);
+        }
+    }
+
+    // Creator-only delete on preview
+    var actions = document.querySelector(".game-preview-actions");
+    if (actions) {
+        var oldDel = document.getElementById("previewDeleteBtn");
+        if (oldDel) oldDel.remove();
+        var me = "";
+        try { me = JSON.parse(localStorage.getItem("azoraAccount") || "{}").username || ""; } catch (e) {}
+        if (me && game.creator === me && !game.deleted) {
+            var delBtn = document.createElement("button");
+            delBtn.type = "button";
+            delBtn.id = "previewDeleteBtn";
+            delBtn.textContent = "🗑️ Delete Game";
+            delBtn.style.background = "linear-gradient(180deg,#f87171,#ef4444)";
+            delBtn.style.color = "#fff";
+            delBtn.onclick = function () { azaFnDeleteGame(gameId); };
+            actions.appendChild(delBtn);
         }
     }
 
@@ -1206,6 +1268,79 @@ function loadAzaFnGames() {
     });
 }
 function saveAzaFnGames() { localStorage.setItem("azoraAzaFnGames", JSON.stringify(azaFnGames)); }
+
+function isGameRemovedFromFeed(game) {
+    if (!game) return true;
+    if (!game.deleted && !game.deletedAt) return false;
+    var removeAt = game.feedRemoveAt || ((game.deletedAt || 0) + 90000);
+    return Date.now() >= removeAt;
+}
+
+function purgeDeletedGames() {
+    loadAzaFnGames();
+    var before = azaFnGames.length;
+    // Hard-delete only after feed delay has fully passed (+ small buffer)
+    azaFnGames = azaFnGames.filter(function (g) {
+        if (!g.deleted && !g.deletedAt) return true;
+        var removeAt = g.feedRemoveAt || ((g.deletedAt || 0) + 90000);
+        return Date.now() < removeAt + 30000; // keep record briefly then wipe
+    });
+    if (azaFnGames.length !== before) saveAzaFnGames();
+}
+
+function azaFnDeleteGame(gameId) {
+    loadAzaFnGames();
+    var account = {};
+    try { account = JSON.parse(localStorage.getItem("azoraAccount") || "{}"); } catch (e) {}
+    var myName = account.username || "";
+    var game = azaFnGames.find(function (g) { return g.id === gameId; });
+    if (!game) {
+        alert("Game not found.");
+        return;
+    }
+    if (!myName || game.creator !== myName) {
+        alert("Only the creator can delete this game.");
+        return;
+    }
+    if (!confirm("Delete \"" + game.title + "\" permanently?\n\nIt will be removed from your profile now.\nThe Feed algorithm will stop recommending it within about 1–2 minutes.")) {
+        return;
+    }
+
+    // Soft-delete: gone for creator immediately; Feed phases it out in 60–120s
+    var delayMs = 60000 + Math.floor(Math.random() * 60000); // 1–2 minutes
+    game.deleted = true;
+    game.deletedAt = Date.now();
+    game.feedRemoveAt = Date.now() + delayMs;
+    // Stay on Feed briefly so the algorithm "catches up" over 1–2 minutes
+    saveAzaFnGames();
+
+    if (currentPreviewGameId === gameId) {
+        try { closeGamePreview(); } catch (e) {}
+    }
+
+    alert("Game deleted.\n\nIt is gone from your profile.\nThe algorithm will stop showing it on Feed within ~" + Math.round(delayMs / 1000) + " seconds.");
+
+    if (typeof renderAzaFnFeed === "function") renderAzaFnFeed();
+    if (typeof renderPublicFeed === "function") renderPublicFeed();
+    // Refresh open profile if any
+    try {
+        if (document.getElementById("profileOverlay") && document.getElementById("profileOverlay").style.display === "flex") {
+            openUserProfile(myName);
+        }
+    } catch (e) {}
+}
+
+// Periodically drop deleted games from Feed after their delay
+setInterval(function () {
+    try {
+        purgeDeletedGames();
+        var feed = document.getElementById("publicFeedOverlay");
+        if (feed && feed.style.display === "flex" && typeof renderPublicFeed === "function") renderPublicFeed();
+        var aza = document.getElementById("azafnOverlay");
+        if (aza && aza.style.display === "flex" && typeof renderAzaFnFeed === "function") renderAzaFnFeed();
+    } catch (e) {}
+}, 15000);
+
 
 function renderAzaFnFeed() {
     var panel = document.getElementById("azafnFeedPanel");
@@ -1359,6 +1494,7 @@ window.azaFnToggleComments = azaFnToggleComments;
 window.azaFnAddComment = azaFnAddComment;
 window.azaFnToggleEdit = azaFnToggleEdit;
 window.azaFnRepublish = azaFnRepublish;
+window.azaFnDeleteGame = azaFnDeleteGame;
 
 
 // --- Public Game Feed (topbar button for everyone) ---
@@ -1377,7 +1513,15 @@ function renderPublicFeed() {
     loadAzaFnGames();
 
     // Only published games appear on the public Feed
-    var publicGames = azaFnGames.filter(function (g) { return g.published === true; });
+    var publicGames = azaFnGames.filter(function (g) {
+        if (!g.published) return false;
+        // Deleted games are phased out of recommendations over 1–2 minutes
+        if (g.deleted || g.deletedAt) {
+            if (isGameRemovedFromFeed(g)) return false;
+            return true; // still within algorithm delay window
+        }
+        return true;
+    });
     if (publicGames.length === 0) {
         panel.innerHTML = '<div class="empty-feed">No games yet! Please come back later!</div>';
         return;
@@ -1429,6 +1573,7 @@ function renderPublicFeed() {
                 saveBtn +
                 '<button class="game-action-btn" onclick="azaFnShare(\'' + game.id + '\')">📤 Share</button>' +
                 (isOwner ? '<button class="game-action-btn" onclick="azaFnToggleEdit(\'' + game.id + '\')">✏️ Edit</button>' : '') +
+                (isOwner ? '<button class="game-action-btn game-delete-btn" onclick="azaFnDeleteGame(\'' + game.id + '\')">🗑️ Delete</button>' : '') +
             '</div>' +
             '<div class="game-comments" id="comments_' + game.id + '">' + commentsHtml + commentFooter + '</div>' +
             (isOwner
@@ -1543,6 +1688,7 @@ function renderProfileGames(username, isOwn) {
     loadAzaFnGames();
     var games = azaFnGames.filter(function (g) {
         if (g.creator !== username) return false;
+        if (g.deleted || g.deletedAt) return false; // gone from profile immediately
         // Owner sees private + public; others only published
         if (isOwn) return true;
         return g.published === true;
@@ -1558,9 +1704,12 @@ function renderProfileGames(username, isOwn) {
         var badge = g.published
             ? '<span class="pg-badge live">Live</span>'
             : '<span class="pg-badge private">Private</span>';
-        html += '<div class="profile-game-row" onclick="openGamePreview(\'' + g.id + '\')">' +
+        html += '<div class="profile-game-row">' +
+            '<div onclick="openGamePreview(\'' + g.id + '\')">' +
             '<strong>' + escapeHtml(g.title) + badge + '</strong>' +
             '<span>' + escapeHtml(g.dimensions) + (g.published ? '' : ' · only you can see this') + '</span>' +
+            '</div>' +
+            (isOwn ? '<button type="button" class="profile-game-delete" onclick="azaFnDeleteGame(\'' + g.id + '\')">🗑️ Delete</button>' : '') +
             '</div>';
     });
     section.innerHTML = html;
