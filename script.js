@@ -776,7 +776,10 @@ function applyTheme(theme) {
         effective === "dark" ? "dark" : "light"
     );
     localStorage.setItem("azoraTheme", theme);
-    console.log("[Azora] Theme →", theme, "effective:", effective);
+    // Rebuild full site palette from browser color for light/dark
+    if (typeof applyBrowserColor === "function") {
+        applyBrowserColor(localStorage.getItem("azoraBrowserColor") || "#1e60ff", true);
+    }
 }
 
 function changeTheme(value) {
@@ -823,17 +826,95 @@ function hexToRgb(hex) {
     };
 }
 
-function applyBrowserColor(hex) {
+function rgbToHex(r, g, b) {
+    function clamp(n) { return Math.max(0, Math.min(255, Math.round(n))); }
+    function h(n) { var s = clamp(n).toString(16); return s.length === 1 ? "0" + s : s; }
+    return "#" + h(r) + h(g) + h(b);
+}
+
+/** Mix base color toward white (t>0) or black (t<0). t in -1..1 */
+function shadeColor(hex, t) {
+    var rgb = hexToRgb(hex);
+    var r = rgb.r, g = rgb.g, b = rgb.b;
+    if (t >= 0) {
+        r = r + (255 - r) * t;
+        g = g + (255 - g) * t;
+        b = b + (255 - b) * t;
+    } else {
+        var k = 1 + t; // t=-0.5 → 0.5
+        r = r * k;
+        g = g * k;
+        b = b * k;
+    }
+    return rgbToHex(r, g, b);
+}
+
+/**
+ * Paints the whole site from one base color.
+ * - Main surfaces use the base
+ * - Darker UI (footer, topbar edges, shadows) = darker shades
+ * - Lighter UI (cards, highlights, bg end) = lighter shades
+ * - Some things stay fixed (status dots, error red, success green)
+ * @param hex base color
+ * @param skipSave if true, don't write localStorage (used when theme flips)
+ */
+function applyBrowserColor(hex, skipSave) {
     var color = normalizeHexColor(hex) || "#1e60ff";
     var rgb = hexToRgb(color);
     var root = document.documentElement;
-    root.style.setProperty("--browser-color", color);
+    var isDark = root.getAttribute("data-theme") === "dark";
+
+    // Full shade ladder from the same hue
+    var darker3 = shadeColor(color, -0.55); // very dark
+    var darker2 = shadeColor(color, -0.40);
+    var darker1 = shadeColor(color, -0.22);
+    var base = color;
+    var lighter1 = shadeColor(color, 0.28);
+    var lighter2 = shadeColor(color, 0.50);
+    var lighter3 = shadeColor(color, 0.72);
+
+    root.style.setProperty("--browser-color", base);
     root.style.setProperty("--browser-color-rgb", rgb.r + ", " + rgb.g + ", " + rgb.b);
-    root.style.setProperty("--accent", color);
-    // Soft tint for cards/borders derived from the pick
-    root.style.setProperty("--browser-tint", "rgba(" + rgb.r + ", " + rgb.g + ", " + rgb.b + ", 0.18)");
+    root.style.setProperty("--browser-darker", darker1);
+    root.style.setProperty("--browser-darkest", darker3);
+    root.style.setProperty("--browser-lighter", lighter1);
+    root.style.setProperty("--browser-lightest", lighter3);
+    root.style.setProperty("--browser-tint", "rgba(" + rgb.r + ", " + rgb.g + ", " + rgb.b + ", 0.20)");
     root.style.setProperty("--browser-glow", "rgba(" + rgb.r + ", " + rgb.g + ", " + rgb.b + ", 0.45)");
-    localStorage.setItem("azoraBrowserColor", color);
+
+    if (isDark) {
+        // Whole page in dark shades of the chosen color
+        root.style.setProperty("--bg-1", darker3);
+        root.style.setProperty("--bg-2", darker2);
+        root.style.setProperty("--bg-3", darker1);
+        root.style.setProperty("--topbar", darker2);
+        root.style.setProperty("--footer", darker3);
+        root.style.setProperty("--accent", lighter1); // readable accents on dark
+        root.style.setProperty("--card-bg", "rgba(" + hexToRgb(darker2).r + ", " + hexToRgb(darker2).g + ", " + hexToRgb(darker2).b + ", 0.85)");
+        root.style.setProperty("--card-border", darker1);
+        root.style.setProperty("--banner", "rgba(" + rgb.r + ", " + rgb.g + ", " + rgb.b + ", 0.20)");
+        root.style.setProperty("--popup-bg", "rgba(" + hexToRgb(darker2).r + ", " + hexToRgb(darker2).g + ", " + hexToRgb(darker2).b + ", 0.98)");
+        root.style.setProperty("--text-1", "#f1f5f9");
+        root.style.setProperty("--text-2", "#cbd5e1");
+    } else {
+        // Whole page gradient from base → lighter shades of same color
+        root.style.setProperty("--bg-1", base);
+        root.style.setProperty("--bg-2", lighter1);
+        root.style.setProperty("--bg-3", lighter2);
+        root.style.setProperty("--topbar", darker1);
+        root.style.setProperty("--footer", darker2);
+        root.style.setProperty("--accent", base);
+        root.style.setProperty("--card-bg", "rgba(255, 255, 255, 0.22)");
+        root.style.setProperty("--card-border", lighter3);
+        root.style.setProperty("--banner", "rgba(" + rgb.r + ", " + rgb.g + ", " + rgb.b + ", 0.22)");
+        root.style.setProperty("--popup-bg", "rgba(255, 255, 255, 0.95)");
+        root.style.setProperty("--text-1", "#ffffff");
+        root.style.setProperty("--text-2", "#f0f7ff");
+    }
+
+    if (!skipSave) {
+        localStorage.setItem("azoraBrowserColor", color);
+    }
     var picker = document.getElementById("browserColorPicker");
     var hexInput = document.getElementById("browserColorHex");
     if (picker) picker.value = color;

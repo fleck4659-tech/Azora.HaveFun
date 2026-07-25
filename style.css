@@ -1711,3 +1711,34 @@ html[data-theme="dark"][data-browser-style="glossy"] .popup,
 html[data-theme="dark"][data-browser-style="glossy"] .avatar-customizer-container {
     background: linear-gradient(180deg, rgba(51,65,85,0.9), rgba(15,23,42,0.85)) !important;
 }
+
+
+/* Whole-site color driven by browser palette */
+.overlay {
+    background: rgba(var(--browser-color-rgb, 30, 96, 255), 0.4) !important;
+}
+.azafn-overlay {
+    background: var(--topbar, var(--browser-color, #1e60ff)) !important;
+}
+html[data-theme="dark"] .azafn-overlay {
+    background: var(--bg-1, #0f172a) !important;
+}
+.community-banner {
+    background: var(--banner) !important;
+}
+footer {
+    background: var(--footer) !important;
+}
+.topbar {
+    background: var(--topbar) !important;
+}
+/* Keep semantic colors independent (do not recolor) */
+.status-dot.online { background: #22c55e !important; }
+.status-dot.offline { background: #9ca3af !important; }
+.status-dot.afk { background: #eab308 !important; }
+.status-dot.building { background: #3b82f6 !important; }
+.status-dot.playing { background: #a855f7 !important; }
+.status-dot.busy { background: #ef4444 !important; }
+.account-error { border-color: #ef4444 !important; color: #dc2626 !important; }
+.security-success { border-color: #10b981 !important; color: #047857 !important; }
+.notif-badge { background: #ef4444 !important; }
