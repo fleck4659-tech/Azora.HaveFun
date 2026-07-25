@@ -799,32 +799,67 @@ setInterval(function () {
 // ============================================================
 // APP START
 // ============================================================
-window.addEventListener("DOMContentLoaded", function () {
-    init3DAvatar();
-
+function dismissIntroSplash(openAccount) {
     var splash = document.getElementById("introSplash");
-    var loggedIn = localStorage.getItem("loggedIn");
-
-    if (loggedIn === "true" || loggedIn === "guest") {
-        if (splash) splash.style.display = "none";
-    } else if (splash) {
-        splash.style.display = "flex";
-        setTimeout(function () {
-            splash.classList.add("fade-out");
-            setTimeout(function () {
-                splash.style.display = "none";
-                if (typeof openCreateAccount === "function") {
-                    openCreateAccount();
-                } else {
+    if (!splash) return;
+    // Force full-screen background to fade (not only the text)
+    splash.classList.add("fade-out");
+    splash.style.transition = "opacity 0.6s ease";
+    splash.style.opacity = "0";
+    splash.style.pointerEvents = "none";
+    setTimeout(function () {
+        splash.style.display = "none";
+        splash.style.visibility = "hidden";
+        if (openAccount) {
+            try {
+                if (typeof openCreateAccount === "function") openCreateAccount();
+                else {
                     var ov = document.getElementById("accountOverlay");
                     if (ov) ov.style.display = "flex";
                 }
-            }, 500);
-        }, 6400);
+            } catch (e) {}
+        }
+    }, 650);
+}
+
+window.addEventListener("DOMContentLoaded", function () {
+    var splash = document.getElementById("introSplash");
+    var loggedIn = localStorage.getItem("loggedIn");
+
+    // Splash must always clear — never blocked by avatar/Three.js errors
+    if (loggedIn === "true" || loggedIn === "guest") {
+        if (splash) {
+            splash.style.display = "none";
+            splash.style.pointerEvents = "none";
+        }
+    } else if (splash) {
+        splash.style.display = "flex";
+        splash.style.opacity = "1";
+        // Match animation length (~6.2s), then fade out
+        setTimeout(function () {
+            dismissIntroSplash(true);
+        }, 6500);
+        // Safety net: force hide even if something went wrong
+        setTimeout(function () {
+            if (splash && splash.style.display !== "none") {
+                splash.style.opacity = "0";
+                splash.style.display = "none";
+                splash.style.pointerEvents = "none";
+                try { if (typeof openCreateAccount === "function") openCreateAccount(); } catch (e) {}
+            }
+        }, 9000);
     }
 
-    ensureGuestButtonsVisible();
-    if (typeof refreshAvatarLock === "function") refreshAvatarLock();
+    try {
+        init3DAvatar();
+    } catch (e) {
+        console.warn("Avatar init failed:", e);
+    }
+
+    try {
+        ensureGuestButtonsVisible();
+        if (typeof refreshAvatarLock === "function") refreshAvatarLock();
+    } catch (e) {}
 
     if (loggedIn === "true" || loggedIn === "guest") {
         try {
@@ -966,31 +1001,68 @@ function renderAzaFnMessages() {
     box.scrollTop = box.scrollHeight;
 }
 
+function showAzaFnTyping() {
+    var box = document.getElementById("azafnMessages");
+    if (!box) return;
+    var existing = document.getElementById("azafnTyping");
+    if (existing) existing.remove();
+    var div = document.createElement("div");
+    div.className = "azafn-typing";
+    div.id = "azafnTyping";
+    div.innerHTML = '<div class="azafn-msg-label">AzaFn-1.0</div><span>•</span><span>•</span><span>•</span> thinking…';
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+}
+
+function hideAzaFnTyping() {
+    var el = document.getElementById("azafnTyping");
+    if (el) el.remove();
+}
+
 function sendAzaFnMessage() {
     var input = document.getElementById("azafnInput");
     var text = (input.value || "").trim();
     if (!text) return;
+    if (input.disabled) return;
     input.value = "";
     addAzaFnUserMessage(text);
     azaFnPendingDescription = text;
-    var dims = detectDimensions(text);
-    if (!dims) {
-        addAzaFnAIMessage(
-            "I heard your idea! 🎮<br><br>Before I can help you build it, I need to know the <strong>dimensions</strong>.<br><br>" +
-            "Do you want this game to be <strong>2D</strong> (side-view, top-down, etc.) or <strong>3D</strong> (full 3D world with depth)?<br><br>" +
-            "Please reply with <strong>2D</strong> or <strong>3D</strong> — I cannot assume."
-        );
-    } else if (dims === "ambiguous") {
-        addAzaFnAIMessage("You mentioned both 2D and 3D. Please pick <strong>one</strong> clearly.");
-    } else {
-        addAzaFnAIMessage(
-            "Great! Here's what I understood:<br><br>📐 <strong>Dimensions:</strong> " + dims +
-            "<br>📝 <strong>Your idea:</strong> " + escapeHtml(text) +
-            "<br><br>When you're ready, press the blue <strong>Build</strong> button below to generate your game and publish it to the Feed!"
-        );
-    }
     renderAzaFnMessages();
+    showAzaFnTyping();
+
+    // Disable input while AI "thinks"
+    input.disabled = true;
+    var sendBtn = input.parentElement ? input.parentElement.querySelector("button") : null;
+    if (sendBtn) sendBtn.disabled = true;
+
+    var delay = 2200 + Math.floor(Math.random() * 1800); // ~2.2–4s
+    setTimeout(function () {
+        hideAzaFnTyping();
+        var dims = detectDimensions(text);
+        if (!dims) {
+            addAzaFnAIMessage(
+                "I heard your idea! 🎮<br><br>Before I can help you build it, I need to know the <strong>dimensions</strong>.<br><br>" +
+                "Do you want this game to be <strong>2D</strong> (side-view, top-down, etc.) or <strong>3D</strong> (full 3D world with depth)?<br><br>" +
+                "Please reply with <strong>2D</strong> or <strong>3D</strong> — I cannot assume."
+            );
+        } else if (dims === "ambiguous") {
+            addAzaFnAIMessage("You mentioned both 2D and 3D. Please pick <strong>one</strong> clearly.");
+        } else {
+            addAzaFnAIMessage(
+                "Great! Here's what I understood:<br><br>📐 <strong>Dimensions:</strong> " + dims +
+                "<br>📝 <strong>Your idea:</strong> " + escapeHtml(text) +
+                "<br><br>When you're ready, press the blue <strong>Build</strong> button below. " +
+                "That opens a <strong>private preview</strong> — only you can see it until you publish it to the Feed."
+            );
+        }
+        renderAzaFnMessages();
+        input.disabled = false;
+        if (sendBtn) sendBtn.disabled = false;
+        input.focus();
+    }, delay);
 }
+
+var currentPreviewGameId = null;
 
 function azaFnBuild(msgIndex) {
     var description = azaFnPendingDescription;
@@ -1014,29 +1086,124 @@ function azaFnBuild(msgIndex) {
         addAzaFnAIMessage("I still don't know if this should be <strong>2D</strong> or <strong>3D</strong>. Please tell me clearly, then press Build again.");
         renderAzaFnMessages(); return;
     }
+
     var account = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
     var username = account.username || "Player";
     var words = description.trim().split(/\s+/).slice(0, 5).join(" ");
     var title = (words.length > 40 ? words.slice(0, 40) + "…" : words) + " (" + finalDims + ")";
+
+    // Private draft — NOT on public Feed until published
     var game = {
         id: "game_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
-        title: title, description: description, dimensions: finalDims,
-        creator: username, createdAt: Date.now(), likes: 0, likedBy: [], savedBy: [], comments: [], published: true
+        title: title,
+        description: description,
+        dimensions: finalDims,
+        creator: username,
+        createdAt: Date.now(),
+        likes: 0,
+        likedBy: [],
+        savedBy: [],
+        comments: [],
+        published: false
     };
+    loadAzaFnGames();
     azaFnGames.unshift(game);
     saveAzaFnGames();
+
     addAzaFnAIMessage(
-        "✅ <strong>Game built and published!</strong><br><br>🎮 <strong>" + escapeHtml(game.title) +
+        "✅ <strong>Game built!</strong><br><br>🎮 <strong>" + escapeHtml(game.title) +
         "</strong><br>📐 " + finalDims +
-        "<br><br>It's now live in the <strong>Feed</strong>! Click the <strong>🎮 Feed</strong> button at the top of the page to see it, like, comment, save, or share. " +
-        "As the creator you can also <strong>Edit</strong> it — republishing pushes it back into the algorithm!"
+        "<br><br>Opening a <strong>private preview</strong> now. Only you can see this game under your profile until you press <strong>Publish to Feed</strong>."
     );
     renderAzaFnMessages();
+
+    // Teleport to preview
+    openGamePreview(game.id);
 }
+
+function openGamePreview(gameId) {
+    loadAzaFnGames();
+    var game = azaFnGames.find(function (g) { return g.id === gameId; });
+    if (!game) return;
+    currentPreviewGameId = gameId;
+
+    document.getElementById("gamePreviewTitle").textContent = game.title;
+    document.getElementById("gamePreviewDims").textContent = game.dimensions;
+    document.getElementById("gamePreviewDesc").textContent = game.description;
+
+    var badge = document.getElementById("gamePreviewBadge");
+    var pubBtn = document.getElementById("publishGameBtn");
+    if (game.published) {
+        badge.textContent = "PUBLIC · Live on Feed";
+        badge.className = "game-preview-badge public";
+        if (pubBtn) pubBtn.style.display = "none";
+    } else {
+        badge.textContent = "PRIVATE · Not on Feed";
+        badge.className = "game-preview-badge";
+        if (pubBtn) pubBtn.style.display = "inline-block";
+    }
+
+    var mock = document.getElementById("previewMock");
+    if (mock) {
+        mock.className = "preview-mock " + (game.dimensions === "3D" ? "dim-3d" : "dim-2d");
+        mock.innerHTML = "";
+        if (game.dimensions === "3D") {
+            var cube = document.createElement("div");
+            cube.className = "preview-cube";
+            mock.appendChild(cube);
+        } else {
+            var plat = document.createElement("div");
+            plat.className = "preview-platform";
+            var player = document.createElement("div");
+            player.className = "preview-player";
+            mock.appendChild(plat);
+            mock.appendChild(player);
+        }
+    }
+
+    document.getElementById("gamePreviewOverlay").style.display = "flex";
+}
+
+function closeGamePreview() {
+    document.getElementById("gamePreviewOverlay").style.display = "none";
+    currentPreviewGameId = null;
+}
+
+function publishCurrentPreview() {
+    if (!currentPreviewGameId) return;
+    loadAzaFnGames();
+    var game = azaFnGames.find(function (g) { return g.id === currentPreviewGameId; });
+    if (!game) return;
+    game.published = true;
+    game.createdAt = Date.now(); // bump to top of algorithm
+    // Move to front of list
+    azaFnGames = azaFnGames.filter(function (g) { return g.id !== game.id; });
+    azaFnGames.unshift(game);
+    saveAzaFnGames();
+
+    var badge = document.getElementById("gamePreviewBadge");
+    if (badge) {
+        badge.textContent = "PUBLIC · Live on Feed";
+        badge.className = "game-preview-badge public";
+    }
+    var pubBtn = document.getElementById("publishGameBtn");
+    if (pubBtn) pubBtn.style.display = "none";
+
+    alert("🚀 Published! Your game is now on the public Feed and on your profile.");
+}
+
+window.openGamePreview = openGamePreview;
+window.closeGamePreview = closeGamePreview;
+window.publishCurrentPreview = publishCurrentPreview;
+
 
 function loadAzaFnGames() {
     try { azaFnGames = JSON.parse(localStorage.getItem("azoraAzaFnGames") || "[]"); }
     catch (e) { azaFnGames = []; }
+    // Older games without published flag count as already public
+    azaFnGames.forEach(function (g) {
+        if (typeof g.published === "undefined") g.published = true;
+    });
 }
 function saveAzaFnGames() { localStorage.setItem("azoraAzaFnGames", JSON.stringify(azaFnGames)); }
 
@@ -1086,6 +1253,11 @@ function renderAzaFnFeed() {
 }
 
 function azaFnLike(gameId) {
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Guests can't like games. Create an account to heart games!");
+        openCreateAccount();
+        return;
+    }
     var myName = (JSON.parse(localStorage.getItem("azoraAccount") || "{}")).username || "";
     if (!myName) return;
     var game = azaFnGames.find(function (g) { return g.id === gameId; });
@@ -1098,6 +1270,11 @@ function azaFnLike(gameId) {
 }
 
 function azaFnSave(gameId) {
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Guests can't save games. Create an account to save games!");
+        openCreateAccount();
+        return;
+    }
     var myName = (JSON.parse(localStorage.getItem("azoraAccount") || "{}")).username || "";
     if (!myName) return;
     var game = azaFnGames.find(function (g) { return g.id === gameId; });
@@ -1123,10 +1300,16 @@ function azaFnToggleComments(gameId) {
 }
 
 function azaFnAddComment(gameId) {
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Guests can't comment. Create an account to join the conversation!");
+        openCreateAccount();
+        return;
+    }
     var input = document.getElementById("commentInput_" + gameId);
     var text = (input && input.value || "").trim();
     if (!text) return;
-    var myName = (JSON.parse(localStorage.getItem("azoraAccount") || "{}")).username || "Guest";
+    var myName = (JSON.parse(localStorage.getItem("azoraAccount") || "{}")).username || "";
+    if (!myName) return;
     var game = azaFnGames.find(function (g) { return g.id === gameId; });
     if (!game) return;
     game.comments = game.comments || [];
@@ -1154,13 +1337,16 @@ function azaFnRepublish(gameId) {
     var words = newDesc.trim().split(/\s+/).slice(0, 5).join(" ");
     game.title = (words.length > 40 ? words.slice(0, 40) + "…" : words) + " (" + dims + ")";
     game.createdAt = Date.now();
+    game.published = true;
     azaFnGames = azaFnGames.filter(function (g) { return g.id !== gameId; });
     azaFnGames.unshift(game);
     saveAzaFnGames();
     alert("🚀 Changes published! Your game is back at the top of the Feed.");
     renderAzaFnFeed();
+    if (typeof renderPublicFeed === "function") renderPublicFeed();
 }
 
+window.renderProfileGames = renderProfileGames;
 window.openAzaFn = openAzaFn;
 window.closeAzaFn = closeAzaFn;
 window.switchAzaFnTab = switchAzaFnTab;
@@ -1190,19 +1376,20 @@ function renderPublicFeed() {
     if (!panel) return;
     loadAzaFnGames();
 
-    if (azaFnGames.length === 0) {
+    // Only published games appear on the public Feed
+    var publicGames = azaFnGames.filter(function (g) { return g.published === true; });
+    if (publicGames.length === 0) {
         panel.innerHTML = '<div class="empty-feed">No games yet! Please come back later!</div>';
         return;
     }
 
-    // Reuse the same card renderer as AzaFn feed
-    // Temporarily point azafnFeedPanel logic at public panel by rendering into publicFeedPanel
     var account = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
     var myName = account.username || "";
     var loggedIn = localStorage.getItem("loggedIn") === "true";
     panel.innerHTML = "";
 
-    azaFnGames.forEach(function (game) {
+    var isGuest = localStorage.getItem("loggedIn") === "guest";
+    publicGames.forEach(function (game) {
         var isOwner = loggedIn && game.creator === myName;
         var liked = loggedIn && (game.likedBy || []).indexOf(myName) !== -1;
         var saved = loggedIn && (game.savedBy || []).indexOf(myName) !== -1;
@@ -1213,38 +1400,37 @@ function renderPublicFeed() {
             commentsHtml += '<div class="game-comment"><strong>' + escapeHtml(c.user) + ':</strong> ' + escapeHtml(c.text) + '</div>';
         });
 
+        // Guests can view & play, but cannot heart / save / comment
+        var likeBtn = loggedIn
+            ? ('<button class="game-action-btn' + (liked ? ' liked' : '') + '" onclick="azaFnLike(\'' + game.id + '\'); renderPublicFeed();">' + (liked ? '❤️ ' : '🤍 ') + (game.likes || 0) + '</button>')
+            : ('<button class="game-action-btn" onclick="alert(\'Guests can play games, but cannot like, save, or comment. Create an account to join in!\');" style="opacity:0.7;">🤍 ' + (game.likes || 0) + '</button>');
+        var saveBtn = loggedIn
+            ? ('<button class="game-action-btn' + (saved ? ' saved' : '') + '" onclick="azaFnSave(\'' + game.id + '\'); renderPublicFeed();">' + (saved ? '🔖 Saved' : '📑 Save') + '</button>')
+            : '';
+        var commentFooter = loggedIn
+            ? ('<div class="comment-input-row"><input type="text" id="commentInput_' + game.id + '" placeholder="Write a comment..."><button onclick="azaFnAddComment(\'' + game.id + '\'); renderPublicFeed();">Post</button></div>')
+            : (isGuest
+                ? '<p style="color:rgba(255,255,255,0.75);font-size:13px;">Guests can play games, but cannot comment, like, or save.</p>'
+                : '<p style="color:rgba(255,255,255,0.7);font-size:13px;">Log in to comment.</p>');
+
         var card = document.createElement("div");
         card.className = "game-card";
         card.innerHTML =
             '<div class="game-card-header">' +
                 '<div class="game-card-avatar">' + initial + '</div>' +
-                '<div class="game-card-meta"><strong>' + escapeHtml(game.creator) + '</strong><span>' + timeStr + '</span></div>' +
+                '<div class="game-card-meta"><strong>' + escapeHtml(game.creator || "Player") + '</strong><span>' + timeStr + '</span></div>' +
             '</div>' +
             '<div class="game-card-title">' + escapeHtml(game.title) + '</div>' +
             '<div class="game-card-dims">' + escapeHtml(game.dimensions) + '</div>' +
             '<div class="game-card-desc">' + escapeHtml(game.description) + '</div>' +
             '<div class="game-card-actions">' +
-                '<button class="game-action-btn' + (liked ? ' liked' : '') + '" onclick="azaFnLike(\'' + game.id + '\'); renderPublicFeed();">' +
-                    (liked ? '❤️ ' : '🤍 ') + (game.likes || 0) +
-                '</button>' +
+                likeBtn +
                 '<button class="game-action-btn" onclick="azaFnToggleComments(\'' + game.id + '\')">💬 Comments (' + (game.comments || []).length + ')</button>' +
-                (loggedIn
-                    ? '<button class="game-action-btn' + (saved ? ' saved' : '') + '" onclick="azaFnSave(\'' + game.id + '\'); renderPublicFeed();">' +
-                        (saved ? '🔖 Saved' : '📑 Save') + '</button>'
-                    : '') +
+                saveBtn +
                 '<button class="game-action-btn" onclick="azaFnShare(\'' + game.id + '\')">📤 Share</button>' +
-                (isOwner
-                    ? '<button class="game-action-btn" onclick="azaFnToggleEdit(\'' + game.id + '\')">✏️ Edit</button>'
-                    : '') +
+                (isOwner ? '<button class="game-action-btn" onclick="azaFnToggleEdit(\'' + game.id + '\')">✏️ Edit</button>' : '') +
             '</div>' +
-            '<div class="game-comments" id="comments_' + game.id + '">' + commentsHtml +
-                (loggedIn
-                    ? '<div class="comment-input-row">' +
-                        '<input type="text" id="commentInput_' + game.id + '" placeholder="Write a comment...">' +
-                        '<button onclick="azaFnAddComment(\'' + game.id + '\'); renderPublicFeed();">Post</button>' +
-                      '</div>'
-                    : '<p style="color:rgba(255,255,255,0.7);font-size:13px;">Log in to comment.</p>') +
-            '</div>' +
+            '<div class="game-comments" id="comments_' + game.id + '">' + commentsHtml + commentFooter + '</div>' +
             (isOwner
                 ? '<div class="game-edit-area" id="edit_' + game.id + '">' +
                     '<textarea id="editDesc_' + game.id + '">' + escapeHtml(game.description) + '</textarea>' +
@@ -1347,6 +1533,37 @@ function openGuestProfile() {
         '<p style="color:#666;font-size:14px;">Guests don\'t have usernames, followers, or friends. Their public User ID is shown above.</p>' +
         '<button onclick="closeProfile(); openCreateAccount();" style="background:linear-gradient(180deg,#3b82f6,#1e60ff);color:#fff;">Create a real account</button>';
     document.getElementById("profileOverlay").style.display = "flex";
+}
+
+
+
+function renderProfileGames(username, isOwn) {
+    var section = document.getElementById("profileGames");
+    if (!section) return;
+    loadAzaFnGames();
+    var games = azaFnGames.filter(function (g) {
+        if (g.creator !== username) return false;
+        // Owner sees private + public; others only published
+        if (isOwn) return true;
+        return g.published === true;
+    });
+    if (games.length === 0) {
+        section.style.display = "none";
+        section.innerHTML = "";
+        return;
+    }
+    section.style.display = "block";
+    var html = "<h3>Games</h3>";
+    games.forEach(function (g) {
+        var badge = g.published
+            ? '<span class="pg-badge live">Live</span>'
+            : '<span class="pg-badge private">Private</span>';
+        html += '<div class="profile-game-row" onclick="openGamePreview(\'' + g.id + '\')">' +
+            '<strong>' + escapeHtml(g.title) + badge + '</strong>' +
+            '<span>' + escapeHtml(g.dimensions) + (g.published ? '' : ' · only you can see this') + '</span>' +
+            '</div>';
+    });
+    section.innerHTML = html;
 }
 
 function openUserProfile(username) {
@@ -1457,6 +1674,8 @@ function openUserProfile(username) {
         }
     }
 
+    var meName = getMyUsername();
+    renderProfileGames(username, meName === username);
     document.getElementById("profileOverlay").style.display = "flex";
 }
 
@@ -1702,6 +1921,7 @@ function performSearch() {
     });
 }
 
+window.dismissIntroSplash = dismissIntroSplash;
 window.ensureGuestButtonsVisible = ensureGuestButtonsVisible;
 window.getPublicUserId = getPublicUserId;
 window.setProfileUserIdDisplay = setProfileUserIdDisplay;
@@ -2040,6 +2260,17 @@ function switchSettingsTab(tab) {
     var tabSecurity = document.getElementById("settingsTabSecurity");
     if (!basic || !security) return;
 
+    var isGuest = localStorage.getItem("loggedIn") === "guest";
+    var isFull = localStorage.getItem("loggedIn") === "true";
+
+    // Guests: Security is restricted
+    if (tab === "security" && !isFull) {
+        if (tabSecurity) {
+            tabSecurity.classList.add("restricted");
+        }
+        // Still show the panel but locked content via refreshSecurityPanel
+    }
+
     if (tab === "security") {
         basic.style.display = "none";
         security.style.display = "block";
@@ -2065,15 +2296,51 @@ function refreshSecurityPanel() {
     var acc = {};
     try { acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}"); } catch (e) {}
 
+    var formIds = ["currentPassword", "newPassword", "confirmNewPassword"];
+    var updateBtn = null;
+    // Find update password button inside security panel
+    var secPanel = document.getElementById("settingsPanelSecurity");
+    if (secPanel) {
+        var btns = secPanel.querySelectorAll("button");
+        btns.forEach(function (b) {
+            if (b.textContent.indexOf("Update Password") !== -1) updateBtn = b;
+        });
+    }
+
+    var locked = loggedIn !== "true";
+
+    formIds.forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) {
+            el.disabled = locked;
+            el.placeholder = locked ? "Restricted for guests" : el.getAttribute("data-ph") || el.placeholder;
+            if (!el.getAttribute("data-ph") && !locked) el.setAttribute("data-ph", el.placeholder);
+        }
+    });
+    if (updateBtn) {
+        updateBtn.disabled = locked;
+        updateBtn.style.opacity = locked ? "0.5" : "1";
+        updateBtn.style.pointerEvents = locked ? "none" : "auto";
+    }
+
     if (info) {
         if (loggedIn === "true" && acc.username) {
             info.innerHTML = "Signed in as <strong>" + escapeHtml(acc.username) + "</strong>" +
                 (acc.userId ? " · " + escapeHtml(acc.userId) : "");
         } else if (loggedIn === "guest") {
-            info.textContent = "Guests cannot change a password. Create an account to use Security settings.";
+            info.innerHTML = "🔒 <strong>Security is restricted for guests.</strong><br>" +
+                "Guests have no username or password, and progress is not saved.<br>" +
+                "You can still play games — create an account to like, save, comment, and use Security.";
         } else {
             info.textContent = "Sign in with a full account to manage security.";
         }
+    }
+
+    // Dim security tab for guests
+    var tabSecurity = document.getElementById("settingsTabSecurity");
+    if (tabSecurity) {
+        if (loggedIn === "guest") tabSecurity.classList.add("restricted");
+        else tabSecurity.classList.remove("restricted");
     }
 }
 

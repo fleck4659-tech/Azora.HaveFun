@@ -296,6 +296,7 @@
             <small id="bioCount" style="color:#666;">0 / 250</small>
             <button onclick="saveProfileBio()" style="width:100%;margin-top:8px;">Save Description</button>
         </div>
+        <div id="profileGames" class="profile-games-section" style="display:none;text-align:left;margin-top:14px;"></div>
         <div id="profileActions" style="display:flex;flex-direction:column;gap:10px;margin-top:15px;"></div>
         <button onclick="closeProfile()" style="margin-top:15px;">Close</button>
     </div>
@@ -335,6 +336,33 @@
         <div style="display:flex;gap:8px;margin-top:15px;">
             <button onclick="markAllNotifsRead()" style="flex:1;">Mark all read</button>
             <button onclick="closeNotifPanel()" style="flex:1;">Close</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- Game Preview (private until published) -->
+<div id="gamePreviewOverlay" class="azafn-overlay" style="display:none;">
+    <div class="azafn-header">
+        <h2><img src="logo.jpg" alt="Azora"> Game Preview</h2>
+        <div class="azafn-tabs">
+            <button onclick="closeGamePreview()" style="margin:0;background:#ff3b30;color:#fff;">✕ Close</button>
+        </div>
+    </div>
+    <div class="game-preview-body">
+        <div class="game-preview-stage" id="gamePreviewStage">
+            <div class="game-preview-badge" id="gamePreviewBadge">PRIVATE · Not on Feed</div>
+            <div class="game-preview-title" id="gamePreviewTitle">Game Title</div>
+            <div class="game-preview-dims" id="gamePreviewDims">2D</div>
+            <div class="game-preview-canvas" id="gamePreviewCanvas">
+                <div class="preview-mock" id="previewMock"></div>
+            </div>
+            <p class="game-preview-desc" id="gamePreviewDesc"></p>
+            <p class="game-preview-note">Only you can see this until you publish. It will also appear under your profile.</p>
+            <div class="game-preview-actions">
+                <button type="button" id="publishGameBtn" onclick="publishCurrentPreview()" style="background:linear-gradient(180deg,#34d399,#10b981);color:#fff;">🚀 Publish to Feed</button>
+                <button type="button" onclick="closeGamePreview()">Keep Private</button>
+            </div>
         </div>
     </div>
 </div>
