@@ -17,10 +17,7 @@
             align-items: center;
             padding: 40px 20px;
         }
-        .lock-screen, .dashboard {
-            width: 100%;
-            max-width: 720px;
-        }
+        .lock-screen, .dashboard { width: 100%; max-width: 780px; }
         .lock-box {
             background: #161b22;
             border: 2px solid #30363d;
@@ -28,203 +25,86 @@
             padding: 40px;
             text-align: center;
         }
-        .lock-box img {
-            width: 80px;
-            border-radius: 50%;
-            margin-bottom: 16px;
-        }
-        .lock-box h1 {
-            color: #58a6ff;
-            margin: 0 0 8px;
-            font-size: 1.5rem;
-        }
-        .lock-box p {
-            color: #8b949e;
-            font-size: 14px;
-            margin-bottom: 24px;
-        }
+        .lock-box img { width: 80px; border-radius: 50%; margin-bottom: 16px; }
+        .lock-box h1 { color: #58a6ff; margin: 0 0 8px; font-size: 1.5rem; }
+        .lock-box p { color: #8b949e; font-size: 14px; margin-bottom: 24px; }
         .lock-box input {
-            width: 100%;
-            padding: 12px 14px;
-            border-radius: 10px;
-            border: 2px solid #30363d;
-            background: #0d1117;
-            color: #e2e8f0;
-            font-size: 15px;
-            margin-bottom: 12px;
+            width: 100%; padding: 12px 14px; border-radius: 10px;
+            border: 2px solid #30363d; background: #0d1117; color: #e2e8f0;
+            font-size: 15px; margin-bottom: 12px;
         }
         .lock-box button, .dashboard button {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 10px;
+            width: 100%; padding: 12px; border: none; border-radius: 10px;
             background: linear-gradient(90deg, #1e60ff, #00aaff);
-            color: #fff;
-            font-weight: bold;
-            font-size: 15px;
-            cursor: pointer;
+            color: #fff; font-weight: bold; font-size: 15px; cursor: pointer;
         }
-        .lock-box button:hover, .dashboard button:hover {
-            opacity: 0.9;
-        }
-        .error {
-            color: #ff7b72;
-            font-size: 13px;
-            margin-top: 10px;
-            display: none;
-        }
+        .lock-box button:hover, .dashboard button:hover { opacity: 0.9; }
+        .error { color: #ff7b72; font-size: 13px; margin-top: 10px; display: none; }
         .dashboard { display: none; }
         .dash-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 16px;
-            flex-wrap: wrap;
-            gap: 12px;
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 16px; flex-wrap: wrap; gap: 12px;
         }
         .dash-header h1 {
-            margin: 0;
-            color: #58a6ff;
-            font-size: 1.4rem;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            margin: 0; color: #58a6ff; font-size: 1.4rem;
+            display: flex; align-items: center; gap: 10px;
         }
-        .dash-header img {
-            width: 40px;
-            border-radius: 50%;
+        .dash-header img { width: 40px; border-radius: 50%; }
+        .note-box {
+            border-radius: 12px; padding: 12px 14px; font-size: 13px;
+            margin-bottom: 16px; line-height: 1.5;
         }
-        .device-note {
-            background: #21262d;
-            border: 1px solid #f59e0b;
-            border-radius: 12px;
-            padding: 12px 14px;
-            font-size: 13px;
-            color: #fbbf24;
-            margin-bottom: 18px;
-            line-height: 1.45;
+        .note-warn {
+            background: #21262d; border: 1px solid #f59e0b; color: #fbbf24;
         }
-        .device-note strong { color: #fef3c7; }
-        .stat-cards {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 14px;
-            margin-bottom: 24px;
+        .note-ok {
+            background: #0d2818; border: 1px solid #10b981; color: #6ee7b7;
         }
-        .stat-card {
-            background: #161b22;
-            border: 2px solid #30363d;
-            border-radius: 14px;
-            padding: 20px;
-            text-align: center;
-        }
-        .stat-card .num {
-            font-size: 2.4rem;
-            font-weight: bold;
-            color: #00ebd4;
-        }
-        .stat-card .label {
-            color: #8b949e;
-            font-size: 13px;
-            margin-top: 4px;
-        }
-        .user-table-wrap {
-            background: #161b22;
-            border: 2px solid #30363d;
-            border-radius: 14px;
-            overflow: hidden;
-        }
-        .user-table-wrap h2 {
-            margin: 0;
-            padding: 16px 20px;
-            font-size: 1rem;
-            border-bottom: 1px solid #30363d;
-            color: #e2e8f0;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 14px;
-        }
-        th, td {
-            padding: 12px 16px;
-            text-align: left;
-            border-bottom: 1px solid #21262d;
-        }
-        th {
-            color: #8b949e;
-            font-weight: 600;
-            background: #0d1117;
-        }
-        td { color: #e2e8f0; }
-        tr:last-child td { border-bottom: none; }
-        .uid {
-            font-family: 'Courier New', monospace;
-            color: #58a6ff;
-            font-weight: bold;
-        }
-        .empty-row {
-            text-align: center;
-            color: #8b949e;
-            padding: 30px !important;
-        }
-        .actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 16px;
-            flex-wrap: wrap;
-        }
-        .actions button {
-            flex: 1;
-            min-width: 120px;
-        }
-        .btn-secondary {
-            background: #21262d !important;
-            border: 1px solid #30363d !important;
-        }
-        .btn-import {
-            background: linear-gradient(90deg, #10b981, #059669) !important;
-        }
-        .note {
-            margin-top: 20px;
-            font-size: 12px;
-            color: #8b949e;
-            text-align: center;
+        .setup-box {
+            background: #161b22; border: 2px solid #30363d; border-radius: 14px;
+            padding: 16px; margin-bottom: 18px; font-size: 13px; color: #c9d1d9;
             line-height: 1.5;
         }
-        .guest-tag {
-            font-size: 11px;
-            color: #94a3b8;
-            margin-left: 6px;
+        .setup-box h3 { margin: 0 0 8px; color: #58a6ff; font-size: 14px; }
+        .setup-box ol { margin: 8px 0 0 18px; padding: 0; }
+        .setup-box code {
+            background: #0d1117; padding: 2px 6px; border-radius: 4px;
+            font-size: 12px; color: #79c0ff;
         }
-        #importBox {
-            display: none;
-            margin-top: 14px;
-            background: #161b22;
-            border: 2px solid #30363d;
-            border-radius: 12px;
-            padding: 14px;
+        .stat-cards {
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
+            margin-bottom: 20px;
         }
-        #importBox textarea {
-            width: 100%;
-            min-height: 100px;
-            background: #0d1117;
-            color: #e2e8f0;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 12px;
-            margin-bottom: 10px;
+        .stat-card {
+            background: #161b22; border: 2px solid #30363d; border-radius: 14px;
+            padding: 16px; text-align: center;
         }
-        #importMsg {
-            font-size: 13px;
-            margin-top: 8px;
-            display: none;
+        .stat-card .num { font-size: 1.8rem; font-weight: bold; color: #00ebd4; }
+        .stat-card .label { color: #8b949e; font-size: 12px; margin-top: 4px; }
+        .user-table-wrap {
+            background: #161b22; border: 2px solid #30363d; border-radius: 14px; overflow: hidden;
         }
-        @media (max-width: 500px) {
-            .stat-cards { grid-template-columns: 1fr; }
+        .user-table-wrap h2 {
+            margin: 0; padding: 14px 18px; font-size: 1rem;
+            border-bottom: 1px solid #30363d; color: #e2e8f0;
         }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { padding: 11px 14px; text-align: left; border-bottom: 1px solid #21262d; }
+        th { color: #8b949e; font-weight: 600; background: #0d1117; }
+        td { color: #e2e8f0; }
+        tr:last-child td { border-bottom: none; }
+        .uid { font-family: 'Courier New', monospace; color: #58a6ff; font-weight: bold; }
+        .empty-row { text-align: center; color: #8b949e; padding: 30px !important; }
+        .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+        .actions button { flex: 1; min-width: 120px; }
+        .btn-secondary { background: #21262d !important; border: 1px solid #30363d !important; }
+        .source-tag {
+            display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 8px;
+            margin-left: 8px; vertical-align: middle;
+        }
+        .source-cloud { background: #064e3b; color: #6ee7b7; }
+        .source-local { background: #374151; color: #d1d5db; }
+        @media (max-width: 600px) { .stat-cards { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -246,25 +126,52 @@
         <button class="btn-secondary" style="width:auto;padding:8px 16px;" onclick="lockServers()">Lock</button>
     </div>
 
-    <div class="device-note">
-        <strong>Important:</strong> Accounts are saved in each device’s browser only (localStorage).
-        A username created on your <strong>phone</strong> will not appear here on your <strong>computer</strong> until you export from the phone and import below.
-        This panel only sees data on <em>this</em> browser.
+    <div id="statusNote" class="note-box note-warn">Checking global registry…</div>
+
+    <div class="setup-box" id="setupBox">
+        <h3>How global user tracking works</h3>
+        <p>
+            Your site on GitHub Pages is <strong>static</strong> — phones and computers cannot share localStorage.
+            Real accounts (not guests) are counted using a free <strong>Firebase Realtime Database</strong>.
+        </p>
+        <ol>
+            <li>Go to <code>https://console.firebase.google.com</code> and create a project (e.g. azora-havefun).</li>
+            <li>Build → Realtime Database → Create database → start in <strong>test mode</strong> (for now).</li>
+            <li>Copy the database URL, like <code>https://azora-havefun-default-rtdb.firebaseio.com</code></li>
+            <li>Open <code>script.js</code> on the site and set:
+                <br><code>firebaseUrl: "https://YOUR-PROJECT-default-rtdb.firebaseio.com"</code>
+                inside <code>AZORA_CLOUD</code> near the top.
+            </li>
+            <li>Also paste the same URL into the box below (saved only on this staff browser).</li>
+            <li>Publish/upload the updated <code>script.js</code> to GitHub Pages.</li>
+        </ol>
+        <p style="margin-top:12px;">
+            <input id="firebaseUrlInput" type="text" placeholder="https://YOUR-PROJECT-default-rtdb.firebaseio.com"
+                style="width:100%;padding:10px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#e2e8f0;margin-bottom:8px;">
+            <button type="button" onclick="saveStaffFirebaseUrl()">Save URL for this Servers panel</button>
+        </p>
+        <p style="color:#8b949e;margin:8px 0 0;font-size:12px;">
+            Guests are never uploaded. Only username + User ID + join time are stored in the cloud — not passwords.
+        </p>
     </div>
 
     <div class="stat-cards">
         <div class="stat-card">
             <div class="num" id="totalUsers">0</div>
-            <div class="label">Total Users (this device)</div>
+            <div class="label">Global accounts</div>
         </div>
         <div class="stat-card">
             <div class="num" id="nextId">Aza: 0</div>
-            <div class="label">Next User ID (this device)</div>
+            <div class="label">Next User ID</div>
+        </div>
+        <div class="stat-card">
+            <div class="num" id="localOnly">0</div>
+            <div class="label">Local-only (this browser)</div>
         </div>
     </div>
 
     <div class="user-table-wrap">
-        <h2>Registered Users</h2>
+        <h2>Users <span id="sourceTag" class="source-tag source-local">local</span></h2>
         <table>
             <thead>
                 <tr>
@@ -274,33 +181,42 @@
                 </tr>
             </thead>
             <tbody id="userTableBody">
-                <tr><td colspan="3" class="empty-row">No users registered yet.</td></tr>
+                <tr><td colspan="3" class="empty-row">No users yet.</td></tr>
             </tbody>
         </table>
     </div>
 
     <div class="actions">
         <button onclick="refreshRegistry()">🔄 Refresh</button>
-        <button class="btn-secondary" onclick="exportRegistry()">📤 Export registry</button>
-        <button class="btn-import" onclick="toggleImport()">📥 Import registry</button>
         <button class="btn-secondary" onclick="window.location.href='index.html'">← Back to Azora</button>
     </div>
-
-    <div id="importBox">
-        <p style="margin:0 0 8px;font-size:13px;color:#8b949e;">Paste the JSON exported from another device, then click Merge import.</p>
-        <textarea id="importText" placeholder='[{"userId":"Aza: 1","username":"Example",...}]'></textarea>
-        <button class="btn-import" onclick="importRegistry()">Merge import into this device</button>
-        <div id="importMsg"></div>
-    </div>
-
-    <p class="note">
-        User IDs are assigned as <strong>Aza: 0</strong>, <strong>Aza: 1</strong>, <strong>Aza: 2</strong>… on each device separately.<br>
-        Import merges missing users so staff can see accounts from phones and other browsers.
-    </p>
 </div>
 
 <script>
 var SERVER_ACCESS_KEY = "azora-servers-2026";
+
+function getFirebaseUrl() {
+    // Staff override for Servers panel, else same default as main site expects
+    var staff = localStorage.getItem("azoraStaffFirebaseUrl") || "";
+    if (staff) return staff.replace(/\/$/, "");
+    return "";
+}
+
+function cloudReady() {
+    var u = getFirebaseUrl();
+    return u.indexOf("https://") === 0 && u.indexOf("YOUR") === -1;
+}
+
+function saveStaffFirebaseUrl() {
+    var v = (document.getElementById("firebaseUrlInput").value || "").trim().replace(/\/$/, "");
+    if (!v) {
+        alert("Paste your Firebase Realtime Database URL first.");
+        return;
+    }
+    localStorage.setItem("azoraStaffFirebaseUrl", v);
+    alert("Saved for this Servers panel. Click Refresh.\n\nRemember: also put the same URL in script.js (AZORA_CLOUD.firebaseUrl) and publish so new signups register globally.");
+    refreshRegistry();
+}
 
 function unlockServers() {
     var input = document.getElementById("serverPassword").value;
@@ -308,6 +224,8 @@ function unlockServers() {
         sessionStorage.setItem("azoraServerUnlocked", "true");
         document.getElementById("lockScreen").style.display = "none";
         document.getElementById("dashboard").style.display = "block";
+        var inp = document.getElementById("firebaseUrlInput");
+        if (inp) inp.value = getFirebaseUrl();
         refreshRegistry();
     } else {
         document.getElementById("lockError").style.display = "block";
@@ -322,157 +240,85 @@ function lockServers() {
     document.getElementById("lockError").style.display = "none";
 }
 
-function readRegistry() {
+function readLocalRegistry() {
     var registry = [];
     try { registry = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]"); } catch (e) {}
     if (!Array.isArray(registry)) registry = [];
-
-    // Also pull full accounts stored on this device (in case registry was incomplete)
-    try {
-        var map = JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
-        Object.keys(map).forEach(function (uname) {
-            var acc = map[uname];
-            if (!acc) return;
-            var uid = acc.userId || null;
-            var exists = registry.some(function (u) {
-                return (uid && u.userId === uid) || (u.username && u.username.toLowerCase() === uname.toLowerCase());
-            });
-            if (!exists) {
-                registry.push({
-                    userId: uid || ("Aza: " + registry.length),
-                    username: acc.username || uname,
-                    isGuest: !!acc.isGuest,
-                    createdAt: acc.createdAt || Date.now()
-                });
-            }
-        });
-    } catch (e) {}
-
-    // Current session account
-    try {
-        var cur = JSON.parse(localStorage.getItem("azoraAccount") || "null");
-        if (cur && (cur.username || cur.userId)) {
-            var exists2 = registry.some(function (u) {
-                return (cur.userId && u.userId === cur.userId) ||
-                    (cur.username && u.username && u.username.toLowerCase() === cur.username.toLowerCase());
-            });
-            if (!exists2) {
-                registry.push({
-                    userId: cur.userId || ("Aza: " + registry.length),
-                    username: cur.username || (cur.isGuest ? "" : ""),
-                    displayName: cur.displayName || "",
-                    isGuest: !!cur.isGuest,
-                    createdAt: cur.createdAt || Date.now()
-                });
-            }
-        }
-    } catch (e) {}
-
-    return registry;
+    // Real accounts only for “local only” comparison
+    return registry.filter(function (u) { return u && !u.isGuest && u.username; });
 }
 
-function saveRegistry(registry) {
-    localStorage.setItem("azoraUserRegistry", JSON.stringify(registry));
-}
-
-function refreshRegistry() {
-    var registry = readRegistry();
-    // Persist merged view so next ID stays consistent on this device
-    saveRegistry(registry);
-
-    document.getElementById("totalUsers").textContent = registry.length;
-    document.getElementById("nextId").textContent = "Aza: " + registry.length;
-
+function renderTable(list, source) {
     var tbody = document.getElementById("userTableBody");
-    if (registry.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="empty-row">No users registered yet on this device.</td></tr>';
+    var tag = document.getElementById("sourceTag");
+    if (tag) {
+        tag.textContent = source;
+        tag.className = "source-tag " + (source === "global cloud" ? "source-cloud" : "source-local");
+    }
+    document.getElementById("totalUsers").textContent = list.length;
+    var maxN = 0;
+    list.forEach(function (u) {
+        var m = String(u.userId || "").match(/Aza:\s*(\d+)/i);
+        if (m) maxN = Math.max(maxN, parseInt(m[1], 10) + 1);
+    });
+    document.getElementById("nextId").textContent = "Aza: " + (list.length ? maxN : list.length);
+
+    if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="empty-row">No real accounts found yet. (Guests do not count.)</td></tr>';
         return;
     }
-
     tbody.innerHTML = "";
-    registry.slice().reverse().forEach(function (user) {
+    list.slice().reverse().forEach(function (user) {
         var tr = document.createElement("tr");
         var dateStr = user.createdAt ? new Date(user.createdAt).toLocaleString() : "—";
-        var name = user.username || user.displayName || "—";
-        if (user.isGuest || name === "") {
-            name = (user.displayName || "Guest") + ' <span class="guest-tag">guest</span>';
-        } else {
-            name = escapeHtml(name);
-        }
         tr.innerHTML =
             '<td class="uid">' + escapeHtml(user.userId || "—") + '</td>' +
-            '<td>' + name + '</td>' +
+            '<td>' + escapeHtml(user.username || "—") + '</td>' +
             '<td>' + dateStr + '</td>';
         tbody.appendChild(tr);
     });
 }
 
-function exportRegistry() {
-    var registry = readRegistry();
-    var blob = new Blob([JSON.stringify(registry, null, 2)], { type: "application/json" });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement("a");
-    a.href = url;
-    a.download = "azora-user-registry.json";
-    a.click();
-    URL.revokeObjectURL(url);
-}
+function refreshRegistry() {
+    var note = document.getElementById("statusNote");
+    var local = readLocalRegistry();
+    document.getElementById("localOnly").textContent = local.length;
 
-function toggleImport() {
-    var box = document.getElementById("importBox");
-    box.style.display = box.style.display === "block" ? "none" : "block";
-}
-
-function importRegistry() {
-    var msg = document.getElementById("importMsg");
-    msg.style.display = "none";
-    var raw = document.getElementById("importText").value.trim();
-    if (!raw) {
-        msg.style.display = "block";
-        msg.style.color = "#ff7b72";
-        msg.textContent = "Paste exported JSON first.";
-        return;
-    }
-    var incoming;
-    try {
-        incoming = JSON.parse(raw);
-    } catch (e) {
-        msg.style.display = "block";
-        msg.style.color = "#ff7b72";
-        msg.textContent = "Invalid JSON. Copy the full export file contents.";
-        return;
-    }
-    if (!Array.isArray(incoming)) {
-        msg.style.display = "block";
-        msg.style.color = "#ff7b72";
-        msg.textContent = "Export should be a JSON array of users.";
+    if (!cloudReady()) {
+        note.className = "note-box note-warn";
+        note.innerHTML = "<strong>Global cloud is not connected yet.</strong> Showing only accounts on <em>this</em> browser. Follow the setup steps below, then put the same Firebase URL in <code>script.js</code> so every device that joins Azora reports in.";
+        renderTable(local, "this browser only");
         return;
     }
 
-    var registry = readRegistry();
-    var added = 0;
-    incoming.forEach(function (user) {
-        if (!user || typeof user !== "object") return;
-        var exists = registry.some(function (u) {
-            return (user.userId && u.userId === user.userId) ||
-                (user.username && u.username && u.username.toLowerCase() === String(user.username).toLowerCase());
+    note.className = "note-box note-warn";
+    note.textContent = "Loading global registry from Firebase…";
+
+    var url = getFirebaseUrl() + "/azoraRegistry.json";
+    fetch(url)
+        .then(function (r) {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+        })
+        .then(function (data) {
+            var list = [];
+            if (data && typeof data === "object") {
+                Object.keys(data).forEach(function (k) {
+                    var u = data[k];
+                    if (u && u.username && !u.isGuest) list.push(u);
+                });
+            }
+            list.sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); });
+            note.className = "note-box note-ok";
+            note.innerHTML = "<strong>Connected to global registry.</strong> These are real accounts from every device using your published site. Guests are excluded.";
+            renderTable(list, "global cloud");
+        })
+        .catch(function (err) {
+            note.className = "note-box note-warn";
+            note.innerHTML = "<strong>Could not reach Firebase.</strong> " + escapeHtml(String(err && err.message || err)) +
+                " — check the database URL and that the database is in test mode. Showing local accounts only.";
+            renderTable(local, "this browser only");
         });
-        if (!exists) {
-            registry.push({
-                userId: user.userId || ("Aza: " + registry.length),
-                username: user.username || "",
-                displayName: user.displayName || "",
-                isGuest: !!user.isGuest,
-                createdAt: user.createdAt || Date.now()
-            });
-            added++;
-        }
-    });
-    saveRegistry(registry);
-    refreshRegistry();
-    msg.style.display = "block";
-    msg.style.color = "#34d399";
-    msg.textContent = "Merged. Added " + added + " user(s). Total on this device: " + registry.length + ".";
 }
 
 function escapeHtml(str) {
@@ -486,6 +332,8 @@ function escapeHtml(str) {
 if (sessionStorage.getItem("azoraServerUnlocked") === "true") {
     document.getElementById("lockScreen").style.display = "none";
     document.getElementById("dashboard").style.display = "block";
+    var inp = document.getElementById("firebaseUrlInput");
+    if (inp) inp.value = getFirebaseUrl();
     refreshRegistry();
 }
 </script>

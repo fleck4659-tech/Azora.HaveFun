@@ -23,6 +23,131 @@ const database = {
 
 let currentSearchTab = "users";
 
+// ============================================================
+// GLOBAL USER REGISTRY (shared across all devices)
+// GitHub Pages is static — real multi-user tracking needs a free
+// Firebase Realtime Database. Guests are NEVER sent to the cloud.
+// Setup: see servers.html staff note once unlocked.
+// ============================================================
+var AZORA_CLOUD = {
+    // ★ Paste your Firebase Realtime Database root URL (no trailing slash)
+    // Example: "https://azora-havefun-default-rtdb.firebaseio.com"
+    firebaseUrl: "",
+    isReady: function () {
+        var u = (this.firebaseUrl || "").trim();
+        return u.indexOf("https://") === 0 && u.indexOf("YOUR") === -1 && u.indexOf("example") === -1;
+    },
+    registryPath: "/azoraRegistry",
+    metaPath: "/azoraMeta"
+};
+
+function cloudBase() {
+    return (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "");
+}
+
+/** Public profile only — never send passwords */
+function buildPublicRegistryEntry(username, userId) {
+    return {
+        username: username,
+        userId: userId,
+        isGuest: false,
+        createdAt: Date.now()
+    };
+}
+
+/**
+ * Register a real account in the global cloud list.
+ * Guests must not call this.
+ * callback(err, entry)
+ */
+function registerGlobalUser(username, preferredUserId, callback) {
+    callback = callback || function () {};
+    if (!AZORA_CLOUD.isReady()) {
+        callback(new Error("Cloud registry not configured"), null);
+        return;
+    }
+    if (!username) {
+        callback(new Error("No username"), null);
+        return;
+    }
+
+    var safeKey = encodeURIComponent(String(username).toLowerCase().replace(/[.#$\/\[\]]/g, "_"));
+    var entryUrl = cloudBase() + AZORA_CLOUD.registryPath + "/" + safeKey + ".json";
+
+    // If username already exists globally, reject
+    fetch(entryUrl)
+        .then(function (r) { return r.json(); })
+        .then(function (existing) {
+            if (existing && existing.username) {
+                callback(new Error("USERNAME_TAKEN"), null);
+                return null;
+            }
+            // Next global ID from meta, fallback to timestamp-based
+            var metaUrl = cloudBase() + AZORA_CLOUD.metaPath + "/nextId.json";
+            return fetch(metaUrl)
+                .then(function (r) { return r.json(); })
+                .then(function (nextId) {
+                    var n = (typeof nextId === "number" && nextId >= 0) ? nextId : 0;
+                    var userId = preferredUserId || ("Aza: " + n);
+                    var entry = buildPublicRegistryEntry(username, userId);
+                    // Write user + bump nextId (best-effort; small race possible)
+                    return Promise.all([
+                        fetch(entryUrl, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(entry)
+                        }),
+                        fetch(metaUrl, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(n + 1)
+                        })
+                    ]).then(function () { return entry; });
+                });
+        })
+        .then(function (entry) {
+            if (entry) callback(null, entry);
+        })
+        .catch(function (err) {
+            console.warn("[Azora Cloud] register failed", err);
+            callback(err, null);
+        });
+}
+
+/** Load all global users (no guests). callback(err, array) */
+function fetchGlobalRegistry(callback) {
+    callback = callback || function () {};
+    if (!AZORA_CLOUD.isReady()) {
+        callback(new Error("Cloud registry not configured"), []);
+        return;
+    }
+    var url = cloudBase() + AZORA_CLOUD.registryPath + ".json";
+    fetch(url)
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            var list = [];
+            if (data && typeof data === "object") {
+                Object.keys(data).forEach(function (k) {
+                    var u = data[k];
+                    if (u && u.username && !u.isGuest) list.push(u);
+                });
+            }
+            // Sort by createdAt
+            list.sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); });
+            callback(null, list);
+        })
+        .catch(function (err) {
+            console.warn("[Azora Cloud] fetch failed", err);
+            callback(err, []);
+        });
+}
+
+window.AZORA_CLOUD = AZORA_CLOUD;
+window.registerGlobalUser = registerGlobalUser;
+window.fetchGlobalRegistry = fetchGlobalRegistry;
+
+
+
 // Create the container automatically
 const container = document.createElement('div');
 container.id = 'falling-text-container';
@@ -350,33 +475,9 @@ function setLoggedInAccount(account) {
     localStorage.setItem("loggedIn", "true");
 }
 
-function createAccount() {
-    if (typeof clearAccountError === "function") clearAccountError();
-    var username = document.getElementById("username").value.trim();
-    var password = document.getElementById("password").value;
-    var confirm = document.getElementById("confirmPassword").value;
-
-    if (!username || !password) {
-        alert("Please fill out username and password!");
-        return;
-    }
-    if (password !== confirm) {
-        alert("Passwords do not match!");
-        return;
-    }
-
+function finishCreateAccount(username, password, userId) {
     migrateLegacyAccount();
     var map = getSavedAccounts();
-    if (map[username]) {
-        alert("That username is already taken. Try another, or Log In.");
-        return;
-    }
-
-    // Assign unique public User ID
-    var registry = [];
-    try { registry = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]"); } catch (e) {}
-    var userId = "Aza: " + registry.length;
-
     var account = {
         username: username,
         password: password,
@@ -392,10 +493,11 @@ function createAccount() {
             face: "default"
         }
     };
-
     map[username] = account;
     saveSavedAccounts(map);
 
+    var registry = [];
+    try { registry = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]"); } catch (e) {}
     registry.push({
         userId: userId,
         username: username,
@@ -405,9 +507,59 @@ function createAccount() {
     localStorage.setItem("azoraUserRegistry", JSON.stringify(registry));
 
     setLoggedInAccount(account);
-
     alert("Welcome to Azora, " + username + "!\nYour User ID is " + userId + "\nYour account has been saved.");
     location.reload();
+}
+
+function createAccount() {
+    if (typeof clearAccountError === "function") clearAccountError();
+    var username = document.getElementById("username").value.trim();
+    var password = document.getElementById("password").value;
+    var confirm = document.getElementById("confirmPassword").value;
+    var btn = document.getElementById("mainButton");
+
+    if (!username || !password) {
+        alert("Please fill out username and password!");
+        return;
+    }
+    if (password !== confirm) {
+        alert("Passwords do not match!");
+        return;
+    }
+
+    migrateLegacyAccount();
+    var map = getSavedAccounts();
+    if (map[username]) {
+        alert("That username is already taken on this device. Try another, or Log In.");
+        return;
+    }
+
+    // Local fallback ID (used if cloud is offline / not set up yet)
+    var registry = [];
+    try { registry = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]"); } catch (e) {}
+    var localId = "Aza: " + registry.length;
+
+    if (typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady()) {
+        if (btn) { btn.disabled = true; btn.textContent = "Creating…"; }
+        registerGlobalUser(username, null, function (err, entry) {
+            if (btn) { btn.disabled = false; btn.textContent = "Create Account"; }
+            if (err && err.message === "USERNAME_TAKEN") {
+                showAccountError("That username is already taken on Azora. Try another.");
+                return;
+            }
+            if (err || !entry) {
+                // Still allow local account so signup is not blocked
+                console.warn("Cloud register failed, saving locally only", err);
+                finishCreateAccount(username, password, localId);
+                return;
+            }
+            finishCreateAccount(username, password, entry.userId);
+        });
+        return;
+    }
+
+    // No cloud configured → local only (old behavior)
+    finishCreateAccount(username, password, localId);
 }
 
 function showAccountError(msg) {
