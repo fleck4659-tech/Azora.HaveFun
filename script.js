@@ -2404,27 +2404,71 @@ function renderAIChatHistoryList() {
     var box = document.getElementById("aiChatHistoryList");
     if (!box) return;
     var store = ensureActiveAIChat();
+    // Newest activity first
+    var chats = store.chats.slice().sort(function (a, b) {
+        return (b.updatedAt || 0) - (a.updatedAt || 0);
+    });
     box.innerHTML = "";
-    store.chats.forEach(function (c) {
+    if (!chats.length) {
+        box.innerHTML = "<p style=\"color:rgba(255,255,255,0.55);font-size:11px;padding:6px;\">No AI chats yet. Send a message or tap New AI chat.</p>";
+        return;
+    }
+    chats.forEach(function (c) {
         var item = document.createElement("div");
-        item.className = "ai-history-item" + (c.id === store.activeId && isAIChat() ? " active" : "");
+        item.className = "ai-history-item" + (c.id === store.activeId && currentChatFriend === AZORA_AI_ID ? " active" : "");
+        item.title = "Click once to open this old AI chat";
+
         var title = c.title || "Chat";
+        var lastTs = c.updatedAt || null;
         if (c.messages && c.messages.length) {
             var last = c.messages[c.messages.length - 1];
-            title = (last.text || title).slice(0, 28);
+            if (last && last.text) title = String(last.text).slice(0, 28);
+            if (last && last.at) lastTs = last.at;
         }
-        item.innerHTML = "<span></span>";
-        item.querySelector("span").textContent = title;
+
+        var meta = document.createElement("div");
+        meta.className = "ai-history-meta";
+        var titleEl = document.createElement("span");
+        titleEl.className = "ai-history-title";
+        titleEl.textContent = title;
+        var timeEl = document.createElement("small");
+        timeEl.className = "ai-history-time";
+        timeEl.textContent = formatLastTalked(lastTs);
+        meta.appendChild(titleEl);
+        meta.appendChild(timeEl);
+
         var del = document.createElement("button");
         del.type = "button";
         del.textContent = "✕";
         del.title = "Delete this AI chat";
-        del.onclick = function (e) { deleteAIChat(c.id, e); };
+        del.onclick = function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            deleteAIChat(c.id, e);
+        };
+
+        item.appendChild(meta);
         item.appendChild(del);
+
+        // One click loads the full old AI chat
         item.onclick = function () {
             setActiveAIChat(c.id);
-            selectChatFriend(AZORA_AI_ID);
+            currentChatFriend = AZORA_AI_ID;
+            clearChatTyping();
+            if (chatAiReplyTimer) {
+                clearTimeout(chatAiReplyTimer);
+                chatAiReplyTimer = null;
+            }
+            var ai = getAICompanion();
+            var chat = getActiveAIChat();
+            document.getElementById("chatWithLabel").textContent =
+                "Chat with " + ai.name + " (AI) — " + (chat.title || "Chat") +
+                " · " + formatLastTalked(chat.updatedAt || lastTs);
+            document.getElementById("chatInputRow").style.display = "flex";
             renderAIChatHistoryList();
+            updateAICompanionListItem();
+            renderFriendsList();
+            renderChatMessages();
         };
         box.appendChild(item);
     });
@@ -2637,7 +2681,18 @@ function updateAICompanionListItem() {
         var meta = item.querySelector(".friend-meta");
         if (meta) {
             var small = meta.querySelector("small");
-            if (small) small.textContent = "AI Companion · Tap to chat";
+            if (small) {
+            try {
+                var ac = getActiveAIChat();
+                var ts = ac && ac.updatedAt ? ac.updatedAt : null;
+                if (ac && ac.messages && ac.messages.length && ac.messages[ac.messages.length - 1].at) {
+                    ts = ac.messages[ac.messages.length - 1].at;
+                }
+                small.textContent = formatLastTalked(ts);
+            } catch (e) {
+                small.textContent = "AI Companion · Tap to chat";
+            }
+        }
         }
     } else if (slot) {
         // recreate if missing
@@ -2680,9 +2735,11 @@ function renderFriendsList() {
     myData.friends.forEach(function (friend) {
         var item = document.createElement("div");
         item.className = "friend-item" + (currentChatFriend === friend ? " active" : "");
+        var last = getFriendLastTalked(friend);
         item.innerHTML =
             '<div class="friend-avatar">' + String(friend)[0].toUpperCase() + '</div>' +
-            '<div class="friend-meta"><span>' + escapeHtml(friend) + '</span><small>Friend</small></div>';
+            '<div class="friend-meta"><span>' + escapeHtml(friend) + '</span><small>' +
+            escapeHtml(formatLastTalked(last)) + '</small></div>';
         item.onclick = function () { selectChatFriend(friend); };
         list.appendChild(item);
     });
@@ -2699,11 +2756,19 @@ function selectChatFriend(friend) {
         ensureActiveAIChat();
         var ai = getAICompanion();
         var chat = getActiveAIChat();
+        var lastTs = chat.updatedAt || null;
+        if (chat.messages && chat.messages.length) {
+            var lm = chat.messages[chat.messages.length - 1];
+            if (lm && lm.at) lastTs = lm.at;
+        }
         document.getElementById("chatWithLabel").textContent =
-            "Chat with " + ai.name + " (AI) — " + (chat.title || "Chat");
+            "Chat with " + ai.name + " (AI) — " + (chat.title || "Chat") +
+            " · " + formatLastTalked(lastTs);
         renderAIChatHistoryList();
     } else {
-        document.getElementById("chatWithLabel").textContent = "Chat with " + friend;
+        var fl = getFriendLastTalked(friend);
+        document.getElementById("chatWithLabel").textContent =
+            "Chat with " + friend + " · " + formatLastTalked(fl);
     }
     document.getElementById("chatInputRow").style.display = "flex";
     renderFriendsList();
@@ -2834,6 +2899,40 @@ function aiReplyDelayMs(userText) {
 function pickRandom(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
 }
+
+function pad2(n) {
+    n = Math.floor(Number(n) || 0);
+    return (n < 10 ? "0" : "") + n;
+}
+/** Format: last talked M/DD/YYYY at HH:MM:SS */
+function formatLastTalked(ts) {
+    if (!ts) return "last talked — never";
+    var d = new Date(ts);
+    if (isNaN(d.getTime())) return "last talked — never";
+    var month = d.getMonth() + 1;
+    var day = pad2(d.getDate());
+    var year = d.getFullYear();
+    var h = pad2(d.getHours());
+    var m = pad2(d.getMinutes());
+    var s = pad2(d.getSeconds());
+    return "last talked " + month + "/" + day + "/" + year + " at " + h + ":" + m + ":" + s;
+}
+function getFriendLastTalked(friend) {
+    try {
+        var me = getChatSenderId();
+        var key = getChatKey(me, friend);
+        var messages = JSON.parse(localStorage.getItem(key) || "[]");
+        if (messages.length) return messages[messages.length - 1].at || null;
+    } catch (e) {}
+    // archives fallback
+    try {
+        var map = getChatArchives();
+        var arr = map["with:" + friend] || [];
+        if (arr.length) return arr[arr.length - 1].at || null;
+    } catch (e2) {}
+    return null;
+}
+
 
 function getChatUserContext() {
     var userName = "";
