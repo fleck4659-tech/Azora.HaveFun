@@ -2385,12 +2385,14 @@ function saveAICompanionSettings() {
         accent: document.getElementById("aiCompAccent").value
     });
     closeAICompanionSettings();
+    updateAICompanionListItem();
     if (document.getElementById("chatOverlay").style.display === "flex") {
         renderFriendsList();
         if (isAIChat()) {
             document.getElementById("chatWithLabel").textContent = "Chat with " + name + " (AI)";
         }
     }
+    alert("AI saved! Name in Chats: " + name);
 }
 
 function closeAICompanionSettings() {
@@ -2420,43 +2422,73 @@ function closeChatPanel() {
     }
 }
 
+function updateAICompanionListItem() {
+    var ai = getAICompanion();
+    var item = document.getElementById("aiCompanionListItem");
+    var nameEl = document.getElementById("aiCompanionListName");
+    var slot = document.getElementById("aiChatSlot");
+    if (nameEl) nameEl.textContent = ai.name || "Aza";
+    if (item) {
+        item.className = "friend-item ai-companion" + (currentChatFriend === AZORA_AI_ID ? " active" : "");
+        item.onclick = function () { selectChatFriend(AZORA_AI_ID); };
+        var av = item.querySelector(".friend-avatar");
+        if (av) {
+            av.className = "friend-avatar ai-face";
+            av.style.setProperty("--ai-head", ai.head || "#ffcc00");
+            av.style.setProperty("--ai-body", ai.body || "#a78bfa");
+            av.style.background = "linear-gradient(135deg, " + (ai.head || "#ffcc00") + ", " + (ai.body || "#a78bfa") + ")";
+            av.textContent = "AI";
+        }
+        // ensure meta text under name
+        var meta = item.querySelector(".friend-meta");
+        if (meta) {
+            var small = meta.querySelector("small");
+            if (small) small.textContent = "AI Companion · Tap to chat";
+        }
+    } else if (slot) {
+        // recreate if missing
+        slot.innerHTML =
+            '<div class="friend-item ai-companion' + (currentChatFriend === AZORA_AI_ID ? " active" : "") + '" id="aiCompanionListItem" onclick="selectChatFriend(\'__azora_ai__\')">' +
+            '<div class="friend-avatar ai-face" style="background:linear-gradient(135deg,' + (ai.head || "#ffcc00") + ',' + (ai.body || "#a78bfa") + ')">AI</div>' +
+            '<div class="friend-meta"><span id="aiCompanionListName">' + escapeHtml(ai.name || "Aza") + '</span>' +
+            '<small>AI Companion · Tap to chat</small></div></div>';
+    }
+}
+
 function renderFriendsList() {
     var isGuest = localStorage.getItem("loggedIn") === "guest";
     var me = getMyUsername();
     var list = document.getElementById("friendsList");
     var noMsg = document.getElementById("noFriendsMsg");
+    if (!list) return;
+
+    updateAICompanionListItem();
     list.innerHTML = "";
 
-    // Always pin AI companion at top (accounts + guests)
-    var ai = getAICompanion();
-    var aiItem = document.createElement("div");
-    aiItem.className = "friend-item ai-companion" + (currentChatFriend === AZORA_AI_ID ? " active" : "");
-    aiItem.innerHTML =
-        '<div class="friend-avatar ai-face" style="--ai-head:' + ai.head + ';--ai-body:' + ai.body + ';">AI</div>' +
-        '<span>' + escapeHtml(ai.name) + ' <small style="opacity:0.75">(AI)</small></span>';
-    aiItem.onclick = function () { selectChatFriend(AZORA_AI_ID); };
-    list.appendChild(aiItem);
-
     if (isGuest) {
-        noMsg.style.display = "block";
-        noMsg.textContent = "Guests can chat with their AI companion. Create an account to add friends!";
+        if (noMsg) {
+            noMsg.style.display = "block";
+            noMsg.textContent = "Guests can chat with their AI above. Create an account to add friends!";
+        }
         return;
     }
 
     var data = getSocialData();
     var myData = ensureUserSocial(data, me);
     if (!myData.friends || myData.friends.length === 0) {
-        noMsg.style.display = "block";
-        noMsg.textContent = "No human friends yet. Your AI companion is always available above!";
+        if (noMsg) {
+            noMsg.style.display = "block";
+            noMsg.textContent = "No friends yet. Search users and tap Add Friend!";
+        }
         return;
     }
-    noMsg.style.display = "none";
+    if (noMsg) noMsg.style.display = "none";
     myData.friends.forEach(function (friend) {
         var item = document.createElement("div");
         item.className = "friend-item" + (currentChatFriend === friend ? " active" : "");
         item.innerHTML =
-            '<div class="friend-avatar">' + friend[0].toUpperCase() + '</div>' +
-            '<span>' + escapeHtml(friend) + '</span>';
+            '<div class="friend-avatar">' + String(friend)[0].toUpperCase() + '</div>' +
+            '<div class="friend-meta"><span>' + escapeHtml(friend) + '</span><small>Friend</small></div>';
         item.onclick = function () { selectChatFriend(friend); };
         list.appendChild(item);
     });
@@ -2650,6 +2682,7 @@ window.openAICompanionSettings = openAICompanionSettings;
 window.closeAICompanionSettings = closeAICompanionSettings;
 window.saveAICompanionSettings = saveAICompanionSettings;
 window.updateAICompanionPreview = updateAICompanionPreview;
+window.updateAICompanionListItem = updateAICompanionListItem;
 
 // Wire search "View" to open profiles
 // Wire search "View" to open profiles

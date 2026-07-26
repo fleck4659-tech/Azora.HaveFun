@@ -1792,3 +1792,45 @@ footer {
 
 
 
+
+
+/* AI companion always visible in chat sidebar */
+#aiChatSlot { margin-bottom: 8px; }
+.friend-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+}
+.friend-meta span {
+    font-weight: bold;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.friend-meta small {
+    font-size: 11px;
+    color: rgba(255,255,255,0.7);
+}
+.friend-item.ai-companion {
+    border: 2px solid rgba(167,139,250,0.75) !important;
+    background: linear-gradient(135deg, rgba(167,139,250,0.35), rgba(30,96,255,0.25)) !important;
+    box-shadow: 0 2px 10px rgba(124,58,237,0.25);
+}
+.friend-item.ai-companion.active {
+    border-color: #c4b5fd !important;
+    background: linear-gradient(135deg, rgba(167,139,250,0.5), rgba(30,96,255,0.35)) !important;
+}
+.ai-rename-btn {
+    width: 100% !important;
+    margin: 0 0 4px 0 !important;
+    padding: 8px 10px !important;
+    font-size: 12px !important;
+    background: rgba(255,255,255,0.12) !important;
+    color: #fff !important;
+    border: 1px solid rgba(255,255,255,0.25) !important;
+}
+.ai-rename-btn:hover {
+    background: rgba(255,255,255,0.2) !important;
+}

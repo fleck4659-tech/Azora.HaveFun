@@ -339,9 +339,20 @@
     </div>
     <div class="chat-layout">
         <div class="chat-sidebar" id="chatSidebar">
-            <h3 style="color:#fff;margin:0 0 10px 0;font-size:14px;">Chats</h3>
+            <h3 style="color:#fff;margin:0 0 8px 0;font-size:13px;text-transform:uppercase;letter-spacing:0.04em;opacity:0.85;">Your AI</h3>
+            <div id="aiChatSlot">
+                <div class="friend-item ai-companion" id="aiCompanionListItem" onclick="selectChatFriend('__azora_ai__')">
+                    <div class="friend-avatar ai-face">AI</div>
+                    <div class="friend-meta">
+                        <span id="aiCompanionListName">Aza</span>
+                        <small>AI Companion · Tap to chat</small>
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="ai-rename-btn" onclick="openAICompanionSettings()">✏️ Customize name & look</button>
+            <h3 style="color:#fff;margin:16px 0 8px 0;font-size:13px;text-transform:uppercase;letter-spacing:0.04em;opacity:0.85;">Friends</h3>
             <div id="friendsList"></div>
-            <p id="noFriendsMsg" class="empty-feed" style="padding:20px 10px;font-size:13px;display:none;">No human friends yet. Your AI companion is always available above!</p>
+            <p id="noFriendsMsg" class="empty-feed" style="padding:12px 8px;font-size:12px;display:none;">No friends yet. Search users and tap Add Friend!</p>
         </div>
         <div class="chat-main">
             <div class="chat-with" id="chatWithLabel">Select a chat</div>
@@ -359,8 +370,8 @@
     <div class="popup" style="max-width:420px;">
         <h1 style="font-size:1.3rem;">Your AI Companion</h1>
         <p style="color:#666;font-size:13px;margin-top:-6px;">Customize the AI you chat with by default.</p>
-        <label style="display:block;text-align:left;font-size:13px;font-weight:bold;margin:8px 0 4px;">Name</label>
-        <input id="aiCompName" type="text" maxlength="24" placeholder="e.g. Nova">
+        <label style="display:block;text-align:left;font-size:13px;font-weight:bold;margin:8px 0 4px;">AI name (what shows in Chats)</label>
+        <input id="aiCompName" type="text" maxlength="24" placeholder="Type a name, e.g. Nova or Buddy">
         <label style="display:block;text-align:left;font-size:13px;font-weight:bold;margin:8px 0 4px;">Personality</label>
         <select id="aiCompPersonality" style="width:100%;padding:12px;border-radius:10px;border:2px solid #ddd;margin-bottom:10px;">
             <option value="friendly">Friendly</option>
