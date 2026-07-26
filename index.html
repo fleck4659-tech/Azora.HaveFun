@@ -8,6 +8,18 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
+<canvas id="weatherCanvas" class="weather-canvas" aria-hidden="true"></canvas>
+<div id="weatherLabel" class="weather-label" style="display:none;"></div>
+<div id="weatherGameOverlay" class="weather-game-overlay" style="display:none;">
+<div class="weather-game-header">
+<h2>Weather World</h2>
+<span id="weatherGameInfo">Loading...</span>
+<button type="button" onclick="closeWeatherGame()" style="margin:0;background:#ff3b30;color:#fff;">Exit</button>
+</div>
+<canvas id="weatherGameCanvas"></canvas>
+<div class="weather-game-hint">Move with A/D or arrows · Jump W or Space · Double-click the sky on the main site to enter</div>
+</div>
+
 <div id="introSplash" class="intro-splash">
     <div class="intro-content">
         <h2 class="slide-text text-welcome">Welcome to</h2>
@@ -393,5 +405,6 @@
 </div>
 
 <script src="script.js"></script>
+<script src="weather.js"></script>
 </body>
 </html>
