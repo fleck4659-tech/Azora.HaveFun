@@ -2601,9 +2601,28 @@ function aiReplyDelayMs(userText) {
 
 function generateAIReply(userText) {
     var ai = getAICompanion();
-    var t = (userText || "").toLowerCase();
+    var t = (userText || "").toLowerCase().trim();
     var name = ai.name || "Aza";
     var p = ai.personality || "friendly";
+
+    // Who is the human talking?
+    var userName = "";
+    var isGuest = localStorage.getItem("loggedIn") === "guest";
+    var userId = "";
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc) {
+            if (acc.isGuest || isGuest) {
+                userName = "";
+                isGuest = true;
+                userId = acc.userId || acc.guestId || "";
+            } else {
+                userName = acc.username || "";
+                userId = acc.userId || "";
+            }
+        }
+    } catch (e) {}
+    if (!userName && !isGuest) userName = getMyUsername() || "";
 
     var openers = {
         friendly: ["Hey!", "Hi there!", "Hello!", "Nice to hear from you!"],
@@ -2614,34 +2633,98 @@ function generateAIReply(userText) {
     var list = openers[p] || openers.friendly;
     var opener = list[Math.floor(Math.random() * list.length)];
 
-    if (/hello|hi\b|hey|yo\b|sup\b/.test(t)) {
-        return opener + " I'm " + name + ", your Azora AI companion. How's your day on Azora?";
+    // --- Name / identity questions (smarter) ---
+    var asksName = (
+        /\b(my name|what(?:'s| is) my name|who am i|what(?:'s| is) my username|my username|do you know (?:my )?name|what do you call me|who am i known as)\b/i.test(t) ||
+        (/\bname\b/.test(t) && /\b(my|me|i)\b/.test(t) && /\b(what|whats|what's|who|tell|know)\b/.test(t))
+    );
+    if (asksName) {
+        if (isGuest || !userName) {
+            return opener + " You're chatting as a Guest right now, so you don't have a username yet. Create an account and I'll remember your name!";
+        }
+        return opener + " Your username on Azora is " + userName + "." +
+            (userId ? " Your public User ID is " + userId + "." : "") +
+            " Nice to know you, " + userName + "!";
     }
-    if (/game|build|create|aza|fn/.test(t)) {
-        return opener + " Building games on Azora is the best. Try AzaFn if you want help designing a 2D or 3D idea!";
+
+    // AI's own name
+    if (/\b(your name|who are you|what(?:'s| is) your name|what are you called)\b/i.test(t)) {
+        return "I'm " + name + ", your personal AI companion on Azora! You can rename me anytime with Customize AI.";
     }
-    if (/friend|chat|message/.test(t)) {
-        return opener + " You can add friends from Search, then message them here. I'm always in your chat list too.";
+
+    // Greetings
+    if (/^(hello|hi|hey|yo|sup|hiya|good (morning|afternoon|evening))\b/.test(t) || t === "hi" || t === "hey") {
+        if (userName) {
+            return opener + " " + userName + "! I'm " + name + ". How's your day on Azora?";
+        }
+        return opener + " I'm " + name + ", your Azora AI companion. How's your day?";
     }
-    if (/avatar|color|custom|name/.test(t)) {
-        return opener + " You can customize my name and colors with Customize AI. Your own avatar is on the main page!";
+
+    // User ID
+    if (/\b(my (user )?id|what(?:'s| is) my id|aza:\s*\d+)\b/i.test(t)) {
+        if (userId) {
+            return opener + " Your public User ID is " + userId + ".";
+        }
+        return opener + " I don't see a User ID on this session yet.";
     }
-    if (/help|what can|who are|what are you/.test(t)) {
-        return "I'm " + name + " — your personal AI on Azora. Chat with me anytime, customize my look, and ask about games, friends, or the platform!";
+
+    // Games / building
+    if (/\b(game|build|create|aza\s*fn|azafn|publish|feed)\b/.test(t)) {
+        return opener + (userName ? " " + userName + "," : "") +
+            " Building games on Azora is the best. Open AzaFn to design a 2D or 3D idea, then publish it to Feed!";
     }
-    if (/thank|thanks|thx/.test(t)) {
-        return opener + " You're welcome! Happy to chat anytime.";
+
+    // Friends / chat
+    if (/\b(friend|message|dm|chat with)\b/.test(t)) {
+        if (isGuest) {
+            return opener + " Guests can talk to me anytime! Create an account to add human friends and message them.";
+        }
+        return opener + " Search for players, send a friend request, and when they accept you can message them in Chat. I'm always here too.";
     }
+
+    // Avatar / customize
+    if (/\b(avatar|color|custom|outfit)\b/.test(t)) {
+        return opener + " Customize your avatar on the main page. You can also change my name and colors with the Customize AI button!";
+    }
+
+    // Help / capabilities
+    if (/\b(help|what can you do|commands|how do (i|you)|what are you)\b/.test(t)) {
+        var who = userName ? userName : (isGuest ? "Guest" : "friend");
+        return "I'm " + name + "! I can chat with you, remember your Azora username when you ask, and talk about games, Feed, friends, and avatars. What do you want to know, " + who + "?";
+    }
+
+    // Thanks
+    if (/\b(thank|thanks|thx|ty)\b/.test(t)) {
+        return opener + (userName ? " You're welcome, " + userName + "!" : " You're welcome! Happy to chat anytime.");
+    }
+
+    // How are you
+    if (/\b(how are you|how(?:'s| is) it going|whats up|what's up)\b/.test(t)) {
+        return opener + " I'm doing great — always ready to chat on Azora." + (userName ? " How are you, " + userName + "?" : " How are you?");
+    }
+
+    // Weather / joke light topics
+    if (/\b(joke|funny)\b/.test(t)) {
+        return opener + " Why did the avatar bring a ladder to Azora? To reach the next level!";
+    }
+
+    // Questions (generic but slightly smarter)
     if (/\?/.test(t)) {
-        return opener + " Good question! I'm a simple companion, but I love talking about Azora, games, and creative ideas.";
+        if (userName) {
+            return opener + " Good question, " + userName + "! I'm a simple companion, but I can talk about your username, games, Feed, friends, and Azora tips.";
+        }
+        return opener + " Good question! Ask me about your username, games, Feed, friends, or how Azora works.";
     }
+
+    // Echo a bit of what they said for smarter feel
+    var snippet = (userText || "").trim();
+    if (snippet.length > 80) snippet = snippet.slice(0, 77) + "...";
     var generics = [
-        opener + " That sounds cool. Tell me more!",
-        opener + " I'm listening. What else is on your mind?",
-        opener + " Azora is more fun with chats like this.",
-        opener + " Thanks for talking with me. Want to build something later?",
-        opener + " Noted! You can also open Feed to discover games.",
-        opener + " I'm right here if you want to keep chatting."
+        opener + (userName ? " " + userName + "," : "") + " that sounds interesting. Tell me more!",
+        opener + " I heard you — \"" + snippet + "\". What else is on your mind?",
+        opener + " Azora is more fun with chats like this." + (userName ? " Anything else, " + userName + "?" : ""),
+        opener + " Thanks for talking with me. Want to build a game later or check the Feed?",
+        opener + " I'm right here if you want to keep chatting" + (userName ? ", " + userName : "") + "."
     ];
     return generics[Math.floor(Math.random() * generics.length)];
 }
