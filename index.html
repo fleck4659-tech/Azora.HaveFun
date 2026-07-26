@@ -333,25 +333,53 @@
     <div class="azafn-header">
         <h2><img src="logo.jpg" alt="Azora"> Chat</h2>
         <div class="azafn-tabs">
-            <button onclick="closeChatPanel()" style="margin:0;background:#ff3b30;color:#fff;">✕ Close</button>
+            <button type="button" onclick="openAICompanionSettings()" style="margin:0;background:linear-gradient(180deg,#a78bfa,#7c3aed);color:#fff;">Customize AI</button>
+            <button type="button" onclick="closeChatPanel()" style="margin:0;background:#ff3b30;color:#fff;">✕ Close</button>
         </div>
     </div>
     <div class="chat-layout">
         <div class="chat-sidebar" id="chatSidebar">
-            <h3 style="color:#fff;margin:0 0 10px 0;font-size:14px;">Friends</h3>
+            <h3 style="color:#fff;margin:0 0 10px 0;font-size:14px;">Chats</h3>
             <div id="friendsList"></div>
-            <p id="noFriendsMsg" class="empty-feed" style="padding:20px 10px;font-size:13px;display:none;">No friends yet. Search for users and tap Add Friend!</p>
+            <p id="noFriendsMsg" class="empty-feed" style="padding:20px 10px;font-size:13px;display:none;">No human friends yet. Your AI companion is always available above!</p>
         </div>
         <div class="chat-main">
-            <div class="chat-with" id="chatWithLabel">Select a friend to chat</div>
+            <div class="chat-with" id="chatWithLabel">Select a chat</div>
             <div class="chat-messages" id="chatMessages"></div>
             <div class="chat-input-row" id="chatInputRow" style="display:none;">
                 <input type="text" id="chatInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendChatMessage()">
-                <button onclick="sendChatMessage()">Send</button>
+                <button type="button" onclick="sendChatMessage()">Send</button>
             </div>
         </div>
     </div>
 </div>
+
+<!-- AI Companion customize -->
+<div id="aiCompanionOverlay" class="overlay" style="display:none;">
+    <div class="popup" style="max-width:420px;">
+        <h1 style="font-size:1.3rem;">Your AI Companion</h1>
+        <p style="color:#666;font-size:13px;margin-top:-6px;">Customize the AI you chat with by default.</p>
+        <label style="display:block;text-align:left;font-size:13px;font-weight:bold;margin:8px 0 4px;">Name</label>
+        <input id="aiCompName" type="text" maxlength="24" placeholder="e.g. Nova">
+        <label style="display:block;text-align:left;font-size:13px;font-weight:bold;margin:8px 0 4px;">Personality</label>
+        <select id="aiCompPersonality" style="width:100%;padding:12px;border-radius:10px;border:2px solid #ddd;margin-bottom:10px;">
+            <option value="friendly">Friendly</option>
+            <option value="playful">Playful</option>
+            <option value="chill">Chill</option>
+            <option value="builder">Builder / helpful</option>
+        </select>
+        <label style="display:block;text-align:left;font-size:13px;font-weight:bold;margin:8px 0 4px;">Avatar colors</label>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+            <div style="text-align:center;"><div style="font-size:11px;">Head</div><input type="color" id="aiCompHead" value="#ffcc00"></div>
+            <div style="text-align:center;"><div style="font-size:11px;">Body</div><input type="color" id="aiCompBody" value="#a78bfa"></div>
+            <div style="text-align:center;"><div style="font-size:11px;">Accent</div><input type="color" id="aiCompAccent" value="#00ebd4"></div>
+        </div>
+        <div id="aiCompPreview" class="ai-comp-preview" aria-hidden="true"></div>
+        <button type="button" onclick="saveAICompanionSettings()" style="background:linear-gradient(180deg,#34d399,#10b981);color:#fff;">Save AI</button>
+        <button type="button" class="secondary" onclick="closeAICompanionSettings()">Cancel</button>
+    </div>
+</div>
+
 
 
 <!-- Notifications Panel -->

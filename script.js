@@ -2309,40 +2309,145 @@ function acceptFriend(username) {
     openUserProfile(username);
 }
 
-// --- Chat ---
-function openChatPanel() {
-    if (localStorage.getItem("loggedIn") === "guest") {
-        alert("Guests can't use Chat. Create an account to add friends and message!");
-        openCreateAccount();
-        return;
+// --- Chat + AI Companion ---
+var AZORA_AI_ID = "__azora_ai__";
+var chatTypingTimer = null;
+var chatAiReplyTimer = null;
+
+function getAICompanion() {
+    var def = {
+        name: "Aza",
+        personality: "friendly",
+        head: "#ffcc00",
+        body: "#a78bfa",
+        accent: "#00ebd4"
+    };
+    try {
+        var saved = JSON.parse(localStorage.getItem("azoraAICompanion") || "null");
+        if (saved && typeof saved === "object") {
+            return {
+                name: (saved.name || def.name).toString().slice(0, 24),
+                personality: saved.personality || def.personality,
+                head: saved.head || def.head,
+                body: saved.body || def.body,
+                accent: saved.accent || def.accent
+            };
+        }
+    } catch (e) {}
+    return def;
+}
+
+function saveAICompanion(data) {
+    localStorage.setItem("azoraAICompanion", JSON.stringify(data));
+}
+
+function isAIChat() {
+    return currentChatFriend === AZORA_AI_ID;
+}
+
+function openAICompanionSettings() {
+    var ai = getAICompanion();
+    document.getElementById("aiCompName").value = ai.name;
+    document.getElementById("aiCompPersonality").value = ai.personality;
+    document.getElementById("aiCompHead").value = ai.head;
+    document.getElementById("aiCompBody").value = ai.body;
+    document.getElementById("aiCompAccent").value = ai.accent;
+    updateAICompanionPreview();
+    ["aiCompHead", "aiCompBody", "aiCompAccent"].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el && !el._bound) {
+            el._bound = true;
+            el.addEventListener("input", updateAICompanionPreview);
+        }
+    });
+    document.getElementById("aiCompanionOverlay").style.display = "flex";
+}
+
+function updateAICompanionPreview() {
+    var box = document.getElementById("aiCompPreview");
+    if (!box) return;
+    var head = document.getElementById("aiCompHead").value;
+    var body = document.getElementById("aiCompBody").value;
+    var accent = document.getElementById("aiCompAccent").value;
+    box.innerHTML =
+        '<div class="ai-head" style="background:' + head + '"></div>' +
+        '<div class="ai-body" style="background:' + body + '"></div>' +
+        '<div class="ai-legs" style="background:' + accent + '"></div>';
+}
+
+function saveAICompanionSettings() {
+    var name = (document.getElementById("aiCompName").value || "Aza").trim().slice(0, 24) || "Aza";
+    saveAICompanion({
+        name: name,
+        personality: document.getElementById("aiCompPersonality").value || "friendly",
+        head: document.getElementById("aiCompHead").value,
+        body: document.getElementById("aiCompBody").value,
+        accent: document.getElementById("aiCompAccent").value
+    });
+    closeAICompanionSettings();
+    if (document.getElementById("chatOverlay").style.display === "flex") {
+        renderFriendsList();
+        if (isAIChat()) {
+            document.getElementById("chatWithLabel").textContent = "Chat with " + name + " (AI)";
+        }
     }
-    if (localStorage.getItem("loggedIn") !== "true") {
-        alert("Please log in to use Chat!");
+}
+
+function closeAICompanionSettings() {
+    var el = document.getElementById("aiCompanionOverlay");
+    if (el) el.style.display = "none";
+}
+
+function openChatPanel() {
+    var login = localStorage.getItem("loggedIn");
+    if (login !== "true" && login !== "guest") {
+        alert("Please log in or continue as Guest to use Chat!");
         openCreateAccount();
         return;
     }
     document.getElementById("chatOverlay").style.display = "flex";
     renderFriendsList();
-    currentChatFriend = null;
-    document.getElementById("chatWithLabel").textContent = "Select a friend to chat";
-    document.getElementById("chatMessages").innerHTML = "";
-    document.getElementById("chatInputRow").style.display = "none";
+    // Default: open AI companion (available to accounts and guests)
+    selectChatFriend(AZORA_AI_ID);
 }
 
 function closeChatPanel() {
     document.getElementById("chatOverlay").style.display = "none";
+    clearChatTyping();
+    if (chatAiReplyTimer) {
+        clearTimeout(chatAiReplyTimer);
+        chatAiReplyTimer = null;
+    }
 }
 
 function renderFriendsList() {
+    var isGuest = localStorage.getItem("loggedIn") === "guest";
     var me = getMyUsername();
-    var data = getSocialData();
-    var myData = ensureUserSocial(data, me);
     var list = document.getElementById("friendsList");
     var noMsg = document.getElementById("noFriendsMsg");
     list.innerHTML = "";
 
+    // Always pin AI companion at top (accounts + guests)
+    var ai = getAICompanion();
+    var aiItem = document.createElement("div");
+    aiItem.className = "friend-item ai-companion" + (currentChatFriend === AZORA_AI_ID ? " active" : "");
+    aiItem.innerHTML =
+        '<div class="friend-avatar ai-face" style="--ai-head:' + ai.head + ';--ai-body:' + ai.body + ';">AI</div>' +
+        '<span>' + escapeHtml(ai.name) + ' <small style="opacity:0.75">(AI)</small></span>';
+    aiItem.onclick = function () { selectChatFriend(AZORA_AI_ID); };
+    list.appendChild(aiItem);
+
+    if (isGuest) {
+        noMsg.style.display = "block";
+        noMsg.textContent = "Guests can chat with their AI companion. Create an account to add friends!";
+        return;
+    }
+
+    var data = getSocialData();
+    var myData = ensureUserSocial(data, me);
     if (!myData.friends || myData.friends.length === 0) {
         noMsg.style.display = "block";
+        noMsg.textContent = "No human friends yet. Your AI companion is always available above!";
         return;
     }
     noMsg.style.display = "none";
@@ -2358,15 +2463,65 @@ function renderFriendsList() {
 }
 
 function selectChatFriend(friend) {
+    clearChatTyping();
+    if (chatAiReplyTimer) {
+        clearTimeout(chatAiReplyTimer);
+        chatAiReplyTimer = null;
+    }
     currentChatFriend = friend;
-    document.getElementById("chatWithLabel").textContent = "Chat with " + friend;
+    if (friend === AZORA_AI_ID) {
+        var ai = getAICompanion();
+        document.getElementById("chatWithLabel").textContent = "Chat with " + ai.name + " (AI)";
+    } else {
+        document.getElementById("chatWithLabel").textContent = "Chat with " + friend;
+    }
     document.getElementById("chatInputRow").style.display = "flex";
     renderFriendsList();
     renderChatMessages();
 }
 
 function getChatKey(a, b) {
+    if (b === AZORA_AI_ID || a === AZORA_AI_ID) {
+        var user = (a === AZORA_AI_ID) ? b : a;
+        if (!user || user === "Guest") {
+            try {
+                var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+                if (acc && acc.guestId) user = acc.guestId;
+                else user = "guest_local";
+            } catch (e) { user = "guest_local"; }
+        }
+        return "azoraChat_AI_" + user;
+    }
     return "azoraChat_" + [a, b].sort().join("_");
+}
+
+function createTypingIndicatorEl() {
+    var div = document.createElement("div");
+    div.className = "chat-typing";
+    div.id = "chatTypingIndicator";
+    div.setAttribute("aria-label", "Typing");
+    div.innerHTML = "<span></span><span></span><span></span>";
+    return div;
+}
+
+function showChatTyping() {
+    var box = document.getElementById("chatMessages");
+    if (!box) return;
+    clearChatTyping();
+    // remove empty state text if present
+    var empty = box.querySelector("p");
+    if (empty && empty.textContent.indexOf("No messages") !== -1) empty.remove();
+    box.appendChild(createTypingIndicatorEl());
+    box.scrollTop = box.scrollHeight;
+}
+
+function clearChatTyping() {
+    var el = document.getElementById("chatTypingIndicator");
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+    if (chatTypingTimer) {
+        clearTimeout(chatTypingTimer);
+        chatTypingTimer = null;
+    }
 }
 
 function renderChatMessages() {
@@ -2379,7 +2534,11 @@ function renderChatMessages() {
 
     box.innerHTML = "";
     if (messages.length === 0) {
-        box.innerHTML = '<p style="color:rgba(255,255,255,0.6);text-align:center;margin-top:40px;">No messages yet. Say hi!</p>';
+        var ai = getAICompanion();
+        var hint = isAIChat()
+            ? ("Say hi to " + ai.name + "! Your AI companion is ready to chat.")
+            : "No messages yet. Say hi!";
+        box.innerHTML = '<p style="color:rgba(255,255,255,0.6);text-align:center;margin-top:40px;">' + escapeHtml(hint) + '</p>';
         return;
     }
     messages.forEach(function (m) {
@@ -2391,11 +2550,66 @@ function renderChatMessages() {
     box.scrollTop = box.scrollHeight;
 }
 
+function aiReplyDelayMs(userText) {
+    // 3–5 seconds depending on message length
+    var len = (userText || "").length;
+    var t = 3000 + Math.min(2000, len * 25);
+    return Math.max(3000, Math.min(5000, t));
+}
+
+function generateAIReply(userText) {
+    var ai = getAICompanion();
+    var t = (userText || "").toLowerCase();
+    var name = ai.name;
+    var p = ai.personality;
+
+    var openers = {
+        friendly: ["Hey!", "Hi there!", "Hello!", "Nice to hear from you!"],
+        playful: ["Hehe!", "Ooh!", "Yo!", "Haha okay—"],
+        chill: ["Hey.", "Mm.", "Cool.", "Alright—"],
+        builder: ["Got it!", "On it!", "Interesting!", "Let's think—"]
+    };
+    var opener = (openers[p] || openers.friendly)[Math.floor(Math.random() * 4)];
+
+    if (/hello|hi\b|hey|yo\b/.test(t)) {
+        return opener + " I'm " + name + ", your Azora AI companion. How's your day on Azora?";
+    }
+    if (/game|build|create|aza|fn/.test(t)) {
+        return opener + " Building games on Azora is the best. Try AzaFn if you want help designing a 2D or 3D idea!";
+    }
+    if (/friend|chat|message/.test(t)) {
+        return opener + " You can add friends from Search, then message them here. I'm always in your chat list too.";
+    }
+    if (/avatar|color|custom/.test(t)) {
+        return opener + " You can customize me with the Customize AI button, and your own avatar on the main page!";
+    }
+    if (/help|what can|who are/.test(t)) {
+        return "I'm " + name + " — your personal AI on Azora. Chat with me anytime, customize my look, and ask about games, friends, or the platform!";
+    }
+    if (/\?/.test(t)) {
+        return opener + " Good question! I'm still a simple companion, but I love talking about Azora, games, and creative ideas.";
+    }
+    var generics = [
+        opener + " That sounds cool. Tell me more!",
+        opener + " I'm listening. What else is on your mind?",
+        opener + " Azora is more fun with chats like this.",
+        opener + " Thanks for talking with me. Want to build something later?",
+        opener + " Noted! You can also open Feed to discover games."
+    ];
+    return generics[Math.floor(Math.random() * generics.length)];
+}
+
 function sendChatMessage() {
     var input = document.getElementById("chatInput");
     var text = (input.value || "").trim();
     if (!text || !currentChatFriend) return;
-    var me = getMyUsername();
+    var isGuest = localStorage.getItem("loggedIn") === "guest";
+    if (isGuest && currentChatFriend !== AZORA_AI_ID) {
+        alert("Guests can only chat with their AI companion. Create an account to message friends!");
+        selectChatFriend(AZORA_AI_ID);
+        return;
+    }
+    var me = getMyUsername() || (isGuest ? "Guest" : null);
     if (!me) return;
 
     var key = getChatKey(me, currentChatFriend);
@@ -2405,8 +2619,39 @@ function sendChatMessage() {
     localStorage.setItem(key, JSON.stringify(messages));
     input.value = "";
     renderChatMessages();
+
+    // Always show animated "..." while waiting on the other side
+    showChatTyping();
+
+    if (isAIChat()) {
+        if (chatAiReplyTimer) clearTimeout(chatAiReplyTimer);
+        var delay = aiReplyDelayMs(text);
+        chatAiReplyTimer = setTimeout(function () {
+            chatAiReplyTimer = null;
+            if (!isAIChat()) return;
+            clearChatTyping();
+            var reply = generateAIReply(text);
+            var msgs = [];
+            try { msgs = JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) {}
+            msgs.push({ from: AZORA_AI_ID, text: reply, at: Date.now() });
+            localStorage.setItem(key, JSON.stringify(msgs));
+            renderChatMessages();
+        }, delay);
+    } else {
+        // Human friend: show typing briefly (no live multiplayer server yet)
+        if (chatTypingTimer) clearTimeout(chatTypingTimer);
+        chatTypingTimer = setTimeout(function () {
+            clearChatTyping();
+        }, 2200);
+    }
 }
 
+window.openAICompanionSettings = openAICompanionSettings;
+window.closeAICompanionSettings = closeAICompanionSettings;
+window.saveAICompanionSettings = saveAICompanionSettings;
+window.updateAICompanionPreview = updateAICompanionPreview;
+
+// Wire search "View" to open profiles
 // Wire search "View" to open profiles
 function performSearch() {
     const query = document.getElementById("searchInput").value.trim().toLowerCase();

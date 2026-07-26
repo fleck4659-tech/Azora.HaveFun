@@ -1381,29 +1381,73 @@ html[data-theme="dark"] .profile-user-id.guest {
     margin: 0;
 }
 
-/* AI typing indicator */
+/* Chat typing indicator — each dot fades + scales in sequence */
+.chat-typing,
 .azafn-typing {
     align-self: flex-start;
-    background: rgba(0,0,0,0.3);
+    background: rgba(0,0,0,0.28);
     color: #fff;
     border: 1px solid rgba(255,255,255,0.2);
     border-radius: 16px;
     border-bottom-left-radius: 4px;
-    padding: 12px 18px;
+    padding: 12px 16px;
     font-size: 14px;
-    opacity: 0.9;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin: 6px 0;
 }
+.chat-typing span,
 .azafn-typing span {
     display: inline-block;
-    animation: typingDot 1.2s infinite;
-    margin-right: 2px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #fff;
+    opacity: 0.25;
+    transform: scale(0.55);
+    animation: chatTypingDot 1.4s ease-in-out infinite;
 }
-.azafn-typing span:nth-child(2) { animation-delay: 0.2s; }
-.azafn-typing span:nth-child(3) { animation-delay: 0.4s; }
-@keyframes typingDot {
-    0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
-    30% { opacity: 1; transform: translateY(-3px); }
+.chat-typing span:nth-child(1),
+.azafn-typing span:nth-child(1) { animation-delay: 0s; }
+.chat-typing span:nth-child(2),
+.azafn-typing span:nth-child(2) { animation-delay: 0.22s; }
+.chat-typing span:nth-child(3),
+.azafn-typing span:nth-child(3) { animation-delay: 0.44s; }
+@keyframes chatTypingDot {
+    0%, 100% { opacity: 0.2; transform: scale(0.5); }
+    35% { opacity: 1; transform: scale(1.15); }
+    55% { opacity: 0.55; transform: scale(0.75); }
 }
+.friend-item.ai-companion {
+    border: 1px solid rgba(167,139,250,0.55);
+    background: rgba(167,139,250,0.18);
+}
+.friend-avatar.ai-face {
+    background: linear-gradient(135deg, var(--ai-head, #ffcc00), var(--ai-body, #a78bfa));
+    font-size: 11px;
+}
+.ai-comp-preview {
+    width: 72px;
+    height: 90px;
+    margin: 0 auto 14px;
+    border-radius: 12px;
+    position: relative;
+    background: #f3f4f6;
+}
+.ai-comp-preview .ai-head {
+    position: absolute; left: 50%; top: 8px; transform: translateX(-50%);
+    width: 28px; height: 28px; border-radius: 50%;
+}
+.ai-comp-preview .ai-body {
+    position: absolute; left: 50%; top: 38px; transform: translateX(-50%);
+    width: 36px; height: 32px; border-radius: 8px;
+}
+.ai-comp-preview .ai-legs {
+    position: absolute; left: 50%; top: 70px; transform: translateX(-50%);
+    width: 28px; height: 14px; border-radius: 4px;
+}
+
 
 /* Profile games */
 .profile-games-section h3 {
