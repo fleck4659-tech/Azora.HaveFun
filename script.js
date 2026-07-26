@@ -1289,11 +1289,6 @@ window.addEventListener("DOMContentLoaded", function () {
     loadTheme();
     if (typeof loadBrowserAppearance === "function") loadBrowserAppearance();
     if (typeof loadServerFlags === "function") loadServerFlags();
-    setTimeout(function () {
-        if (typeof startWeatherSystem === "function" && (localStorage.getItem("loggedIn") === "true" || localStorage.getItem("loggedIn") === "guest")) {
-            startWeatherSystem();
-        }
-    }, 300);
 });
 
 
