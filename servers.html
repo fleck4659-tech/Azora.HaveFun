@@ -3,235 +3,450 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Azora Have Fun Servers</title>
+    <title>Azora Have Fun Servers — Staff Console</title>
     <style>
         * { box-sizing: border-box; }
         body {
-            margin: 0;
-            min-height: 100vh;
+            margin: 0; min-height: 100vh;
             font-family: Arial, sans-serif;
-            background: #0d1117;
+            background: #0b0f14;
             color: #e2e8f0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 40px 20px;
+            display: flex; flex-direction: column; align-items: center;
+            padding: 28px 16px 60px;
         }
-        .lock-screen, .dashboard { width: 100%; max-width: 780px; }
-        .lock-box {
-            background: #161b22;
-            border: 2px solid #30363d;
+        .shell { width: 100%; max-width: 960px; }
+        .lock-box, .panel-card {
+            background: #12181f;
+            border: 1px solid #2a3544;
             border-radius: 16px;
-            padding: 40px;
-            text-align: center;
+            padding: 22px;
         }
-        .lock-box img { width: 80px; border-radius: 50%; margin-bottom: 16px; }
-        .lock-box h1 { color: #58a6ff; margin: 0 0 8px; font-size: 1.5rem; }
-        .lock-box p { color: #8b949e; font-size: 14px; margin-bottom: 24px; }
-        .lock-box input {
-            width: 100%; padding: 12px 14px; border-radius: 10px;
-            border: 2px solid #30363d; background: #0d1117; color: #e2e8f0;
-            font-size: 15px; margin-bottom: 12px;
+        .lock-box { max-width: 420px; margin: 80px auto; text-align: center; }
+        .lock-box img { width: 72px; border-radius: 50%; margin-bottom: 12px; }
+        .lock-box h1 { color: #58a6ff; margin: 0 0 6px; font-size: 1.35rem; }
+        .lock-box p { color: #8b949e; font-size: 13px; margin: 0 0 18px; }
+        input[type="text"], input[type="password"], input[type="number"], select, textarea {
+            width: 100%; padding: 11px 12px; border-radius: 10px;
+            border: 1px solid #30363d; background: #0d1117; color: #e2e8f0;
+            font-size: 14px; margin-bottom: 10px;
         }
-        .lock-box button, .dashboard button {
-            width: 100%; padding: 12px; border: none; border-radius: 10px;
+        textarea { min-height: 80px; resize: vertical; font-family: inherit; }
+        button {
+            padding: 11px 14px; border: none; border-radius: 10px;
             background: linear-gradient(90deg, #1e60ff, #00aaff);
-            color: #fff; font-weight: bold; font-size: 15px; cursor: pointer;
+            color: #fff; font-weight: bold; font-size: 14px; cursor: pointer;
         }
-        .lock-box button:hover, .dashboard button:hover { opacity: 0.9; }
-        .error { color: #ff7b72; font-size: 13px; margin-top: 10px; display: none; }
-        .dashboard { display: none; }
-        .dash-header {
+        button:hover { opacity: 0.92; }
+        button:disabled { opacity: 0.45; cursor: not-allowed; }
+        .btn-ghost {
+            background: #21262d !important;
+            border: 1px solid #30363d !important;
+        }
+        .btn-danger { background: linear-gradient(90deg, #ef4444, #b91c1c) !important; }
+        .btn-ok { background: linear-gradient(90deg, #10b981, #059669) !important; }
+        .btn-warn { background: linear-gradient(90deg, #f59e0b, #d97706) !important; color: #111 !important; }
+        .error { color: #ff7b72; font-size: 13px; margin-top: 8px; display: none; }
+        #dashboard { display: none; }
+        .top {
             display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 16px; flex-wrap: wrap; gap: 12px;
+            gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
         }
-        .dash-header h1 {
-            margin: 0; color: #58a6ff; font-size: 1.4rem;
+        .top h1 {
+            margin: 0; color: #58a6ff; font-size: 1.25rem;
             display: flex; align-items: center; gap: 10px;
         }
-        .dash-header img { width: 40px; border-radius: 50%; }
-        .note-box {
-            border-radius: 12px; padding: 12px 14px; font-size: 13px;
-            margin-bottom: 16px; line-height: 1.5;
+        .top img { width: 36px; border-radius: 50%; }
+        .tabs {
+            display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;
         }
-        .note-warn {
-            background: #21262d; border: 1px solid #f59e0b; color: #fbbf24;
+        .tab {
+            background: #1a222d !important;
+            border: 1px solid #30363d !important;
+            color: #cbd5e1 !important;
+            width: auto !important;
+            padding: 9px 14px !important;
+            font-size: 13px !important;
         }
-        .note-ok {
-            background: #0d2818; border: 1px solid #10b981; color: #6ee7b7;
+        .tab.active {
+            background: #1e60ff !important;
+            border-color: #1e60ff !important;
+            color: #fff !important;
         }
-        .setup-box {
-            background: #161b22; border: 2px solid #30363d; border-radius: 14px;
-            padding: 16px; margin-bottom: 18px; font-size: 13px; color: #c9d1d9;
-            line-height: 1.5;
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        .grid-3 {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px;
         }
-        .setup-box h3 { margin: 0 0 8px; color: #58a6ff; font-size: 14px; }
-        .setup-box ol { margin: 8px 0 0 18px; padding: 0; }
-        .setup-box code {
-            background: #0d1117; padding: 2px 6px; border-radius: 4px;
-            font-size: 12px; color: #79c0ff;
-        }
-        .stat-cards {
-            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
-            margin-bottom: 20px;
-        }
-        .stat-card {
-            background: #161b22; border: 2px solid #30363d; border-radius: 14px;
+        .stat {
+            background: #12181f; border: 1px solid #2a3544; border-radius: 14px;
             padding: 16px; text-align: center;
         }
-        .stat-card .num { font-size: 1.8rem; font-weight: bold; color: #00ebd4; }
-        .stat-card .label { color: #8b949e; font-size: 12px; margin-top: 4px; }
-        .user-table-wrap {
-            background: #161b22; border: 2px solid #30363d; border-radius: 14px; overflow: hidden;
+        .stat .n { font-size: 1.7rem; font-weight: bold; color: #00ebd4; }
+        .stat .l { color: #8b949e; font-size: 12px; margin-top: 4px; }
+        .note {
+            border-radius: 12px; padding: 11px 13px; font-size: 13px;
+            margin-bottom: 14px; line-height: 1.45;
         }
-        .user-table-wrap h2 {
-            margin: 0; padding: 14px 18px; font-size: 1rem;
-            border-bottom: 1px solid #30363d; color: #e2e8f0;
+        .note-warn { background: #1c1917; border: 1px solid #f59e0b; color: #fbbf24; }
+        .note-ok { background: #052e1c; border: 1px solid #10b981; color: #6ee7b7; }
+        .note-info { background: #0c1a2e; border: 1px solid #3b82f6; color: #93c5fd; }
+        .row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+        .row button, .row input { flex: 1; min-width: 140px; margin-bottom: 0; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #21262d; }
+        th { color: #8b949e; background: #0d1117; }
+        .uid { font-family: Consolas, monospace; color: #58a6ff; font-weight: bold; }
+        .table-wrap {
+            border: 1px solid #2a3544; border-radius: 12px; overflow: hidden; margin-top: 8px;
         }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th, td { padding: 11px 14px; text-align: left; border-bottom: 1px solid #21262d; }
-        th { color: #8b949e; font-weight: 600; background: #0d1117; }
-        td { color: #e2e8f0; }
-        tr:last-child td { border-bottom: none; }
-        .uid { font-family: 'Courier New', monospace; color: #58a6ff; font-weight: bold; }
-        .empty-row { text-align: center; color: #8b949e; padding: 30px !important; }
-        .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
-        .actions button { flex: 1; min-width: 120px; }
-        .btn-secondary { background: #21262d !important; border: 1px solid #30363d !important; }
-        .source-tag {
-            display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 8px;
-            margin-left: 8px; vertical-align: middle;
+        .code-result {
+            display: none; margin-top: 12px; padding: 12px 14px; border-radius: 12px;
+            font-size: 13px; line-height: 1.45;
         }
-        .source-cloud { background: #064e3b; color: #6ee7b7; }
-        .source-local { background: #374151; color: #d1d5db; }
-        @media (max-width: 600px) { .stat-cards { grid-template-columns: 1fr; } }
+        .code-result.ok { display: block; background: #052e1c; border: 1px solid #10b981; color: #6ee7b7; }
+        .code-result.bad { display: block; background: #2a1215; border: 1px solid #ef4444; color: #fca5a5; }
+        .code-result.info { display: block; background: #0c1a2e; border: 1px solid #3b82f6; color: #93c5fd; }
+        .codes-list {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;
+        }
+        .code-card {
+            background: #0d1117; border: 1px solid #30363d; border-radius: 12px; padding: 12px;
+            font-size: 12px;
+        }
+        .code-card strong {
+            display: block; color: #79c0ff; font-family: Consolas, monospace;
+            margin-bottom: 4px; font-size: 13px;
+        }
+        .log {
+            max-height: 220px; overflow-y: auto; background: #0d1117;
+            border: 1px solid #30363d; border-radius: 10px; padding: 10px;
+            font-size: 12px; font-family: Consolas, monospace; color: #9ca3af;
+        }
+        .log div { margin-bottom: 6px; border-bottom: 1px solid #1f2937; padding-bottom: 4px; }
+        .muted { color: #8b949e; font-size: 12px; }
+        h2 { margin: 0 0 10px; font-size: 1rem; color: #e2e8f0; }
+        h3 { margin: 16px 0 8px; font-size: 0.92rem; color: #93c5fd; }
+        @media (max-width: 700px) {
+            .grid-3, .codes-list { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
+<div class="shell">
 
-<div class="lock-screen" id="lockScreen">
-    <div class="lock-box">
-        <img src="logo.jpg" alt="Azora">
-        <h1>Azora Have Fun Servers</h1>
-        <p>Restricted access. Authorized staff only.</p>
-        <input type="password" id="serverPassword" placeholder="Server access key" onkeydown="if(event.key==='Enter')unlockServers()">
-        <button onclick="unlockServers()">Unlock</button>
-        <div class="error" id="lockError">Incorrect access key.</div>
+<!-- LOCK -->
+<div class="lock-box" id="lockScreen">
+    <img src="logo.jpg" alt="Azora">
+    <h1>Azora Staff Console</h1>
+    <p>Restricted access · Have Fun Servers</p>
+    <input type="password" id="serverPassword" placeholder="Server access key" onkeydown="if(event.key==='Enter')unlockServers()">
+    <button onclick="unlockServers()" style="width:100%">Unlock Console</button>
+    <div class="error" id="lockError">Incorrect access key.</div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard">
+    <div class="top">
+        <h1><img src="logo.jpg" alt=""> Azora Staff Console</h1>
+        <div class="row" style="margin:0;flex:0;">
+            <button class="btn-ghost" style="width:auto" onclick="refreshAll()">🔄 Refresh</button>
+            <button class="btn-ghost" style="width:auto" onclick="lockServers()">Lock</button>
+            <button class="btn-ghost" style="width:auto" onclick="location.href='index.html'">← Site</button>
+        </div>
+    </div>
+
+    <div id="statusNote" class="note note-warn">Loading…</div>
+
+    <div class="grid-3">
+        <div class="stat"><div class="n" id="statGlobal">0</div><div class="l">Global accounts</div></div>
+        <div class="stat"><div class="n" id="statNext">Aza: 0</div><div class="l">Next User ID</div></div>
+        <div class="stat"><div class="n" id="statLocal">0</div><div class="l">Local (this browser)</div></div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab active" data-tab="codes" onclick="switchTab('codes')">🔑 Special Codes</button>
+        <button class="tab" data-tab="users" onclick="switchTab('users')">👥 Users</button>
+        <button class="tab" data-tab="broadcast" onclick="switchTab('broadcast')">📢 Broadcast</button>
+        <button class="tab" data-tab="ops" onclick="switchTab('ops')">🛠️ Operations</button>
+        <button class="tab" data-tab="setup" onclick="switchTab('setup')">⚙️ Setup</button>
+        <button class="tab" data-tab="log" onclick="switchTab('log')">📋 Log</button>
+    </div>
+
+    <!-- CODES -->
+    <div class="tab-panel active panel-card" id="panel-codes">
+        <h2>Special Codes</h2>
+        <p class="muted">Enter a staff code to unlock tools, events, or site-wide flags. Codes are case-insensitive.</p>
+        <div class="row">
+            <input type="text" id="specialCodeInput" placeholder="Enter special code…" onkeydown="if(event.key==='Enter')redeemCode()">
+            <button class="btn-ok" style="flex:0.4" onclick="redeemCode()">Redeem</button>
+        </div>
+        <div id="codeResult" class="code-result"></div>
+
+        <h3>Known staff codes</h3>
+        <div class="codes-list" id="codesList"></div>
+    </div>
+
+    <!-- USERS -->
+    <div class="tab-panel panel-card" id="panel-users">
+        <h2>User Registry</h2>
+        <p class="muted">Global list when Firebase is connected. Guests never appear here.</p>
+        <div class="row">
+            <input type="text" id="userSearch" placeholder="Filter by username or ID…" oninput="renderUsers()">
+            <button class="btn-ghost" style="flex:0.35" onclick="refreshUsers()">Reload users</button>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>User ID</th><th>Username</th><th>Created</th></tr></thead>
+                <tbody id="userTableBody"><tr><td colspan="3" style="text-align:center;color:#8b949e;padding:24px;">No data</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- BROADCAST -->
+    <div class="tab-panel panel-card" id="panel-broadcast">
+        <h2>Site Broadcast</h2>
+        <p class="muted">Message shown on the main Azora site for everyone (requires Firebase). Leave empty to clear.</p>
+        <textarea id="broadcastText" placeholder="Example: Halloween Event starts tomorrow!"></textarea>
+        <div class="row">
+            <button class="btn-ok" onclick="publishBroadcast()">Publish broadcast</button>
+            <button class="btn-danger" onclick="clearBroadcast()">Clear broadcast</button>
+        </div>
+        <h3>Maintenance mode</h3>
+        <div class="row">
+            <button class="btn-warn" onclick="setMaintenance(true)">Enable maintenance banner</button>
+            <button class="btn-ghost" onclick="setMaintenance(false)">Disable maintenance</button>
+        </div>
+        <p class="muted" id="broadcastStatus">Status: unknown</p>
+    </div>
+
+    <!-- OPS -->
+    <div class="tab-panel panel-card" id="panel-ops">
+        <h2>Operations (this browser)</h2>
+        <p class="muted">These affect only the device you’re on, unless noted.</p>
+        <div class="row">
+            <button onclick="grantCoins(100)">+100 AzoraCoins</button>
+            <button onclick="grantCoins(1000)">+1000 AzoraCoins</button>
+            <button class="btn-ghost" onclick="resetCoins()">Reset coins to 0</button>
+        </div>
+        <div class="row">
+            <button class="btn-warn" onclick="forceTheme('dark')">Force dark theme</button>
+            <button class="btn-warn" onclick="forceTheme('light')">Force light theme</button>
+            <button class="btn-ghost" onclick="forceTheme('auto')">Theme: auto</button>
+        </div>
+        <div class="row">
+            <button class="btn-danger" onclick="clearLocalGuests()">Clear local guest sessions</button>
+            <button class="btn-danger" onclick="clearLocalGames()">Clear local games list</button>
+        </div>
+        <h3>Active event flag (global if Firebase connected)</h3>
+        <div class="row">
+            <select id="eventSelect">
+                <option value="">None</option>
+                <option value="halloween">Halloween</option>
+                <option value="launch">Launch Party</option>
+                <option value="winter">Winter Fest</option>
+                <option value="builder">Builder Week</option>
+            </select>
+            <button class="btn-ok" onclick="setEventFlag()">Set event</button>
+        </div>
+    </div>
+
+    <!-- SETUP -->
+    <div class="tab-panel panel-card" id="panel-setup">
+        <h2>Cloud Setup</h2>
+        <p class="muted">Paste your Firebase Realtime Database URL so this console and the main site share one user list.</p>
+        <input id="firebaseUrlInput" type="text" placeholder="https://YOUR-PROJECT-default-rtdb.firebaseio.com">
+        <div class="row">
+            <button class="btn-ok" onclick="saveStaffFirebaseUrl()">Save Firebase URL</button>
+            <button class="btn-ghost" onclick="testFirebase()">Test connection</button>
+        </div>
+        <p class="muted" id="setupMsg"></p>
+        <h3>Also required on the public site</h3>
+        <p class="muted">In <code>script.js</code>, set the same URL on <code>AZORA_CLOUD.firebaseUrl</code>, then publish to GitHub Pages.</p>
+    </div>
+
+    <!-- LOG -->
+    <div class="tab-panel panel-card" id="panel-log">
+        <h2>Staff activity log</h2>
+        <p class="muted">Stored on this browser only.</p>
+        <div class="log" id="staffLog"></div>
+        <div class="row" style="margin-top:10px">
+            <button class="btn-ghost" onclick="clearLog()">Clear log</button>
+        </div>
     </div>
 </div>
 
-<div class="dashboard" id="dashboard">
-    <div class="dash-header">
-        <h1><img src="logo.jpg" alt=""> Azora Have Fun Servers</h1>
-        <button class="btn-secondary" style="width:auto;padding:8px 16px;" onclick="lockServers()">Lock</button>
-    </div>
-
-    <div id="statusNote" class="note-box note-warn">Checking global registry…</div>
-
-    <div class="setup-box" id="setupBox">
-        <h3>How global user tracking works</h3>
-        <p>
-            Your site on GitHub Pages is <strong>static</strong> — phones and computers cannot share localStorage.
-            Real accounts (not guests) are counted using a free <strong>Firebase Realtime Database</strong>.
-        </p>
-        <ol>
-            <li>Go to <code>https://console.firebase.google.com</code> and create a project (e.g. azora-havefun).</li>
-            <li>Build → Realtime Database → Create database → start in <strong>test mode</strong> (for now).</li>
-            <li>Copy the database URL, like <code>https://azora-havefun-default-rtdb.firebaseio.com</code></li>
-            <li>Open <code>script.js</code> on the site and set:
-                <br><code>firebaseUrl: "https://YOUR-PROJECT-default-rtdb.firebaseio.com"</code>
-                inside <code>AZORA_CLOUD</code> near the top.
-            </li>
-            <li>Also paste the same URL into the box below (saved only on this staff browser).</li>
-            <li>Publish/upload the updated <code>script.js</code> to GitHub Pages.</li>
-        </ol>
-        <p style="margin-top:12px;">
-            <input id="firebaseUrlInput" type="text" placeholder="https://YOUR-PROJECT-default-rtdb.firebaseio.com"
-                style="width:100%;padding:10px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#e2e8f0;margin-bottom:8px;">
-            <button type="button" onclick="saveStaffFirebaseUrl()">Save URL for this Servers panel</button>
-        </p>
-        <p style="color:#8b949e;margin:8px 0 0;font-size:12px;">
-            Guests are never uploaded. Only username + User ID + join time are stored in the cloud — not passwords.
-        </p>
-    </div>
-
-    <div class="stat-cards">
-        <div class="stat-card">
-            <div class="num" id="totalUsers">0</div>
-            <div class="label">Global accounts</div>
-        </div>
-        <div class="stat-card">
-            <div class="num" id="nextId">Aza: 0</div>
-            <div class="label">Next User ID</div>
-        </div>
-        <div class="stat-card">
-            <div class="num" id="localOnly">0</div>
-            <div class="label">Local-only (this browser)</div>
-        </div>
-    </div>
-
-    <div class="user-table-wrap">
-        <h2>Users <span id="sourceTag" class="source-tag source-local">local</span></h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>User ID</th>
-                    <th>Username</th>
-                    <th>Created</th>
-                </tr>
-            </thead>
-            <tbody id="userTableBody">
-                <tr><td colspan="3" class="empty-row">No users yet.</td></tr>
-            </tbody>
-        </table>
-    </div>
-
-    <div class="actions">
-        <button onclick="refreshRegistry()">🔄 Refresh</button>
-        <button class="btn-secondary" onclick="window.location.href='index.html'">← Back to Azora</button>
-    </div>
 </div>
 
 <script>
 var SERVER_ACCESS_KEY = "azora-servers-2026";
+var cachedUsers = [];
+
+/** Special codes → handlers */
+var SPECIAL_CODES = {
+    "AZORA-LAUNCH": {
+        desc: "Launch celebration flag + site broadcast",
+        run: function () {
+            setEventFlagValue("launch");
+            writeMeta("broadcast", "🚀 Azora Launch is live! Build, play, and have fun.");
+            return { ok: true, msg: "Launch mode enabled. Broadcast set for all visitors (if Firebase is connected)." };
+        }
+    },
+    "HALLOWEEN-2026": {
+        desc: "Halloween event mode",
+        run: function () {
+            setEventFlagValue("halloween");
+            writeMeta("broadcast", "🎃 Halloween Event is active on Azora!");
+            return { ok: true, msg: "Halloween event flag + broadcast published." };
+        }
+    },
+    "WINTER-FEST": {
+        desc: "Winter Fest event mode",
+        run: function () {
+            setEventFlagValue("winter");
+            writeMeta("broadcast", "❄️ Winter Fest is here — stay cozy and build!");
+            return { ok: true, msg: "Winter Fest enabled." };
+        }
+    },
+    "BUILDER-WEEK": {
+        desc: "Builder Week event",
+        run: function () {
+            setEventFlagValue("builder");
+            writeMeta("broadcast", "🛠️ Builder Week! Publish games and climb the Feed.");
+            return { ok: true, msg: "Builder Week enabled." };
+        }
+    },
+    "CLEAR-EVENT": {
+        desc: "Clear active event + broadcast",
+        run: function () {
+            setEventFlagValue("");
+            writeMeta("broadcast", "");
+            writeMeta("maintenance", false);
+            return { ok: true, msg: "Events, broadcast, and maintenance cleared." };
+        }
+    },
+    "MAINT-ON": {
+        desc: "Turn on maintenance banner site-wide",
+        run: function () {
+            writeMeta("maintenance", true);
+            return { ok: true, msg: "Maintenance mode ON for all visitors (Firebase required)." };
+        }
+    },
+    "MAINT-OFF": {
+        desc: "Turn off maintenance banner",
+        run: function () {
+            writeMeta("maintenance", false);
+            return { ok: true, msg: "Maintenance mode OFF." };
+        }
+    },
+    "COINS-500": {
+        desc: "Grant 500 AzoraCoins on this device",
+        run: function () {
+            grantCoins(500, true);
+            return { ok: true, msg: "Granted 500 AzoraCoins on this browser." };
+        }
+    },
+    "COINS-5000": {
+        desc: "Grant 5000 AzoraCoins on this device",
+        run: function () {
+            grantCoins(5000, true);
+            return { ok: true, msg: "Granted 5000 AzoraCoins on this browser." };
+        }
+    },
+    "STAFF-DARK": {
+        desc: "Force dark theme on this device",
+        run: function () {
+            forceTheme("dark", true);
+            return { ok: true, msg: "This browser is now dark theme." };
+        }
+    },
+    "STAFF-LIGHT": {
+        desc: "Force light theme on this device",
+        run: function () {
+            forceTheme("light", true);
+            return { ok: true, msg: "This browser is now light theme." };
+        }
+    },
+    "PURGE-LOCAL-GUESTS": {
+        desc: "Remove guest session data on this device",
+        run: function () {
+            clearLocalGuests(true);
+            return { ok: true, msg: "Local guest session data cleared." };
+        }
+    },
+    "STATUS-PING": {
+        desc: "Test code — confirms console is working",
+        run: function () {
+            return { ok: true, msg: "Pong! Staff console is online. Time: " + new Date().toLocaleString() };
+        }
+    },
+    "OPEN-REGISTRY": {
+        desc: "Jump to Users tab",
+        run: function () {
+            switchTab("users");
+            refreshUsers();
+            return { ok: true, msg: "Opened Users registry." };
+        }
+    }
+};
 
 function getFirebaseUrl() {
-    // Staff override for Servers panel, else same default as main site expects
-    var staff = localStorage.getItem("azoraStaffFirebaseUrl") || "";
-    if (staff) return staff.replace(/\/$/, "");
-    return "";
+    return (localStorage.getItem("azoraStaffFirebaseUrl") || "").replace(/\/$/, "");
 }
-
 function cloudReady() {
     var u = getFirebaseUrl();
     return u.indexOf("https://") === 0 && u.indexOf("YOUR") === -1;
 }
+function metaUrl(key) {
+    return getFirebaseUrl() + "/azoraMeta/" + key + ".json";
+}
 
-function saveStaffFirebaseUrl() {
-    var v = (document.getElementById("firebaseUrlInput").value || "").trim().replace(/\/$/, "");
-    if (!v) {
-        alert("Paste your Firebase Realtime Database URL first.");
-        return;
+function writeMeta(key, value) {
+    if (!cloudReady()) {
+        // local fallback flags for this browser / testing
+        var flags = {};
+        try { flags = JSON.parse(localStorage.getItem("azoraServerFlags") || "{}"); } catch (e) {}
+        flags[key] = value;
+        flags.updatedAt = Date.now();
+        localStorage.setItem("azoraServerFlags", JSON.stringify(flags));
+        logStaff("LOCAL flag " + key + " = " + JSON.stringify(value));
+        return Promise.resolve(false);
     }
-    localStorage.setItem("azoraStaffFirebaseUrl", v);
-    alert("Saved for this Servers panel. Click Refresh.\n\nRemember: also put the same URL in script.js (AZORA_CLOUD.firebaseUrl) and publish so new signups register globally.");
-    refreshRegistry();
+    return fetch(metaUrl(key), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(value)
+    }).then(function () {
+        logStaff("CLOUD flag " + key + " = " + JSON.stringify(value));
+        return true;
+    }).catch(function (e) {
+        logStaff("CLOUD write failed: " + e);
+        return false;
+    });
+}
+
+function readMeta(key) {
+    if (!cloudReady()) {
+        try {
+            var flags = JSON.parse(localStorage.getItem("azoraServerFlags") || "{}");
+            return Promise.resolve(flags[key]);
+        } catch (e) { return Promise.resolve(null); }
+    }
+    return fetch(metaUrl(key)).then(function (r) { return r.json(); }).catch(function () { return null; });
 }
 
 function unlockServers() {
-    var input = document.getElementById("serverPassword").value;
-    if (input === SERVER_ACCESS_KEY) {
+    if (document.getElementById("serverPassword").value === SERVER_ACCESS_KEY) {
         sessionStorage.setItem("azoraServerUnlocked", "true");
         document.getElementById("lockScreen").style.display = "none";
         document.getElementById("dashboard").style.display = "block";
-        var inp = document.getElementById("firebaseUrlInput");
-        if (inp) inp.value = getFirebaseUrl();
-        refreshRegistry();
+        document.getElementById("firebaseUrlInput").value = getFirebaseUrl();
+        renderCodesList();
+        refreshAll();
+        logStaff("Console unlocked");
     } else {
         document.getElementById("lockError").style.display = "block";
     }
 }
-
 function lockServers() {
     sessionStorage.removeItem("azoraServerUnlocked");
     document.getElementById("dashboard").style.display = "none";
@@ -240,66 +455,201 @@ function lockServers() {
     document.getElementById("lockError").style.display = "none";
 }
 
-function readLocalRegistry() {
+function switchTab(id) {
+    document.querySelectorAll(".tab").forEach(function (t) {
+        t.classList.toggle("active", t.getAttribute("data-tab") === id);
+    });
+    document.querySelectorAll(".tab-panel").forEach(function (p) {
+        p.classList.toggle("active", p.id === "panel-" + id);
+    });
+}
+
+function renderCodesList() {
+    var box = document.getElementById("codesList");
+    box.innerHTML = "";
+    Object.keys(SPECIAL_CODES).forEach(function (code) {
+        var div = document.createElement("div");
+        div.className = "code-card";
+        div.innerHTML = "<strong>" + escapeHtml(code) + "</strong>" + escapeHtml(SPECIAL_CODES[code].desc);
+        box.appendChild(div);
+    });
+}
+
+function redeemCode() {
+    var raw = (document.getElementById("specialCodeInput").value || "").trim().toUpperCase();
+    var result = document.getElementById("codeResult");
+    if (!raw) {
+        result.className = "code-result bad";
+        result.textContent = "Enter a code first.";
+        return;
+    }
+    var entry = SPECIAL_CODES[raw];
+    if (!entry) {
+        result.className = "code-result bad";
+        result.textContent = "Unknown code. Check the list below or ask lead staff.";
+        logStaff("Invalid code attempt: " + raw);
+        return;
+    }
+    try {
+        var out = entry.run() || { ok: true, msg: "Code applied." };
+        result.className = "code-result " + (out.ok ? "ok" : "bad");
+        result.textContent = out.msg || "Done.";
+        logStaff("Code redeemed: " + raw + " → " + (out.msg || "ok"));
+        document.getElementById("specialCodeInput").value = "";
+        refreshBroadcastStatus();
+    } catch (e) {
+        result.className = "code-result bad";
+        result.textContent = "Code failed: " + e;
+        logStaff("Code error " + raw + ": " + e);
+    }
+}
+
+function logStaff(msg) {
+    var list = [];
+    try { list = JSON.parse(localStorage.getItem("azoraStaffLog") || "[]"); } catch (e) {}
+    list.unshift({ at: Date.now(), msg: String(msg) });
+    list = list.slice(0, 80);
+    localStorage.setItem("azoraStaffLog", JSON.stringify(list));
+    renderLog();
+}
+function renderLog() {
+    var el = document.getElementById("staffLog");
+    if (!el) return;
+    var list = [];
+    try { list = JSON.parse(localStorage.getItem("azoraStaffLog") || "[]"); } catch (e) {}
+    if (!list.length) { el.innerHTML = "<div>No activity yet.</div>"; return; }
+    el.innerHTML = list.map(function (row) {
+        return "<div>[" + new Date(row.at).toLocaleString() + "] " + escapeHtml(row.msg) + "</div>";
+    }).join("");
+}
+function clearLog() {
+    localStorage.removeItem("azoraStaffLog");
+    renderLog();
+}
+
+function grantCoins(n, silent) {
+    var cur = parseInt(localStorage.getItem("azoraCoins") || "0", 10) || 0;
+    cur += n;
+    localStorage.setItem("azoraCoins", String(cur));
+    // also update live label if on main page later
+    logStaff("Coins " + (n >= 0 ? "+" : "") + n + " → total " + cur);
+    if (!silent) alert("AzoraCoins on this device: " + cur);
+}
+function resetCoins() {
+    localStorage.setItem("azoraCoins", "0");
+    logStaff("Coins reset to 0");
+    alert("Coins reset to 0 on this device.");
+}
+function forceTheme(v, silent) {
+    localStorage.setItem("azoraTheme", v);
+    logStaff("Theme set to " + v);
+    if (!silent) alert("Theme set to " + v + " for this browser. Open the main site to see it.");
+}
+function clearLocalGuests(silent) {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc && acc.isGuest) {
+            localStorage.removeItem("azoraAccount");
+            localStorage.removeItem("loggedIn");
+        }
+    } catch (e) {}
+    logStaff("Cleared local guest session if present");
+    if (!silent) alert("Local guest session cleared (if any).");
+}
+function clearLocalGames() {
+    if (!confirm("Delete all locally stored AzaFn games on this device?")) return;
+    localStorage.removeItem("azoraAzaFnGames");
+    logStaff("Cleared local games");
+    alert("Local games cleared.");
+}
+
+function setEventFlagValue(name) {
+    var sel = document.getElementById("eventSelect");
+    if (sel) sel.value = name || "";
+    writeMeta("event", name || "");
+    var flags = {};
+    try { flags = JSON.parse(localStorage.getItem("azoraServerFlags") || "{}"); } catch (e) {}
+    flags.event = name || "";
+    localStorage.setItem("azoraServerFlags", JSON.stringify(flags));
+}
+function setEventFlag() {
+    var name = document.getElementById("eventSelect").value || "";
+    setEventFlagValue(name);
+    alert(name ? ("Event set to: " + name) : "Event cleared");
+}
+
+function publishBroadcast() {
+    var text = (document.getElementById("broadcastText").value || "").trim().slice(0, 280);
+    writeMeta("broadcast", text).then(function () {
+        alert(text ? "Broadcast published." : "Broadcast cleared.");
+        refreshBroadcastStatus();
+    });
+}
+function clearBroadcast() {
+    document.getElementById("broadcastText").value = "";
+    publishBroadcast();
+}
+function setMaintenance(on) {
+    writeMeta("maintenance", !!on).then(function () {
+        alert("Maintenance " + (on ? "ON" : "OFF"));
+        refreshBroadcastStatus();
+    });
+}
+function refreshBroadcastStatus() {
+    var el = document.getElementById("broadcastStatus");
+    if (!el) return;
+    Promise.all([readMeta("broadcast"), readMeta("maintenance"), readMeta("event")]).then(function (vals) {
+        var b = vals[0], m = vals[1], e = vals[2];
+        document.getElementById("broadcastText").value = (typeof b === "string") ? b : (b || "");
+        el.textContent = "Status: maintenance=" + (m ? "ON" : "OFF") +
+            " · event=" + (e || "none") +
+            " · broadcast=" + (b ? "set" : "empty") +
+            (cloudReady() ? " · cloud" : " · local only");
+    });
+}
+
+function saveStaffFirebaseUrl() {
+    var v = (document.getElementById("firebaseUrlInput").value || "").trim().replace(/\/$/, "");
+    if (!v) { alert("Paste a Firebase URL first."); return; }
+    localStorage.setItem("azoraStaffFirebaseUrl", v);
+    document.getElementById("setupMsg").textContent = "Saved for this console.";
+    logStaff("Firebase URL saved");
+    refreshAll();
+}
+function testFirebase() {
+    if (!cloudReady()) {
+        document.getElementById("setupMsg").textContent = "No valid URL saved.";
+        return;
+    }
+    fetch(getFirebaseUrl() + "/.json")
+        .then(function (r) {
+            document.getElementById("setupMsg").textContent = r.ok ? "Connection OK (" + r.status + ")" : "HTTP " + r.status;
+            logStaff("Firebase test: " + r.status);
+        })
+        .catch(function (e) {
+            document.getElementById("setupMsg").textContent = "Failed: " + e;
+        });
+}
+
+function readLocalUsers() {
     var registry = [];
     try { registry = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]"); } catch (e) {}
-    if (!Array.isArray(registry)) registry = [];
-    // Real accounts only for “local only” comparison
-    return registry.filter(function (u) { return u && !u.isGuest && u.username; });
+    return (registry || []).filter(function (u) { return u && !u.isGuest && u.username; });
 }
 
-function renderTable(list, source) {
-    var tbody = document.getElementById("userTableBody");
-    var tag = document.getElementById("sourceTag");
-    if (tag) {
-        tag.textContent = source;
-        tag.className = "source-tag " + (source === "global cloud" ? "source-cloud" : "source-local");
-    }
-    document.getElementById("totalUsers").textContent = list.length;
-    var maxN = 0;
-    list.forEach(function (u) {
-        var m = String(u.userId || "").match(/Aza:\s*(\d+)/i);
-        if (m) maxN = Math.max(maxN, parseInt(m[1], 10) + 1);
-    });
-    document.getElementById("nextId").textContent = "Aza: " + (list.length ? maxN : list.length);
-
-    if (list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="empty-row">No real accounts found yet. (Guests do not count.)</td></tr>';
-        return;
-    }
-    tbody.innerHTML = "";
-    list.slice().reverse().forEach(function (user) {
-        var tr = document.createElement("tr");
-        var dateStr = user.createdAt ? new Date(user.createdAt).toLocaleString() : "—";
-        tr.innerHTML =
-            '<td class="uid">' + escapeHtml(user.userId || "—") + '</td>' +
-            '<td>' + escapeHtml(user.username || "—") + '</td>' +
-            '<td>' + dateStr + '</td>';
-        tbody.appendChild(tr);
-    });
-}
-
-function refreshRegistry() {
-    var note = document.getElementById("statusNote");
-    var local = readLocalRegistry();
-    document.getElementById("localOnly").textContent = local.length;
+function refreshUsers() {
+    var local = readLocalUsers();
+    document.getElementById("statLocal").textContent = local.length;
 
     if (!cloudReady()) {
-        note.className = "note-box note-warn";
-        note.innerHTML = "<strong>Global cloud is not connected yet.</strong> Showing only accounts on <em>this</em> browser. Follow the setup steps below, then put the same Firebase URL in <code>script.js</code> so every device that joins Azora reports in.";
-        renderTable(local, "this browser only");
+        cachedUsers = local;
+        renderUsers();
+        document.getElementById("statGlobal").textContent = local.length;
+        document.getElementById("statNext").textContent = "Aza: " + local.length;
         return;
     }
-
-    note.className = "note-box note-warn";
-    note.textContent = "Loading global registry from Firebase…";
-
-    var url = getFirebaseUrl() + "/azoraRegistry.json";
-    fetch(url)
-        .then(function (r) {
-            if (!r.ok) throw new Error("HTTP " + r.status);
-            return r.json();
-        })
+    fetch(getFirebaseUrl() + "/azoraRegistry.json")
+        .then(function (r) { return r.json(); })
         .then(function (data) {
             var list = [];
             if (data && typeof data === "object") {
@@ -309,32 +659,66 @@ function refreshRegistry() {
                 });
             }
             list.sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); });
-            note.className = "note-box note-ok";
-            note.innerHTML = "<strong>Connected to global registry.</strong> These are real accounts from every device using your published site. Guests are excluded.";
-            renderTable(list, "global cloud");
+            cachedUsers = list;
+            var maxN = list.length;
+            list.forEach(function (u) {
+                var m = String(u.userId || "").match(/Aza:\s*(\d+)/i);
+                if (m) maxN = Math.max(maxN, parseInt(m[1], 10) + 1);
+            });
+            document.getElementById("statGlobal").textContent = list.length;
+            document.getElementById("statNext").textContent = "Aza: " + maxN;
+            renderUsers();
         })
-        .catch(function (err) {
-            note.className = "note-box note-warn";
-            note.innerHTML = "<strong>Could not reach Firebase.</strong> " + escapeHtml(String(err && err.message || err)) +
-                " — check the database URL and that the database is in test mode. Showing local accounts only.";
-            renderTable(local, "this browser only");
+        .catch(function () {
+            cachedUsers = local;
+            document.getElementById("statGlobal").textContent = local.length;
+            renderUsers();
         });
 }
 
+function renderUsers() {
+    var q = (document.getElementById("userSearch").value || "").trim().toLowerCase();
+    var list = cachedUsers.filter(function (u) {
+        if (!q) return true;
+        return String(u.username || "").toLowerCase().indexOf(q) !== -1 ||
+            String(u.userId || "").toLowerCase().indexOf(q) !== -1;
+    });
+    var tbody = document.getElementById("userTableBody");
+    if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#8b949e;padding:24px;">No matching real accounts.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = list.slice().reverse().map(function (u) {
+        return '<tr><td class="uid">' + escapeHtml(u.userId || "—") + '</td><td>' +
+            escapeHtml(u.username || "—") + '</td><td>' +
+            (u.createdAt ? new Date(u.createdAt).toLocaleString() : "—") + '</td></tr>';
+    }).join("");
+}
+
+function refreshAll() {
+    var note = document.getElementById("statusNote");
+    if (cloudReady()) {
+        note.className = "note note-ok";
+        note.innerHTML = "<strong>Cloud linked.</strong> Global codes & user list use Firebase. Guests are excluded.";
+    } else {
+        note.className = "note note-warn";
+        note.innerHTML = "<strong>Cloud not linked.</strong> Codes still work locally. Connect Firebase in Setup for site-wide effects.";
+    }
+    refreshUsers();
+    refreshBroadcastStatus();
+    renderLog();
+}
+
 function escapeHtml(str) {
-    return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+    return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
 if (sessionStorage.getItem("azoraServerUnlocked") === "true") {
     document.getElementById("lockScreen").style.display = "none";
     document.getElementById("dashboard").style.display = "block";
-    var inp = document.getElementById("firebaseUrlInput");
-    if (inp) inp.value = getFirebaseUrl();
-    refreshRegistry();
+    document.getElementById("firebaseUrlInput").value = getFirebaseUrl();
+    renderCodesList();
+    refreshAll();
 }
 </script>
 </body>

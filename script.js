@@ -146,6 +146,73 @@ window.AZORA_CLOUD = AZORA_CLOUD;
 window.registerGlobalUser = registerGlobalUser;
 window.fetchGlobalRegistry = fetchGlobalRegistry;
 
+// --- Global server flags (from Staff Console / Firebase) ---
+function applyServerFlags(flags) {
+    if (!flags || typeof flags !== "object") return;
+    var banner = document.getElementById("serverMessage");
+    if (banner) {
+        if (flags.maintenance) {
+            banner.style.display = "block";
+            banner.innerHTML = "⚠️ Azora is in <strong>maintenance mode</strong>. Some features may be limited.<br>Please check back soon.";
+        } else if (flags.broadcast) {
+            banner.style.display = "block";
+            banner.textContent = String(flags.broadcast);
+        } else {
+            // only hide if it was our dynamic message
+            if (banner.getAttribute("data-dynamic") === "1" || flags.broadcast === "" || flags.maintenance === false) {
+                if (!flags.maintenance && !flags.broadcast) banner.style.display = "none";
+            }
+        }
+        if (flags.maintenance || flags.broadcast) banner.setAttribute("data-dynamic", "1");
+    }
+    if (flags.event) {
+        document.documentElement.setAttribute("data-azora-event", String(flags.event));
+    } else {
+        document.documentElement.removeAttribute("data-azora-event");
+    }
+    // Coins display sync if present
+    try {
+        var coins = localStorage.getItem("azoraCoins");
+        var el = document.getElementById("bucks");
+        if (el && coins !== null) el.textContent = coins;
+    } catch (e) {}
+}
+
+function loadServerFlags() {
+    // Prefer cloud meta; fall back to local staff flags
+    function fromLocal() {
+        try {
+            var flags = JSON.parse(localStorage.getItem("azoraServerFlags") || "{}");
+            applyServerFlags(flags);
+        } catch (e) {}
+        // coins
+        try {
+            var el = document.getElementById("bucks");
+            if (el) el.textContent = localStorage.getItem("azoraCoins") || "0";
+        } catch (e) {}
+    }
+
+    if (typeof AZORA_CLOUD === "undefined" || !AZORA_CLOUD.isReady()) {
+        fromLocal();
+        return;
+    }
+    var base = cloudBase();
+    Promise.all([
+        fetch(base + "/azoraMeta/broadcast.json").then(function (r) { return r.json(); }).catch(function () { return null; }),
+        fetch(base + "/azoraMeta/maintenance.json").then(function (r) { return r.json(); }).catch(function () { return null; }),
+        fetch(base + "/azoraMeta/event.json").then(function (r) { return r.json(); }).catch(function () { return null; })
+    ]).then(function (vals) {
+        applyServerFlags({
+            broadcast: vals[0],
+            maintenance: vals[1],
+            event: vals[2]
+        });
+    }).catch(fromLocal);
+}
+
+window.loadServerFlags = loadServerFlags;
+window.applyServerFlags = applyServerFlags;
+
 
 
 // Create the container automatically
@@ -1221,6 +1288,7 @@ window.addEventListener("DOMContentLoaded", function () {
 
     loadTheme();
     if (typeof loadBrowserAppearance === "function") loadBrowserAppearance();
+    if (typeof loadServerFlags === "function") loadServerFlags();
 });
 
 
