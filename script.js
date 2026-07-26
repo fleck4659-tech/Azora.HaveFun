@@ -2320,7 +2320,9 @@ function getAICompanion() {
         personality: "friendly",
         head: "#ffcc00",
         body: "#a78bfa",
-        accent: "#00ebd4"
+        accent: "#00ebd4",
+        apiKey: "",
+        useOpenEnded: true
     };
     try {
         var saved = JSON.parse(localStorage.getItem("azoraAICompanion") || "null");
@@ -2330,10 +2332,13 @@ function getAICompanion() {
                 personality: saved.personality || def.personality,
                 head: saved.head || def.head,
                 body: saved.body || def.body,
-                accent: saved.accent || def.accent
+                accent: saved.accent || def.accent,
+                apiKey: saved.apiKey || localStorage.getItem("azoraAIApiKey") || "",
+                useOpenEnded: saved.useOpenEnded !== false
             };
         }
     } catch (e) {}
+    def.apiKey = localStorage.getItem("azoraAIApiKey") || "";
     return def;
 }
 
@@ -2352,6 +2357,23 @@ function openAICompanionSettings() {
     document.getElementById("aiCompHead").value = ai.head;
     document.getElementById("aiCompBody").value = ai.body;
     document.getElementById("aiCompAccent").value = ai.accent;
+    var keyEl = document.getElementById("aiCompApiKey");
+    if (keyEl) keyEl.value = ai.apiKey || "";
+    var useEl = document.getElementById("aiCompUseOpenAI");
+    if (useEl) useEl.checked = ai.useOpenEnded !== false;
+    var st = document.getElementById("aiApiStatus");
+    if (st) {
+        if (ai.useOpenEnded === false) {
+            st.textContent = "Open-ended AI is turned off. Only simple replies will be used.";
+            st.style.color = "#666";
+        } else if (ai.apiKey) {
+            st.textContent = "Open-ended AI: Gemini key saved (this device).";
+            st.style.color = "#059669";
+        } else {
+            st.textContent = "Open-ended AI: free mode (no key needed).";
+            st.style.color = "#059669";
+        }
+    }
     updateAICompanionPreview();
     ["aiCompHead", "aiCompBody", "aiCompAccent"].forEach(function (id) {
         var el = document.getElementById(id);
@@ -2377,13 +2399,21 @@ function updateAICompanionPreview() {
 
 function saveAICompanionSettings() {
     var name = (document.getElementById("aiCompName").value || "Aza").trim().slice(0, 24) || "Aza";
+    var apiKey = (document.getElementById("aiCompApiKey") && document.getElementById("aiCompApiKey").value || "").trim();
+    var useOpen = document.getElementById("aiCompUseOpenAI")
+        ? document.getElementById("aiCompUseOpenAI").checked
+        : true;
     saveAICompanion({
         name: name,
         personality: document.getElementById("aiCompPersonality").value || "friendly",
         head: document.getElementById("aiCompHead").value,
         body: document.getElementById("aiCompBody").value,
-        accent: document.getElementById("aiCompAccent").value
+        accent: document.getElementById("aiCompAccent").value,
+        apiKey: apiKey,
+        useOpenEnded: useOpen
     });
+    if (apiKey) localStorage.setItem("azoraAIApiKey", apiKey);
+    else localStorage.removeItem("azoraAIApiKey");
     closeAICompanionSettings();
     updateAICompanionListItem();
     if (document.getElementById("chatOverlay").style.display === "flex") {
@@ -2392,7 +2422,9 @@ function saveAICompanionSettings() {
             document.getElementById("chatWithLabel").textContent = "Chat with " + name + " (AI)";
         }
     }
-    alert("AI saved! Name in Chats: " + name);
+    alert(useOpen
+        ? ("AI saved! Open-ended mode ON" + (apiKey ? " (Gemini key)" : " (free)") + ". Name: " + name)
+        : ("AI saved! Simple replies only. Name: " + name));
 }
 
 function closeAICompanionSettings() {
@@ -2599,134 +2631,428 @@ function aiReplyDelayMs(userText) {
     return Math.max(3000, Math.min(5000, t));
 }
 
-function generateAIReply(userText) {
-    var ai = getAICompanion();
-    var t = (userText || "").toLowerCase().trim();
-    var name = ai.name || "Aza";
-    var p = ai.personality || "friendly";
+function pickRandom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
 
-    // Who is the human talking?
+function getChatUserContext() {
     var userName = "";
     var isGuest = localStorage.getItem("loggedIn") === "guest";
     var userId = "";
     try {
         var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
         if (acc) {
-            if (acc.isGuest || isGuest) {
-                userName = "";
-                isGuest = true;
-                userId = acc.userId || acc.guestId || "";
-            } else {
-                userName = acc.username || "";
-                userId = acc.userId || "";
-            }
+            isGuest = !!(acc.isGuest || isGuest);
+            userName = isGuest ? "" : (acc.username || "");
+            userId = acc.userId || "";
         }
     } catch (e) {}
     if (!userName && !isGuest) userName = getMyUsername() || "";
+    return { userName: userName, isGuest: isGuest, userId: userId };
+}
+
+function generateAIReply(userText) {
+    var ai = getAICompanion();
+    var t = (userText || "").toLowerCase().trim();
+    var name = ai.name || "Aza";
+    var p = ai.personality || "friendly";
+    var ctx = getChatUserContext();
+    var userName = ctx.userName;
+    var isGuest = ctx.isGuest;
+    var userId = ctx.userId;
+    var who = userName || (isGuest ? "friend" : "friend");
 
     var openers = {
         friendly: ["Hey!", "Hi there!", "Hello!", "Nice to hear from you!"],
-        playful: ["Hehe!", "Ooh!", "Yo!", "Haha okay—"],
+        playful: ["Hehe!", "Ooh!", "Yo!", "Haha—"],
         chill: ["Hey.", "Mm.", "Cool.", "Alright—"],
         builder: ["Got it!", "On it!", "Interesting!", "Let's think—"]
     };
-    var list = openers[p] || openers.friendly;
-    var opener = list[Math.floor(Math.random() * list.length)];
+    var opener = pickRandom(openers[p] || openers.friendly);
 
-    // --- Name / identity questions (smarter) ---
-    var asksName = (
-        /\b(my name|what(?:'s| is) my name|who am i|what(?:'s| is) my username|my username|do you know (?:my )?name|what do you call me|who am i known as)\b/i.test(t) ||
-        (/\bname\b/.test(t) && /\b(my|me|i)\b/.test(t) && /\b(what|whats|what's|who|tell|know)\b/.test(t))
-    );
-    if (asksName) {
+    // ===== IDENTITY / NAME =====
+    if (/\b(my name|what(?:'s| is) my name|who am i|what(?:'s| is) my username|my username|do you know (?:my )?name|what do you call me)\b/.test(t) ||
+        (/\bname\b/.test(t) && /\b(my|me|i)\b/.test(t) && /\b(what|whats|what's|who|tell|know)\b/.test(t))) {
         if (isGuest || !userName) {
-            return opener + " You're chatting as a Guest right now, so you don't have a username yet. Create an account and I'll remember your name!";
+            return pickRandom([
+                opener + " You're on Azora as a Guest, so you don't have a username yet. Create an account and I'll remember your name!",
+                "Right now you're a Guest — no username saved. Make an account and your name will show up here!"
+            ]);
         }
-        return opener + " Your username on Azora is " + userName + "." +
-            (userId ? " Your public User ID is " + userId + "." : "") +
-            " Nice to know you, " + userName + "!";
+        return pickRandom([
+            opener + " Your username is " + userName + "!" + (userId ? " Your User ID is " + userId + "." : ""),
+            "You go by " + userName + " on Azora." + (userId ? " Public ID: " + userId + "." : ""),
+            "Easy — you're " + userName + "!" + (userId ? " (" + userId + ")" : "")
+        ]);
     }
-
-    // AI's own name
-    if (/\b(your name|who are you|what(?:'s| is) your name|what are you called)\b/i.test(t)) {
-        return "I'm " + name + ", your personal AI companion on Azora! You can rename me anytime with Customize AI.";
+    if (/\b(your name|who are you|what(?:'s| is) your name|what are you called)\b/.test(t)) {
+        return pickRandom([
+            "I'm " + name + ", your AI companion on Azora! You can rename me in Customize AI.",
+            "My name is " + name + ". I'm here to chat, help with Azora tips, and keep you company!",
+            "I'm " + name + " — built into Azora Chat just for you."
+        ]);
     }
-
-    // Greetings
-    if (/^(hello|hi|hey|yo|sup|hiya|good (morning|afternoon|evening))\b/.test(t) || t === "hi" || t === "hey") {
-        if (userName) {
-            return opener + " " + userName + "! I'm " + name + ". How's your day on Azora?";
-        }
-        return opener + " I'm " + name + ", your Azora AI companion. How's your day?";
-    }
-
-    // User ID
-    if (/\b(my (user )?id|what(?:'s| is) my id|aza:\s*\d+)\b/i.test(t)) {
-        if (userId) {
-            return opener + " Your public User ID is " + userId + ".";
-        }
+    if (/\b(my (user )?id|what(?:'s| is) my id)\b/.test(t)) {
+        if (userId) return opener + " Your public User ID is " + userId + ".";
         return opener + " I don't see a User ID on this session yet.";
     }
 
-    // Games / building
-    if (/\b(game|build|create|aza\s*fn|azafn|publish|feed)\b/.test(t)) {
-        return opener + (userName ? " " + userName + "," : "") +
-            " Building games on Azora is the best. Open AzaFn to design a 2D or 3D idea, then publish it to Feed!";
-    }
-
-    // Friends / chat
-    if (/\b(friend|message|dm|chat with)\b/.test(t)) {
-        if (isGuest) {
-            return opener + " Guests can talk to me anytime! Create an account to add human friends and message them.";
-        }
-        return opener + " Search for players, send a friend request, and when they accept you can message them in Chat. I'm always here too.";
-    }
-
-    // Avatar / customize
-    if (/\b(avatar|color|custom|outfit)\b/.test(t)) {
-        return opener + " Customize your avatar on the main page. You can also change my name and colors with the Customize AI button!";
-    }
-
-    // Help / capabilities
-    if (/\b(help|what can you do|commands|how do (i|you)|what are you)\b/.test(t)) {
-        var who = userName ? userName : (isGuest ? "Guest" : "friend");
-        return "I'm " + name + "! I can chat with you, remember your Azora username when you ask, and talk about games, Feed, friends, and avatars. What do you want to know, " + who + "?";
-    }
-
-    // Thanks
-    if (/\b(thank|thanks|thx|ty)\b/.test(t)) {
-        return opener + (userName ? " You're welcome, " + userName + "!" : " You're welcome! Happy to chat anytime.");
-    }
-
-    // How are you
-    if (/\b(how are you|how(?:'s| is) it going|whats up|what's up)\b/.test(t)) {
-        return opener + " I'm doing great — always ready to chat on Azora." + (userName ? " How are you, " + userName + "?" : " How are you?");
-    }
-
-    // Weather / joke light topics
-    if (/\b(joke|funny)\b/.test(t)) {
-        return opener + " Why did the avatar bring a ladder to Azora? To reach the next level!";
-    }
-
-    // Questions (generic but slightly smarter)
-    if (/\?/.test(t)) {
+    // ===== GREETINGS =====
+    if (/^(hello|hi|hey|yo|sup|hiya|howdy|good (morning|afternoon|evening))[\s!.?]*$/.test(t) ||
+        /^(hello|hi|hey|yo)\b/.test(t) && t.length < 24) {
         if (userName) {
-            return opener + " Good question, " + userName + "! I'm a simple companion, but I can talk about your username, games, Feed, friends, and Azora tips.";
+            return pickRandom([
+                opener + " " + userName + "! How's Azora treating you today?",
+                "Hey " + userName + "! I'm " + name + ". What do you want to talk about?",
+                "Hi " + userName + "! Ready to build, play, or just chat?"
+            ]);
         }
-        return opener + " Good question! Ask me about your username, games, Feed, friends, or how Azora works.";
+        return pickRandom([
+            opener + " I'm " + name + ". How's your day?",
+            "Hey! Welcome to Azora Chat. What's up?",
+            "Hi! I'm " + name + " — your companion here. Say anything!"
+        ]);
     }
 
-    // Echo a bit of what they said for smarter feel
+    // ===== HOW ARE YOU =====
+    if (/\b(how are you|how(?:'s| is) it going|what(?:'s| is) up|how do you feel)\b/.test(t)) {
+        return pickRandom([
+            opener + " I'm doing great — always happy to chat on Azora. How are you, " + who + "?",
+            "Feeling good! Ready to talk games, friends, or random questions. You?",
+            "I'm solid. Thanks for asking, " + who + "! What's going on?"
+        ]);
+    }
+
+    // ===== THANKS =====
+    if (/\b(thank|thanks|thx|ty|appreciate)\b/.test(t)) {
+        return pickRandom([
+            "You're welcome, " + who + "!",
+            opener + " Anytime!",
+            "Happy to help!",
+            "No problem — that's what I'm here for."
+        ]);
+    }
+
+    // ===== AZORA / PLATFORM =====
+    if (/\b(what is azora|what's azora|about azora|this (site|app|platform|game))\b/.test(t)) {
+        return "Azora is a fun social platform where you customize avatars, build games with AzaFn, discover games on Feed, chat with friends, and hang out with me — your AI companion!";
+    }
+    if (/\b(aza\s*fn|azafn|build a game|create a game|make a game)\b/.test(t)) {
+        return pickRandom([
+            opener + " Open AzaFn from the top area, describe your idea, and choose 2D or 3D. After it builds, you can preview and publish to Feed!",
+            "AzaFn helps you generate games. Say whether you want 2D or 3D, then use Build. Publish when you're ready so others can play."
+        ]);
+    }
+    if (/\b(feed|discover games|public games)\b/.test(t)) {
+        return "The Feed is where published games appear. Tap Feed at the top to scroll, play, and (if you have an account) like, save, or comment!";
+    }
+    if (/\b(friend|add friend|follow|message someone)\b/.test(t)) {
+        if (isGuest) {
+            return "Guests can chat with me and play games! Create an account to add friends, follow people, and message other players.";
+        }
+        return "Search for a username, open their profile, then Follow or Add Friend. Once you're friends, you can message them in Chat.";
+    }
+    if (/\b(avatar|customize|character colors)\b/.test(t)) {
+        return pickRandom([
+            "On the main page you can change avatar colors for head, torso, arms, and legs. Guests can look, but saving avatar progress needs an account.",
+            "Avatar customizing is on the home screen with the 3D character. Accounts can save colors; guests play without saving."
+        ]);
+    }
+    if (/\b(guest|account|sign up|log in|login)\b/.test(t)) {
+        return "Guest mode lets you play games and chat with me. A full account unlocks username, saved avatar, friends, likes, comments, saves, and more!";
+    }
+    if (/\b(settings|dark mode|theme)\b/.test(t)) {
+        return "Open Settings from the top bar. Basic Settings has theme options like light, dark, and automatic. Accounts also get Security for password changes.";
+    }
+    if (/\b(notification|bell)\b/.test(t)) {
+        return "The bell icon shows important alerts — follows, friend requests, game milestones, and events. Tap it to open your notification list.";
+    }
+    if (/\b(status|online|afk|busy)\b/.test(t)) {
+        return "Your profile can show a status like Online, AFK, Building, Playing, Busy, or Offline. AFK and Offline can update after you are inactive for a while.";
+    }
+
+    // ===== GAMES / PLAY =====
+    if (/\b(play|games?|fun)\b/.test(t) && !/\b(game of|video game history)\b/.test(t)) {
+        return pickRandom([
+            opener + " Try the Feed for community games, or AzaFn if you want to make your own!",
+            "Playing is the heart of Azora. Check Feed for published games — guests can play too!",
+            "If you want something new, build with AzaFn or explore Feed. What kind of game do you like — 2D or 3D?"
+        ]);
+    }
+
+    // ===== JOKES =====
+    if (/\b(joke|funny|make me laugh)\b/.test(t)) {
+        return pickRandom([
+            "Why did the avatar bring a ladder to Azora? To reach the next level!",
+            "What do clouds wear under their clothes? Thunderwear!",
+            "Why don't programmers like nature? Too many bugs.",
+            "I told my computer I needed a break… and it said 'No problem, I'll go to sleep.'",
+            "Why was the game Feed always calm? Because all the drama got moderated!",
+            "What is a skeleton's favorite instrument? The trom-bone!"
+        ]);
+    }
+
+    // ===== FEELINGS =====
+    if (/\b(i('m| am) (sad|lonely|upset|mad|angry|bored|tired|scared|anxious|nervous))\b/.test(t) ||
+        /\b(feeling (sad|down|bad|low))\b/.test(t)) {
+        return pickRandom([
+            "Sorry you're feeling that way, " + who + ". I'm here to chat. Want to talk about it, hear a joke, or look at something fun on Azora?",
+            "That sounds hard. You matter. If you want a distraction, we can talk games — or just keep chatting here.",
+            "I'm glad you told me. Take it one step at a time. Want a silly joke or an Azora tip?"
+        ]);
+    }
+    if (/\b(i('m| am) (happy|excited|great|good|awesome))\b/.test(t)) {
+        return pickRandom([
+            "Love that energy, " + who + "! What's the best part of your day?",
+            "Awesome! Celebrate those wins. Did you build or play something cool on Azora?"
+        ]);
+    }
+
+    // ===== SCIENCE / NATURE (simple educational) =====
+    if (/\bvolcano/.test(t)) {
+        return "Volcanoes form when melted rock (magma) rises from under the Earth's crust. If pressure builds up, it can erupt as lava, ash, and gas. Some eruptions are gentle; others are explosive!";
+    }
+    if (/\b(planet|solar system)\b/.test(t)) {
+        return "Our solar system has the Sun at the center and planets orbiting it — like Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune. Earth is the one with liquid water and us!";
+    }
+    if (/\b(dinosaur|t-?rex)\b/.test(t)) {
+        return "Dinosaurs lived millions of years ago. Some were huge plant-eaters; others were fast hunters. Birds are related to theropod dinosaurs — so in a way, dinosaurs never fully left!";
+    }
+    if (/\b(space|star|galaxy|moon|astronaut)\b/.test(t)) {
+        return "Space is enormous. Stars are giant balls of hot gas; our Sun is a star. The Moon orbits Earth and affects tides. Astronauts train hard to live and work in microgravity!";
+    }
+    if (/\b(ocean|fish|shark)\b/.test(t)) {
+        return "Oceans cover most of Earth and are full of life — from tiny plankton to giant whales. Sharks are fish with skeletons made of cartilage, and many help keep ocean ecosystems balanced.";
+    }
+    if (/\b(weather|rain|thunder|lightning|cloud|storm)\b/.test(t)) {
+        return "Weather happens in Earth's atmosphere. Clouds are tiny water droplets or ice. Rain falls when drops get heavy. Lightning is a giant spark of electricity; thunder is the sound that shockwave makes!";
+    }
+    if (/\b(computer|robot|coding|program)\b/.test(t)) {
+        return "Computers follow instructions called code. Programming is writing those instructions clearly. Robots combine sensors, code, and moving parts — and games are programs too!";
+    }
+    if (/\b(math|plus|minus|multiply|divide|homework)\b/.test(t)) {
+        return "I can help with simple math talk! Try asking something like 'what is 7 times 8' — for big homework, your teachers and trusted adults are the best guides.";
+    }
+    // simple arithmetic
+    var mathMatch = t.match(/what(?:'s| is)\s+(\d+)\s*([\+\-\*x\/]|times|plus|minus|divided by)\s*(\d+)/);
+    if (mathMatch) {
+        var a = parseInt(mathMatch[1], 10), b = parseInt(mathMatch[3], 10), op = mathMatch[2], r = null;
+        if (op === '+' || op === 'plus') r = a + b;
+        else if (op === '-' || op === 'minus') r = a - b;
+        else if (op === '*' || op === 'x' || op === 'times') r = a * b;
+        else if ((op === '/' || op === 'divided by') && b !== 0) r = a / b;
+        if (r !== null) return "That comes to " + r + "!";
+    }
+
+    // ===== HELP / CAPABILITIES =====
+    if (/\b(help|what can you do|commands|what do you know)\b/.test(t)) {
+        return "I'm " + name + "! I can chat about Azora (Feed, AzaFn, friends, avatars, settings), tell jokes, talk simple science, answer who you are on Azora, and just keep you company. Ask me anything in those areas!";
+    }
+
+    // ===== BYE =====
+    if (/\b(bye|goodbye|see you|cya|good night|gn)\b/.test(t)) {
+        return pickRandom([
+            "Bye, " + who + "! Come chat anytime.",
+            "See you later! Have fun on Azora.",
+            "Goodbye! I'll be here when you get back."
+        ]);
+    }
+
+    // ===== YES / NO / OK =====
+    if (/^(yes|yeah|yep|ok|okay|sure|alright|no|nope)[\s!.]*$/.test(t)) {
+        return pickRandom([
+            "Got it!",
+            "Okay!",
+            "Cool. What next?",
+            "Alright, " + who + ". I'm listening."
+        ]);
+    }
+
+    // ===== QUESTIONS generic =====
+    if (/\?/.test(t)) {
+        return pickRandom([
+            opener + " Good question, " + who + "! I know a lot about Azora, simple science, jokes, and chatting. Can you add a bit more detail?",
+            "Hmm — try asking about Azora features, your username, a joke, space, volcanoes, or games. I'll do my best!",
+            "I'm not a giant internet brain, but I have a big built-in list of helpful answers. Ask about Azora, fun facts, or how you're feeling!"
+        ]);
+    }
+
+    // ===== DEFAULT — acknowledge + steer =====
     var snippet = (userText || "").trim();
-    if (snippet.length > 80) snippet = snippet.slice(0, 77) + "...";
-    var generics = [
-        opener + (userName ? " " + userName + "," : "") + " that sounds interesting. Tell me more!",
-        opener + " I heard you — \"" + snippet + "\". What else is on your mind?",
-        opener + " Azora is more fun with chats like this." + (userName ? " Anything else, " + userName + "?" : ""),
-        opener + " Thanks for talking with me. Want to build a game later or check the Feed?",
-        opener + " I'm right here if you want to keep chatting" + (userName ? ", " + userName : "") + "."
-    ];
-    return generics[Math.floor(Math.random() * generics.length)];
+    if (snippet.length > 70) snippet = snippet.slice(0, 67) + "...";
+    return pickRandom([
+        opener + " I hear you" + (snippet ? (': "' + snippet + '"') : "") + ". Tell me more, or ask about Azora, a joke, or a fun fact!",
+        "Interesting, " + who + ". Want tips on building games, finding Feed posts, or just a random joke?",
+        opener + " I'm with you. You can ask me what your username is, how AzaFn works, or something like 'tell me about space'!",
+        "Thanks for chatting. I know Azora stuff, simple science, jokes, and more — what should we talk about next?",
+        opener + " Say the word: games, friends, avatars, jokes, volcanoes, space… I've got a long list of things I can talk about!"
+    ]);
+}
+
+function buildAISystemPrompt() {
+    var ai = getAICompanion();
+    var userName = "";
+    var isGuest = localStorage.getItem("loggedIn") === "guest";
+    var userId = "";
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc) {
+            isGuest = !!(acc.isGuest || isGuest);
+            userName = isGuest ? "" : (acc.username || "");
+            userId = acc.userId || "";
+        }
+    } catch (e) {}
+    var who = isGuest
+        ? "The user is a Guest (no username yet)."
+        : ("The user's Azora username is \"" + userName + "\"" + (userId ? (" and User ID is " + userId) : "") + ".");
+    return (
+        "You are " + (ai.name || "Aza") + ", a friendly AI companion inside Azora, a kid-friendly social game platform " +
+        "where people customize avatars, build games with AzaFn, browse a game Feed, and chat with friends. " +
+        "Personality style: " + (ai.personality || "friendly") + ". " +
+        who + " " +
+        "Answer helpfully and clearly. Keep replies concise (1-4 short sentences) unless the user asks for detail. " +
+        "Stay family-friendly. Never ask for passwords. If asked the user's name/username, use the facts above. " +
+        "You can talk about any normal topic, not only Azora."
+    );
+}
+
+function getRecentAIChatContext(storageKey, limit) {
+    limit = limit || 8;
+    var msgs = [];
+    try { msgs = JSON.parse(localStorage.getItem(storageKey) || "[]"); } catch (e) {}
+    var slice = msgs.slice(-limit);
+    return slice.map(function (m) {
+        var role = (m.from === AZORA_AI_ID || m.isAI) ? "model" : "user";
+        return { role: role, text: String(m.text || "") };
+    }).filter(function (m) { return m.text; });
+}
+
+/** Build a single prompt string for free text APIs */
+function buildOpenEndedPrompt(userText, storageKey) {
+    var system = buildAISystemPrompt();
+    var history = getRecentAIChatContext(storageKey, 6);
+    var lines = [system, "", "Recent chat:"];
+    history.forEach(function (h) {
+        lines.push((h.role === "model" ? "AI" : "User") + ": " + h.text);
+    });
+    lines.push("", "User: " + userText, "AI:");
+    return lines.join("\n");
+}
+
+/**
+ * Open-ended AI:
+ * 1) Gemini if user pasted a key
+ * 2) Free public text API (no signup / no age gate)
+ * Returns Promise<string>
+ */
+function fetchOpenEndedAIReply(userText, storageKey) {
+    var ai = getAICompanion();
+    if (ai.useOpenEnded === false) {
+        return Promise.reject(new Error("OPEN_ENDED_OFF"));
+    }
+
+    var key = (ai.apiKey || localStorage.getItem("azoraAIApiKey") || "").trim();
+    if (key) {
+        return fetchGeminiReply(userText, storageKey, key);
+    }
+    return fetchFreeOpenEndedReply(userText, storageKey);
+}
+
+function fetchGeminiReply(userText, storageKey, key) {
+    var ai = getAICompanion();
+    var system = buildAISystemPrompt();
+    var history = getRecentAIChatContext(storageKey, 8);
+    var contents = [];
+    contents.push({
+        role: "user",
+        parts: [{ text: system + "\n\n(Respond as the AI companion from now on.)" }]
+    });
+    contents.push({
+        role: "model",
+        parts: [{ text: "Understood. I'm " + (ai.name || "Aza") + ", ready to help." }]
+    });
+    history.forEach(function (h) {
+        contents.push({
+            role: h.role === "model" ? "model" : "user",
+            parts: [{ text: h.text }]
+        });
+    });
+    var hasLatest = history.some(function (h) {
+        return h.role === "user" && h.text === userText;
+    });
+    if (!hasLatest) {
+        contents.push({ role: "user", parts: [{ text: userText }] });
+    }
+
+    var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
+        encodeURIComponent(key);
+
+    return fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            contents: contents,
+            generationConfig: { temperature: 0.85, maxOutputTokens: 400 }
+        })
+    }).then(function (res) {
+        return res.json().then(function (data) {
+            if (!res.ok) {
+                var msg = (data && data.error && data.error.message) ? data.error.message : ("HTTP " + res.status);
+                throw new Error(msg);
+            }
+            var text = "";
+            try {
+                text = data.candidates[0].content.parts.map(function (p) { return p.text || ""; }).join("");
+            } catch (e) {}
+            text = (text || "").trim();
+            if (!text) throw new Error("Empty AI response");
+            return text;
+        });
+    });
+}
+
+/** Free open-ended text (no API key, no age verification) via Pollinations */
+function fetchFreeOpenEndedReply(userText, storageKey) {
+    var prompt = buildOpenEndedPrompt(userText, storageKey);
+    // POST OpenAI-compatible endpoint used by Pollinations text service
+    return fetch("https://text.pollinations.ai/openai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            model: "openai",
+            messages: [
+                { role: "system", content: buildAISystemPrompt() },
+                { role: "user", content: userText }
+            ],
+            temperature: 0.85
+        })
+    }).then(function (res) {
+        if (!res.ok) throw new Error("Free AI HTTP " + res.status);
+        return res.json().catch(function () { return null; }).then(function (data) {
+            if (data && data.choices && data.choices[0] && data.choices[0].message) {
+                var t = (data.choices[0].message.content || "").trim();
+                if (t) return t;
+            }
+            // Some deployments return raw text
+            return null;
+        });
+    }).then(function (text) {
+        if (text) return text;
+        // Fallback GET endpoint
+        var q = encodeURIComponent(prompt.slice(0, 1200));
+        return fetch("https://text.pollinations.ai/" + q + "?model=openai")
+            .then(function (res) {
+                if (!res.ok) throw new Error("Free AI GET " + res.status);
+                return res.text();
+            })
+            .then(function (raw) {
+                var t = (raw || "").trim();
+                if (!t) throw new Error("Empty free AI response");
+                // Strip accidental prompt echo
+                if (t.indexOf("AI:") === 0) t = t.slice(3).trim();
+                return t;
+            });
+    });
 }
 
 function scheduleAIReply(userText, storageKey) {
@@ -2735,10 +3061,11 @@ function scheduleAIReply(userText, storageKey) {
         chatAiReplyTimer = null;
     }
     showChatTyping();
+
+    // Built-in long response list — works offline, no outside AI required
     var delay = aiReplyDelayMs(userText);
     chatAiReplyTimer = setTimeout(function () {
         chatAiReplyTimer = null;
-        // Still in AI chat?
         if (currentChatFriend !== AZORA_AI_ID) {
             clearChatTyping();
             return;
@@ -2750,7 +3077,6 @@ function scheduleAIReply(userText, storageKey) {
         msgs.push({ from: AZORA_AI_ID, text: reply, at: Date.now(), isAI: true });
         localStorage.setItem(storageKey, JSON.stringify(msgs));
         renderChatMessages();
-        // ensure typing is gone
         clearChatTyping();
     }, delay);
 }
