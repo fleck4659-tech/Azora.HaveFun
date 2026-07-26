@@ -2515,16 +2515,12 @@ function selectChatFriend(friend) {
 function getChatKey(a, b) {
     if (b === AZORA_AI_ID || a === AZORA_AI_ID) {
         var user = (a === AZORA_AI_ID) ? b : a;
-        if (!user || user === "Guest") {
-            try {
-                var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
-                if (acc && acc.guestId) user = acc.guestId;
-                else user = "guest_local";
-            } catch (e) { user = "guest_local"; }
+        if (!user || user === "Guest" || user === "Player") {
+            user = getChatSenderId();
         }
-        return "azoraChat_AI_" + user;
+        return "azoraChat_AI_" + String(user);
     }
-    return "azoraChat_" + [a, b].sort().join("_");
+    return "azoraChat_" + [String(a), String(b)].sort().join("_");
 }
 
 function createTypingIndicatorEl() {
@@ -2556,10 +2552,22 @@ function clearChatTyping() {
     }
 }
 
+function getChatSenderId() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc && acc.isGuest) {
+            return acc.guestId || ("guest_" + (acc.userId || "local"));
+        }
+        if (acc && acc.username) return acc.username;
+    } catch (e) {}
+    if (localStorage.getItem("loggedIn") === "guest") return "guest_local";
+    return getMyUsername() || "Player";
+}
+
 function renderChatMessages() {
     var box = document.getElementById("chatMessages");
     if (!box || !currentChatFriend) return;
-    var me = getMyUsername();
+    var me = getChatSenderId();
     var key = getChatKey(me, currentChatFriend);
     var messages = [];
     try { messages = JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) {}
@@ -2575,7 +2583,10 @@ function renderChatMessages() {
     }
     messages.forEach(function (m) {
         var div = document.createElement("div");
-        div.className = "chat-bubble " + (m.from === me ? "mine" : "theirs");
+        var mine = (m.from === me || m.from === getMyUsername() || m.from === "Guest");
+        // AI messages are never "mine"
+        if (m.from === AZORA_AI_ID || m.isAI) mine = false;
+        div.className = "chat-bubble " + (mine ? "mine" : "theirs");
         div.textContent = m.text;
         box.appendChild(div);
     });
@@ -2583,7 +2594,6 @@ function renderChatMessages() {
 }
 
 function aiReplyDelayMs(userText) {
-    // 3–5 seconds depending on message length
     var len = (userText || "").length;
     var t = 3000 + Math.min(2000, len * 25);
     return Math.max(3000, Math.min(5000, t));
@@ -2592,8 +2602,8 @@ function aiReplyDelayMs(userText) {
 function generateAIReply(userText) {
     var ai = getAICompanion();
     var t = (userText || "").toLowerCase();
-    var name = ai.name;
-    var p = ai.personality;
+    var name = ai.name || "Aza";
+    var p = ai.personality || "friendly";
 
     var openers = {
         friendly: ["Hey!", "Hi there!", "Hello!", "Nice to hear from you!"],
@@ -2601,9 +2611,10 @@ function generateAIReply(userText) {
         chill: ["Hey.", "Mm.", "Cool.", "Alright—"],
         builder: ["Got it!", "On it!", "Interesting!", "Let's think—"]
     };
-    var opener = (openers[p] || openers.friendly)[Math.floor(Math.random() * 4)];
+    var list = openers[p] || openers.friendly;
+    var opener = list[Math.floor(Math.random() * list.length)];
 
-    if (/hello|hi\b|hey|yo\b/.test(t)) {
+    if (/hello|hi\b|hey|yo\b|sup\b/.test(t)) {
         return opener + " I'm " + name + ", your Azora AI companion. How's your day on Azora?";
     }
     if (/game|build|create|aza|fn/.test(t)) {
@@ -2612,37 +2623,75 @@ function generateAIReply(userText) {
     if (/friend|chat|message/.test(t)) {
         return opener + " You can add friends from Search, then message them here. I'm always in your chat list too.";
     }
-    if (/avatar|color|custom/.test(t)) {
-        return opener + " You can customize me with the Customize AI button, and your own avatar on the main page!";
+    if (/avatar|color|custom|name/.test(t)) {
+        return opener + " You can customize my name and colors with Customize AI. Your own avatar is on the main page!";
     }
-    if (/help|what can|who are/.test(t)) {
+    if (/help|what can|who are|what are you/.test(t)) {
         return "I'm " + name + " — your personal AI on Azora. Chat with me anytime, customize my look, and ask about games, friends, or the platform!";
     }
+    if (/thank|thanks|thx/.test(t)) {
+        return opener + " You're welcome! Happy to chat anytime.";
+    }
     if (/\?/.test(t)) {
-        return opener + " Good question! I'm still a simple companion, but I love talking about Azora, games, and creative ideas.";
+        return opener + " Good question! I'm a simple companion, but I love talking about Azora, games, and creative ideas.";
     }
     var generics = [
         opener + " That sounds cool. Tell me more!",
         opener + " I'm listening. What else is on your mind?",
         opener + " Azora is more fun with chats like this.",
         opener + " Thanks for talking with me. Want to build something later?",
-        opener + " Noted! You can also open Feed to discover games."
+        opener + " Noted! You can also open Feed to discover games.",
+        opener + " I'm right here if you want to keep chatting."
     ];
     return generics[Math.floor(Math.random() * generics.length)];
 }
 
+function scheduleAIReply(userText, storageKey) {
+    if (chatAiReplyTimer) {
+        clearTimeout(chatAiReplyTimer);
+        chatAiReplyTimer = null;
+    }
+    showChatTyping();
+    var delay = aiReplyDelayMs(userText);
+    chatAiReplyTimer = setTimeout(function () {
+        chatAiReplyTimer = null;
+        // Still in AI chat?
+        if (currentChatFriend !== AZORA_AI_ID) {
+            clearChatTyping();
+            return;
+        }
+        clearChatTyping();
+        var reply = generateAIReply(userText);
+        var msgs = [];
+        try { msgs = JSON.parse(localStorage.getItem(storageKey) || "[]"); } catch (e) {}
+        msgs.push({ from: AZORA_AI_ID, text: reply, at: Date.now(), isAI: true });
+        localStorage.setItem(storageKey, JSON.stringify(msgs));
+        renderChatMessages();
+        // ensure typing is gone
+        clearChatTyping();
+    }, delay);
+}
+
 function sendChatMessage() {
     var input = document.getElementById("chatInput");
+    if (!input) return;
     var text = (input.value || "").trim();
-    if (!text || !currentChatFriend) return;
+    if (!text) return;
+
+    // If no chat selected, default to AI
+    if (!currentChatFriend) {
+        currentChatFriend = AZORA_AI_ID;
+    }
+
     var isGuest = localStorage.getItem("loggedIn") === "guest";
     if (isGuest && currentChatFriend !== AZORA_AI_ID) {
         alert("Guests can only chat with their AI companion. Create an account to message friends!");
         selectChatFriend(AZORA_AI_ID);
         return;
     }
-    var me = getMyUsername() || (isGuest ? "Guest" : null);
-    if (!me) return;
+
+    var me = getChatSenderId();
+    if (!me) me = isGuest ? "guest_local" : "Player";
 
     var key = getChatKey(me, currentChatFriend);
     var messages = [];
@@ -2652,25 +2701,11 @@ function sendChatMessage() {
     input.value = "";
     renderChatMessages();
 
-    // Always show animated "..." while waiting on the other side
-    showChatTyping();
-
-    if (isAIChat()) {
-        if (chatAiReplyTimer) clearTimeout(chatAiReplyTimer);
-        var delay = aiReplyDelayMs(text);
-        chatAiReplyTimer = setTimeout(function () {
-            chatAiReplyTimer = null;
-            if (!isAIChat()) return;
-            clearChatTyping();
-            var reply = generateAIReply(text);
-            var msgs = [];
-            try { msgs = JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) {}
-            msgs.push({ from: AZORA_AI_ID, text: reply, at: Date.now() });
-            localStorage.setItem(key, JSON.stringify(msgs));
-            renderChatMessages();
-        }, delay);
+    if (currentChatFriend === AZORA_AI_ID || isAIChat()) {
+        currentChatFriend = AZORA_AI_ID;
+        scheduleAIReply(text, key);
     } else {
-        // Human friend: show typing briefly (no live multiplayer server yet)
+        showChatTyping();
         if (chatTypingTimer) clearTimeout(chatTypingTimer);
         chatTypingTimer = setTimeout(function () {
             clearChatTyping();
