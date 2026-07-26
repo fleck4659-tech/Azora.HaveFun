@@ -2313,6 +2313,166 @@ function acceptFriend(username) {
 var AZORA_AI_ID = "__azora_ai__";
 var chatTypingTimer = null;
 var chatAiReplyTimer = null;
+var currentAIChatId = null;
+
+function getAIChatStore() {
+    try {
+        var s = JSON.parse(localStorage.getItem("azoraAIChats") || "null");
+        if (s && Array.isArray(s.chats)) return s;
+    } catch (e) {}
+    return { chats: [], activeId: null };
+}
+function saveAIChatStore(store) {
+    localStorage.setItem("azoraAIChats", JSON.stringify(store));
+}
+function ensureActiveAIChat() {
+    var store = getAIChatStore();
+    if (!store.chats.length) {
+        var id = "ai_" + Date.now();
+        store.chats.push({
+            id: id,
+            title: "Chat 1",
+            messages: [],
+            updatedAt: Date.now()
+        });
+        store.activeId = id;
+        saveAIChatStore(store);
+    }
+    if (!store.activeId || !store.chats.some(function (c) { return c.id === store.activeId; })) {
+        store.activeId = store.chats[0].id;
+        saveAIChatStore(store);
+    }
+    currentAIChatId = store.activeId;
+    return store;
+}
+function getActiveAIChat() {
+    var store = ensureActiveAIChat();
+    for (var i = 0; i < store.chats.length; i++) {
+        if (store.chats[i].id === store.activeId) return store.chats[i];
+    }
+    return store.chats[0];
+}
+function setActiveAIChat(id) {
+    var store = getAIChatStore();
+    if (!store.chats.some(function (c) { return c.id === id; })) return;
+    store.activeId = id;
+    currentAIChatId = id;
+    saveAIChatStore(store);
+}
+function startNewAIChat() {
+    var store = getAIChatStore();
+    var n = store.chats.length + 1;
+    var id = "ai_" + Date.now();
+    store.chats.unshift({
+        id: id,
+        title: "Chat " + n,
+        messages: [],
+        updatedAt: Date.now()
+    });
+    store.activeId = id;
+    currentAIChatId = id;
+    saveAIChatStore(store);
+    selectChatFriend(AZORA_AI_ID);
+    renderAIChatHistoryList();
+}
+function deleteAIChat(id, ev) {
+    if (ev) ev.stopPropagation();
+    var store = getAIChatStore();
+    if (store.chats.length <= 1) {
+        // reset the only chat
+        store.chats[0].messages = [];
+        store.chats[0].title = "Chat 1";
+        store.chats[0].updatedAt = Date.now();
+        saveAIChatStore(store);
+        if (isAIChat()) renderChatMessages();
+        renderAIChatHistoryList();
+        return;
+    }
+    store.chats = store.chats.filter(function (c) { return c.id !== id; });
+    if (store.activeId === id) store.activeId = store.chats[0].id;
+    currentAIChatId = store.activeId;
+    saveAIChatStore(store);
+    if (isAIChat()) {
+        renderChatMessages();
+        var ai = getAICompanion();
+        var chat = getActiveAIChat();
+        document.getElementById("chatWithLabel").textContent = "Chat with " + ai.name + " — " + (chat.title || "AI");
+    }
+    renderAIChatHistoryList();
+}
+function renderAIChatHistoryList() {
+    var box = document.getElementById("aiChatHistoryList");
+    if (!box) return;
+    var store = ensureActiveAIChat();
+    box.innerHTML = "";
+    store.chats.forEach(function (c) {
+        var item = document.createElement("div");
+        item.className = "ai-history-item" + (c.id === store.activeId && isAIChat() ? " active" : "");
+        var title = c.title || "Chat";
+        if (c.messages && c.messages.length) {
+            var last = c.messages[c.messages.length - 1];
+            title = (last.text || title).slice(0, 28);
+        }
+        item.innerHTML = "<span></span>";
+        item.querySelector("span").textContent = title;
+        var del = document.createElement("button");
+        del.type = "button";
+        del.textContent = "✕";
+        del.title = "Delete this AI chat";
+        del.onclick = function (e) { deleteAIChat(c.id, e); };
+        item.appendChild(del);
+        item.onclick = function () {
+            setActiveAIChat(c.id);
+            selectChatFriend(AZORA_AI_ID);
+            renderAIChatHistoryList();
+        };
+        box.appendChild(item);
+    });
+}
+
+// Player message archives (kept even if live chat is cleared)
+function getChatArchives() {
+    try {
+        return JSON.parse(localStorage.getItem("azoraChatArchives") || "{}");
+    } catch (e) { return {}; }
+}
+function saveChatArchives(map) {
+    localStorage.setItem("azoraChatArchives", JSON.stringify(map));
+}
+function archivePlayerMessage(friendKey, entry) {
+    var map = getChatArchives();
+    if (!map[friendKey]) map[friendKey] = [];
+    map[friendKey].push(entry);
+    // cap per thread
+    if (map[friendKey].length > 500) map[friendKey] = map[friendKey].slice(-500);
+    saveChatArchives(map);
+}
+function openChatArchives() {
+    var body = document.getElementById("chatArchivesBody");
+    var map = getChatArchives();
+    var keys = Object.keys(map);
+    if (!keys.length) {
+        body.innerHTML = "<p style='color:#666;'>No archived friend messages yet. Messages you send to friends are stored here automatically.</p>";
+    } else {
+        body.innerHTML = keys.map(function (k) {
+            var lines = (map[k] || []).slice().reverse().slice(0, 40).map(function (m) {
+                return "<div class='archive-line'><strong>" + escapeHtml(m.from) + ":</strong> " +
+                    escapeHtml(m.text) + "<time>" + (m.at ? new Date(m.at).toLocaleString() : "") + "</time></div>";
+            }).join("");
+            return "<div class='archive-block'><h4>" + escapeHtml(k) + "</h4>" + lines + "</div>";
+        }).join("");
+    }
+    document.getElementById("chatArchivesOverlay").style.display = "flex";
+}
+function closeChatArchives() {
+    var el = document.getElementById("chatArchivesOverlay");
+    if (el) el.style.display = "none";
+}
+window.startNewAIChat = startNewAIChat;
+window.deleteAIChat = deleteAIChat;
+window.openChatArchives = openChatArchives;
+window.closeChatArchives = closeChatArchives;
+
 
 function getAICompanion() {
     var def = {
@@ -2440,7 +2600,9 @@ function openChatPanel() {
         return;
     }
     document.getElementById("chatOverlay").style.display = "flex";
+    ensureActiveAIChat();
     renderFriendsList();
+    renderAIChatHistoryList();
     // Default: open AI companion (available to accounts and guests)
     selectChatFriend(AZORA_AI_ID);
 }
@@ -2534,8 +2696,12 @@ function selectChatFriend(friend) {
     }
     currentChatFriend = friend;
     if (friend === AZORA_AI_ID) {
+        ensureActiveAIChat();
         var ai = getAICompanion();
-        document.getElementById("chatWithLabel").textContent = "Chat with " + ai.name + " (AI)";
+        var chat = getActiveAIChat();
+        document.getElementById("chatWithLabel").textContent =
+            "Chat with " + ai.name + " (AI) — " + (chat.title || "Chat");
+        renderAIChatHistoryList();
     } else {
         document.getElementById("chatWithLabel").textContent = "Chat with " + friend;
     }
@@ -2599,30 +2765,64 @@ function getChatSenderId() {
 function renderChatMessages() {
     var box = document.getElementById("chatMessages");
     if (!box || !currentChatFriend) return;
-    var me = getChatSenderId();
-    var key = getChatKey(me, currentChatFriend);
+
     var messages = [];
-    try { messages = JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) {}
+    var me = getChatSenderId();
+
+    if (currentChatFriend === AZORA_AI_ID) {
+        var chat = getActiveAIChat();
+        messages = (chat && chat.messages) ? chat.messages : [];
+    } else {
+        var key = getChatKey(me, currentChatFriend);
+        try { messages = JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) {}
+        // Live friend chat intentionally does not emphasize long history —
+        // full record lives in Archives. Show recent messages only (last 30).
+        if (messages.length > 30) messages = messages.slice(-30);
+    }
 
     box.innerHTML = "";
     if (messages.length === 0) {
         var ai = getAICompanion();
         var hint = isAIChat()
-            ? ("Say hi to " + ai.name + "! Your AI companion is ready to chat.")
-            : "No messages yet. Say hi!";
+            ? ("New chat with " + ai.name + ". Ask about Azora rules, games, jokes, science, and more!")
+            : "Send a message. Full history is kept in Message Archives.";
         box.innerHTML = '<p style="color:rgba(255,255,255,0.6);text-align:center;margin-top:40px;">' + escapeHtml(hint) + '</p>';
         return;
     }
-    messages.forEach(function (m) {
+    messages.forEach(function (m, idx) {
         var div = document.createElement("div");
         var mine = (m.from === me || m.from === getMyUsername() || m.from === "Guest");
-        // AI messages are never "mine"
         if (m.from === AZORA_AI_ID || m.isAI) mine = false;
         div.className = "chat-bubble " + (mine ? "mine" : "theirs");
         div.textContent = m.text;
+        // Friend chats: allow removing from live view (stays in archives)
+        if (!isAIChat() && mine) {
+            div.title = "Double-click to remove from live chat (stays in Archives)";
+            div.style.cursor = "pointer";
+            div.ondblclick = (function (messageIndex) {
+                return function () {
+                    removeLiveFriendMessage(messageIndex);
+                };
+            })(idx);
+        }
         box.appendChild(div);
     });
     box.scrollTop = box.scrollHeight;
+}
+
+function removeLiveFriendMessage(visibleIndex) {
+    if (isAIChat() || !currentChatFriend) return;
+    var me = getChatSenderId();
+    var key = getChatKey(me, currentChatFriend);
+    var messages = [];
+    try { messages = JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) {}
+    // visible list is last 30 — map back
+    var start = Math.max(0, messages.length - 30);
+    var realIndex = start + visibleIndex;
+    if (realIndex < 0 || realIndex >= messages.length) return;
+    messages.splice(realIndex, 1);
+    localStorage.setItem(key, JSON.stringify(messages));
+    renderChatMessages();
 }
 
 function aiReplyDelayMs(userText) {
@@ -2733,6 +2933,26 @@ function generateAIReply(userText) {
         ]);
     }
 
+
+    // ===== RULES OF AZORA =====
+    if (/\b(rules?|guidelines|tos|terms|what(?:'s| is) (not )?allowed|community rules|code of conduct)\b/.test(t)) {
+        return (
+            "Here are the main Rules of Azora:\\n" +
+            "1) Be kind — no bullying, hate, or harassment.\\n" +
+            "2) Keep it family-friendly — no inappropriate content.\\n" +
+            "3) Don't scam, hack, or try to steal accounts.\\n" +
+            "4) Don't spam chats, Feed, or comments.\\n" +
+            "5) Respect others' games and creations — no stealing or claiming someone else's work as yours.\\n" +
+            "6) No threats, violence talk, or illegal stuff.\\n" +
+            "7) Guests can play and talk to the AI; accounts unlock friends, likes, comments, and saving.\\n" +
+            "8) Staff may moderate content that breaks these rules.\\n" +
+            "Have fun, build cool games, and treat people well!"
+        );
+    }
+    if (/\b(safe|safety|report|moderat)\b/.test(t)) {
+        return "Stay safe on Azora: don't share passwords, be kind in chat, and report anything that feels wrong to a trusted adult. Staff tools help moderate the platform when rules are broken.";
+    }
+
     // ===== AZORA / PLATFORM =====
     if (/\b(what is azora|what's azora|about azora|this (site|app|platform|game))\b/.test(t)) {
         return "Azora is a fun social platform where you customize avatars, build games with AzaFn, discover games on Feed, chat with friends, and hang out with me — your AI companion!";
@@ -2769,6 +2989,26 @@ function generateAIReply(userText) {
     }
     if (/\b(status|online|afk|busy)\b/.test(t)) {
         return "Your profile can show a status like Online, AFK, Building, Playing, Busy, or Offline. AFK and Offline can update after you are inactive for a while.";
+    }
+
+
+    if (/\b(coin|currency|bucks|money)\b/.test(t)) {
+        return "AzoraCoins are the fun currency on the platform. Some staff tools can grant coins on a device for testing. Spend them on future cosmetic features as Azora grows!";
+    }
+    if (/\b(delete (my )?game|remove (my )?game)\b/.test(t)) {
+        return "If you published a game, creators can delete their own game. It disappears for you right away; the public Feed may take a short time to stop showing it.";
+    }
+    if (/\b(private|publish|preview)\b/.test(t)) {
+        return "Games start private when you build them — only you see them under your profile/preview. Publishing puts them on Feed for everyone.";
+    }
+    if (/\b(2d|3d|dimension)\b/.test(t)) {
+        return "When you build with AzaFn, pick 2D or 3D. The AI won't assume — you choose the dimensions so the game matches what you want!";
+    }
+    if (/\b(server|staff|admin)\b/.test(t)) {
+        return "Azora Have Fun Servers is a staff-only panel for tracking accounts and special codes. Regular players use the main Azora site.";
+    }
+    if (/\b(archive|history|old messages)\b/.test(t)) {
+        return "With me (the AI), you get full chat history and can start New AI chats anytime. Friend chats keep a Message Archives copy of everything — even if a live message is removed.";
     }
 
     // ===== GAMES / PLAY =====
@@ -3055,14 +3295,13 @@ function fetchFreeOpenEndedReply(userText, storageKey) {
     });
 }
 
-function scheduleAIReply(userText, storageKey) {
+function scheduleAIReply(userText, aiChatId) {
     if (chatAiReplyTimer) {
         clearTimeout(chatAiReplyTimer);
         chatAiReplyTimer = null;
     }
     showChatTyping();
 
-    // Built-in long response list — works offline, no outside AI required
     var delay = aiReplyDelayMs(userText);
     chatAiReplyTimer = setTimeout(function () {
         chatAiReplyTimer = null;
@@ -3072,11 +3311,17 @@ function scheduleAIReply(userText, storageKey) {
         }
         clearChatTyping();
         var reply = generateAIReply(userText);
-        var msgs = [];
-        try { msgs = JSON.parse(localStorage.getItem(storageKey) || "[]"); } catch (e) {}
-        msgs.push({ from: AZORA_AI_ID, text: reply, at: Date.now(), isAI: true });
-        localStorage.setItem(storageKey, JSON.stringify(msgs));
+        var store = getAIChatStore();
+        var chat = null;
+        for (var i = 0; i < store.chats.length; i++) {
+            if (store.chats[i].id === (aiChatId || store.activeId)) { chat = store.chats[i]; break; }
+        }
+        if (!chat) chat = getActiveAIChat();
+        chat.messages.push({ from: AZORA_AI_ID, text: reply, at: Date.now(), isAI: true });
+        chat.updatedAt = Date.now();
+        saveAIChatStore(store);
         renderChatMessages();
+        renderAIChatHistoryList();
         clearChatTyping();
     }, delay);
 }
@@ -3087,10 +3332,7 @@ function sendChatMessage() {
     var text = (input.value || "").trim();
     if (!text) return;
 
-    // If no chat selected, default to AI
-    if (!currentChatFriend) {
-        currentChatFriend = AZORA_AI_ID;
-    }
+    if (!currentChatFriend) currentChatFriend = AZORA_AI_ID;
 
     var isGuest = localStorage.getItem("loggedIn") === "guest";
     if (isGuest && currentChatFriend !== AZORA_AI_ID) {
@@ -3099,27 +3341,43 @@ function sendChatMessage() {
         return;
     }
 
-    var me = getChatSenderId();
-    if (!me) me = isGuest ? "guest_local" : "Player";
+    var me = getChatSenderId() || (isGuest ? "guest_local" : "Player");
+    input.value = "";
 
+    if (currentChatFriend === AZORA_AI_ID) {
+        var store = ensureActiveAIChat();
+        var chat = null;
+        for (var i = 0; i < store.chats.length; i++) {
+            if (store.chats[i].id === store.activeId) { chat = store.chats[i]; break; }
+        }
+        if (!chat) chat = store.chats[0];
+        chat.messages.push({ from: me, text: text, at: Date.now() });
+        chat.updatedAt = Date.now();
+        if (!chat.title || /^Chat \d+$/.test(chat.title)) {
+            chat.title = text.slice(0, 24) || chat.title;
+        }
+        saveAIChatStore(store);
+        renderChatMessages();
+        renderAIChatHistoryList();
+        scheduleAIReply(text, store.activeId);
+        return;
+    }
+
+    // Friend message — live thread + permanent archive
     var key = getChatKey(me, currentChatFriend);
     var messages = [];
     try { messages = JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) {}
-    messages.push({ from: me, text: text, at: Date.now() });
+    var entry = { from: me, text: text, at: Date.now() };
+    messages.push(entry);
     localStorage.setItem(key, JSON.stringify(messages));
-    input.value = "";
+    archivePlayerMessage("with:" + currentChatFriend, entry);
     renderChatMessages();
 
-    if (currentChatFriend === AZORA_AI_ID || isAIChat()) {
-        currentChatFriend = AZORA_AI_ID;
-        scheduleAIReply(text, key);
-    } else {
-        showChatTyping();
-        if (chatTypingTimer) clearTimeout(chatTypingTimer);
-        chatTypingTimer = setTimeout(function () {
-            clearChatTyping();
-        }, 2200);
-    }
+    showChatTyping();
+    if (chatTypingTimer) clearTimeout(chatTypingTimer);
+    chatTypingTimer = setTimeout(function () {
+        clearChatTyping();
+    }, 2200);
 }
 
 window.openAICompanionSettings = openAICompanionSettings;

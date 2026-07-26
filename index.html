@@ -345,14 +345,17 @@
                     <div class="friend-avatar ai-face">AI</div>
                     <div class="friend-meta">
                         <span id="aiCompanionListName">Aza</span>
-                        <small>AI Companion · Tap to chat</small>
+                        <small>AI Companion</small>
                     </div>
                 </div>
             </div>
+            <button type="button" class="ai-rename-btn" onclick="startNewAIChat()">＋ New AI chat</button>
             <button type="button" class="ai-rename-btn" onclick="openAICompanionSettings()">✏️ Customize name & look</button>
+            <div id="aiChatHistoryList" class="ai-chat-history-list"></div>
             <h3 style="color:#fff;margin:16px 0 8px 0;font-size:13px;text-transform:uppercase;letter-spacing:0.04em;opacity:0.85;">Friends</h3>
             <div id="friendsList"></div>
             <p id="noFriendsMsg" class="empty-feed" style="padding:12px 8px;font-size:12px;display:none;">No friends yet. Search users and tap Add Friend!</p>
+            <button type="button" class="ai-rename-btn" id="openArchivesBtn" onclick="openChatArchives()" style="margin-top:10px;">📦 Message Archives</button>
         </div>
         <div class="chat-main">
             <div class="chat-with" id="chatWithLabel">Select a chat</div>
@@ -362,6 +365,16 @@
                 <button type="button" onclick="sendChatMessage()">Send</button>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Player message archives -->
+<div id="chatArchivesOverlay" class="overlay" style="display:none;">
+    <div class="popup" style="max-width:520px;max-height:85vh;display:flex;flex-direction:column;">
+        <h1 style="font-size:1.25rem;">Message Archives</h1>
+        <p style="color:#666;font-size:12px;margin-top:-6px;">Every friend message is saved here, even if removed from the live chat.</p>
+        <div id="chatArchivesBody" style="text-align:left;overflow-y:auto;flex:1;max-height:50vh;font-size:13px;"></div>
+        <button type="button" class="secondary" onclick="closeChatArchives()">Close</button>
     </div>
 </div>
 

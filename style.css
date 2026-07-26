@@ -919,6 +919,7 @@ html[data-theme="dark"] .game-card { background: rgba(15,23,42,0.9); border-colo
 }
 
 .chat-bubble {
+    white-space: pre-wrap;
     max-width: 75%;
     padding: 10px 14px;
     border-radius: 14px;
@@ -1834,3 +1835,48 @@ footer {
 .ai-rename-btn:hover {
     background: rgba(255,255,255,0.2) !important;
 }
+
+
+.ai-chat-history-list {
+    margin-top: 8px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+.ai-history-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #fff;
+    font-size: 12px;
+    background: rgba(255,255,255,0.06);
+    margin-bottom: 4px;
+}
+.ai-history-item:hover, .ai-history-item.active {
+    background: rgba(167,139,250,0.3);
+}
+.ai-history-item span {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ai-history-item button {
+    width: auto !important;
+    margin: 0 !important;
+    padding: 2px 8px !important;
+    font-size: 11px !important;
+    background: rgba(255,59,48,0.85) !important;
+}
+.archive-block {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 10px;
+    background: #f9fafb;
+}
+.archive-block h4 { margin: 0 0 6px; font-size: 13px; color: #1e60ff; }
+.archive-line { margin: 4px 0; color: #333; }
+.archive-line time { color: #888; font-size: 11px; margin-left: 6px; }
