@@ -1517,6 +1517,7 @@ function azaFnBuild(msgIndex) {
         var words = description.trim().split(/\s+/).slice(0, 5).join(" ");
         var title = (words.length > 40 ? words.slice(0, 40) + "…" : words) + " (" + finalDims + ")";
 
+        var playConfig = buildPlayConfig(description, finalDims);
         var game = {
             id: "game_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
             title: title,
@@ -1529,7 +1530,9 @@ function azaFnBuild(msgIndex) {
             savedBy: [],
             comments: [],
             published: false,
-            deleted: false
+            deleted: false,
+            playConfig: playConfig,
+            genre: playConfig.genre
         };
         loadAzaFnGames();
         azaFnGames.unshift(game);
@@ -1546,6 +1549,242 @@ function azaFnBuild(msgIndex) {
     }, 60000);
 }
 
+
+function hashString(str) {
+    var h = 2166136261;
+    for (var i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+}
+function mulberry32(a) {
+    return function () {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        var t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+}
+function buildPlayConfig(description, dimensions) {
+    var d = (description || "").toLowerCase();
+    var seed = hashString(d + "|" + (dimensions || "2D"));
+    var rand = mulberry32(seed);
+    var genre = "collector";
+    if (/\b(platform|jump|runner|parkour)\b/.test(d)) genre = "platformer";
+    else if (/\b(maze|labyrinth|puzzle)\b/.test(d)) genre = "maze";
+    else if (/\b(dodge|avoid|survive|asteroid|rain)\b/.test(d)) genre = "dodger";
+    else if (/\b(race|speed|car|drive)\b/.test(d)) genre = "racer";
+    else if (/\b(fight|arena|battle|combat)\b/.test(d)) genre = "arena";
+    else if (/\b(fly|flight|plane|bird)\b/.test(d)) genre = "flyer";
+    else if (/\b(collect|coin|gem|treasure)\b/.test(d)) genre = "collector";
+    else {
+        var picks = ["collector", "platformer", "dodger", "maze", "racer"];
+        genre = picks[Math.floor(rand() * picks.length)];
+    }
+    var palettes = [
+        ["#1e60ff", "#00ebd4", "#ffcc00", "#0f172a"],
+        ["#7c3aed", "#f472b6", "#34d399", "#111827"],
+        ["#ef4444", "#f59e0b", "#3b82f6", "#0b1220"],
+        ["#10b981", "#60a5fa", "#fbbf24", "#0f172a"],
+        ["#06b6d4", "#a78bfa", "#fb7185", "#020617"]
+    ];
+    var palette = palettes[seed % palettes.length];
+    return {
+        seed: seed,
+        genre: genre,
+        dimensions: dimensions === "3D" ? "3D" : "2D",
+        colors: { primary: palette[0], secondary: palette[1], accent: palette[2], bg: palette[3] },
+        goalCount: 5 + Math.floor(rand() * 8),
+        speed: 2.2 + rand() * 2.5,
+        difficulty: 0.6 + rand() * 0.9
+    };
+}
+var _play = { running: false, raf: null, keys: {}, game: null, cfg: null, score: 0, won: false, lost: false, entities: [], player: null, canvas: null, ctx: null, renderer: null, scene: null, camera: null, meshPlayer: null, collectMeshes: [], _last: 0 };
+function playCurrentPreview() { if (currentPreviewGameId) playAzoraGame(currentPreviewGameId); }
+function playAzoraGame(gameId) {
+    loadAzaFnGames();
+    var game = azaFnGames.find(function (g) { return g.id === gameId; });
+    if (!game) { alert("Game not found."); return; }
+    if (!game.playConfig) { game.playConfig = buildPlayConfig(game.description || game.title || "", game.dimensions || "2D"); saveAzaFnGames(); }
+    startGamePlay(game);
+}
+function startGamePlay(game) {
+    stopGamePlayLoops();
+    _play.game = game;
+    _play.cfg = game.playConfig || buildPlayConfig(game.description || "", game.dimensions || "2D");
+    _play.score = 0; _play.won = false; _play.lost = false; _play.running = true; _play.keys = {}; _play._last = 0;
+    document.getElementById("gamePlayTitle").textContent = game.title || "Game";
+    document.getElementById("gamePlayHudScore").textContent = "Score: 0";
+    document.getElementById("gamePlayHudGoal").textContent = "Genre: " + _play.cfg.genre + " | Goal " + _play.cfg.goalCount;
+    document.getElementById("gamePlayHudHint").textContent = _play.cfg.dimensions === "3D" ? "WASD move | collect orbs | avoid red boxes" : "Arrows/WASD move | Space jump (platformer)";
+    document.getElementById("gamePlayStatus").textContent = "Go!";
+    document.getElementById("gamePlayOverlay").style.display = "flex";
+    _play.canvas = document.getElementById("gamePlayCanvas");
+    _play.ctx = _play.canvas.getContext("2d");
+    window.addEventListener("keydown", _playKeyDown);
+    window.addEventListener("keyup", _playKeyUp);
+    if (_play.cfg.dimensions === "3D" && typeof THREE !== "undefined") initPlay3D();
+    else initPlay2D();
+    _play.raf = requestAnimationFrame(playLoop);
+}
+function restartGamePlay() { if (_play.game) startGamePlay(_play.game); }
+function closeGamePlay() { stopGamePlayLoops(); var el = document.getElementById("gamePlayOverlay"); if (el) el.style.display = "none"; }
+function stopGamePlayLoops() {
+    _play.running = false;
+    if (_play.raf) cancelAnimationFrame(_play.raf);
+    _play.raf = null;
+    window.removeEventListener("keydown", _playKeyDown);
+    window.removeEventListener("keyup", _playKeyUp);
+    if (_play.renderer) {
+        try { var c = _play.renderer.domElement; if (c && c.parentNode) c.parentNode.removeChild(c); _play.renderer.dispose(); } catch (e) {}
+    }
+    _play.renderer = null; _play.scene = null; _play.camera = null; _play.meshPlayer = null; _play.collectMeshes = [];
+    var canvas = document.getElementById("gamePlayCanvas"); if (canvas) canvas.style.display = "block";
+}
+function _playKeyDown(e) {
+    _play.keys[e.key.toLowerCase()] = true;
+    var k = e.key.toLowerCase();
+    if (k === "arrowup" || k === "arrowdown" || k === "arrowleft" || k === "arrowright" || e.key === " ") e.preventDefault();
+}
+function _playKeyUp(e) { _play.keys[e.key.toLowerCase()] = false; }
+function initPlay2D() {
+    var canvas = _play.canvas; canvas.style.display = "block";
+    var w = canvas.width, h = canvas.height, rand = mulberry32(_play.cfg.seed), genre = _play.cfg.genre;
+    _play.player = { x: 60, y: h - 80, vx: 0, vy: 0, w: 28, h: 28, onGround: false };
+    _play.entities = [];
+    if (genre === "platformer") {
+        _play.entities.push({ type: "plat", x: 0, y: h - 40, w: w, h: 40 });
+        for (var i = 0; i < 6; i++) _play.entities.push({ type: "plat", x: 80 + i * 110 + rand() * 40, y: h - 120 - rand() * 200, w: 70 + rand() * 50, h: 16 });
+        for (var c = 0; c < _play.cfg.goalCount; c++) _play.entities.push({ type: "coin", x: 100 + c * 90 + rand() * 30, y: 80 + rand() * (h - 200), r: 10, taken: false });
+    } else if (genre === "maze") {
+        _play.player.x = 40; _play.player.y = 40;
+        for (var m = 0; m < 18; m++) { var horiz = rand() > 0.5; _play.entities.push({ type: "wall", x: rand() * (w - 100), y: rand() * (h - 100), w: horiz ? 80 + rand() * 120 : 16, h: horiz ? 16 : 80 + rand() * 120 }); }
+        for (var g = 0; g < _play.cfg.goalCount; g++) _play.entities.push({ type: "coin", x: 60 + rand() * (w - 120), y: 60 + rand() * (h - 120), r: 10, taken: false });
+    } else if (genre === "dodger") {
+        _play.player.y = h - 70;
+        for (var d = 0; d < 10; d++) _play.entities.push({ type: "hazard", x: rand() * w, y: -rand() * 400, w: 18 + rand() * 24, h: 18 + rand() * 24, vy: 2 + rand() * 3 * _play.cfg.difficulty });
+        for (var k = 0; k < _play.cfg.goalCount; k++) _play.entities.push({ type: "coin", x: 40 + rand() * (w - 80), y: 40 + rand() * (h - 120), r: 10, taken: false });
+    } else if (genre === "racer" || genre === "flyer") {
+        _play.player.x = w / 2; _play.player.y = h - 80;
+        for (var r = 0; r < 12; r++) _play.entities.push({ type: "hazard", x: rand() * w, y: -r * 80 - rand() * 40, w: 30, h: 30, vy: 3 + _play.cfg.speed * 0.5 });
+        for (var o = 0; o < _play.cfg.goalCount; o++) _play.entities.push({ type: "coin", x: 40 + rand() * (w - 80), y: -o * 100 - 50, r: 12, taken: false, vy: 3 });
+    } else {
+        for (var j = 0; j < _play.cfg.goalCount; j++) _play.entities.push({ type: "coin", x: 50 + rand() * (w - 100), y: 50 + rand() * (h - 100), r: 12, taken: false });
+        for (var e = 0; e < 4; e++) _play.entities.push({ type: "hazard", x: rand() * w, y: rand() * h, w: 22, h: 22, vx: (rand() - 0.5) * 3, vy: (rand() - 0.5) * 3 });
+    }
+}
+function initPlay3D() {
+    var canvas = _play.canvas; canvas.style.display = "none";
+    var host = canvas.parentElement;
+    var w = Math.min(900, host.clientWidth || 800); var h = Math.round(w * 0.6);
+    _play.scene = new THREE.Scene();
+    _play.scene.background = new THREE.Color(_play.cfg.colors.bg);
+    _play.camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 200);
+    _play.camera.position.set(0, 8, 14);
+    _play.renderer = new THREE.WebGLRenderer({ antialias: true });
+    _play.renderer.setSize(w, h);
+    _play.renderer.domElement.style.borderRadius = "12px";
+    _play.renderer.domElement.style.border = "3px solid #1e60ff";
+    host.insertBefore(_play.renderer.domElement, canvas);
+    _play.scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+    var light = new THREE.DirectionalLight(0xffffff, 0.9); light.position.set(5, 12, 8); _play.scene.add(light);
+    var floor = new THREE.Mesh(new THREE.BoxGeometry(40, 1, 40), new THREE.MeshLambertMaterial({ color: _play.cfg.colors.primary }));
+    floor.position.y = -0.5; _play.scene.add(floor);
+    _play.meshPlayer = new THREE.Mesh(new THREE.BoxGeometry(1, 1.4, 1), new THREE.MeshLambertMaterial({ color: _play.cfg.colors.accent }));
+    _play.meshPlayer.position.set(0, 0.7, 0); _play.scene.add(_play.meshPlayer);
+    _play.collectMeshes = [];
+    var rand = mulberry32(_play.cfg.seed);
+    for (var i = 0; i < _play.cfg.goalCount; i++) {
+        var orb = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 12), new THREE.MeshLambertMaterial({ color: _play.cfg.colors.secondary, emissive: _play.cfg.colors.secondary }));
+        orb.position.set((rand() - 0.5) * 30, 0.5, (rand() - 0.5) * 30);
+        orb.userData.taken = false; _play.scene.add(orb); _play.collectMeshes.push(orb);
+    }
+    for (var o = 0; o < 6; o++) {
+        var box = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 1.5), new THREE.MeshLambertMaterial({ color: 0xef4444 }));
+        box.position.set((rand() - 0.5) * 28, 0.75, (rand() - 0.5) * 28);
+        box.userData.hazard = true; _play.scene.add(box); _play.collectMeshes.push(box);
+    }
+}
+function playLoop(now) {
+    if (!_play.running) return;
+    var dt = Math.min(32, now - (_play._last || now)) / 16.67; _play._last = now;
+    if (_play.cfg.dimensions === "3D" && _play.renderer) { updatePlay3D(dt); _play.renderer.render(_play.scene, _play.camera); }
+    else { updatePlay2D(dt); drawPlay2D(); }
+    document.getElementById("gamePlayHudScore").textContent = "Score: " + _play.score;
+    if (_play.score >= _play.cfg.goalCount && !_play.won) { _play.won = true; document.getElementById("gamePlayStatus").textContent = "You win! Score " + _play.score; }
+    if (_play.lost) document.getElementById("gamePlayStatus").textContent = "Hit a hazard! Press Restart.";
+    _play.raf = requestAnimationFrame(playLoop);
+}
+function updatePlay2D(dt) {
+    if (_play.won || _play.lost) return;
+    var p = _play.player, speed = _play.cfg.speed * 1.6;
+    var left = _play.keys["arrowleft"] || _play.keys["a"], right = _play.keys["arrowright"] || _play.keys["d"];
+    var up = _play.keys["arrowup"] || _play.keys["w"] || _play.keys[" "], down = _play.keys["arrowdown"] || _play.keys["s"];
+    p.vx = 0; if (left) p.vx = -speed; if (right) p.vx = speed;
+    var genre = _play.cfg.genre;
+    if (genre === "platformer") {
+        p.vy += 0.55 * dt; if (up && p.onGround) { p.vy = -11; p.onGround = false; }
+        p.x += p.vx * dt; p.y += p.vy * dt; p.onGround = false;
+        _play.entities.forEach(function (e) {
+            if (e.type === "plat" && p.x < e.x + e.w && p.x + p.w > e.x && p.y + p.h > e.y && p.y + p.h < e.y + e.h + 12 && p.vy >= 0) { p.y = e.y - p.h; p.vy = 0; p.onGround = true; }
+        });
+    } else if (genre === "flyer" || genre === "racer") {
+        if (up) p.y -= speed * dt; if (down) p.y += speed * dt; p.x += p.vx * dt;
+        _play.entities.forEach(function (e) { if (e.vy) { e.y += e.vy * dt; if (e.y > _play.canvas.height + 40) { e.y = -40; e.x = Math.random() * _play.canvas.width; } } });
+    } else {
+        if (up) p.y -= speed * dt; if (down) p.y += speed * dt; p.x += p.vx * dt;
+        _play.entities.forEach(function (e) {
+            if (e.type === "hazard") {
+                if (e.vx || e.vy) { e.x += (e.vx || 0) * dt; e.y += (e.vy || 0) * dt; if (e.x < 0 || e.x > _play.canvas.width) e.vx *= -1; if (e.y < 0 || e.y > _play.canvas.height) e.vy *= -1; }
+                if (e.vy && !e.vx) { e.y += e.vy * dt; if (e.y > _play.canvas.height) { e.y = -30; e.x = Math.random() * _play.canvas.width; } }
+            }
+        });
+    }
+    p.x = Math.max(0, Math.min(_play.canvas.width - p.w, p.x));
+    p.y = Math.max(0, Math.min(_play.canvas.height - p.h, p.y));
+    _play.entities.forEach(function (e) {
+        if (e.type === "coin" && !e.taken && p.x < e.x + e.r && p.x + p.w > e.x - e.r && p.y < e.y + e.r && p.y + p.h > e.y - e.r) { e.taken = true; _play.score++; }
+        if (e.type === "hazard" && p.x < e.x + e.w && p.x + p.w > e.x && p.y < e.y + e.h && p.y + p.h > e.y) _play.lost = true;
+        if (e.type === "wall" && p.x < e.x + e.w && p.x + p.w > e.x && p.y < e.y + e.h && p.y + p.h > e.y) { p.x -= p.vx * dt * 2; }
+    });
+}
+function drawPlay2D() {
+    var ctx = _play.ctx, w = _play.canvas.width, h = _play.canvas.height, c = _play.cfg.colors;
+    ctx.fillStyle = c.bg; ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 0.08; ctx.fillStyle = c.primary;
+    for (var i = 0; i < 20; i++) ctx.fillRect((i * 97 + _play.cfg.seed) % w, (i * 53 + _play.cfg.seed * 2) % h, 40, 40);
+    ctx.globalAlpha = 1;
+    _play.entities.forEach(function (e) {
+        if (e.type === "plat") { ctx.fillStyle = c.primary; ctx.fillRect(e.x, e.y, e.w, e.h); }
+        else if (e.type === "wall") { ctx.fillStyle = "#475569"; ctx.fillRect(e.x, e.y, e.w, e.h); }
+        else if (e.type === "coin" && !e.taken) { ctx.beginPath(); ctx.fillStyle = c.accent; ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill(); }
+        else if (e.type === "hazard") { ctx.fillStyle = "#ef4444"; ctx.fillRect(e.x, e.y, e.w, e.h); }
+    });
+    var p = _play.player; ctx.fillStyle = c.secondary; ctx.fillRect(p.x, p.y, p.w, p.h);
+    ctx.fillStyle = "#fff"; ctx.fillRect(p.x + 6, p.y + 8, 6, 6); ctx.fillRect(p.x + 16, p.y + 8, 6, 6);
+}
+function updatePlay3D(dt) {
+    if (_play.won || _play.lost || !_play.meshPlayer) return;
+    var speed = _play.cfg.speed * 0.12, p = _play.meshPlayer.position;
+    if (_play.keys["a"] || _play.keys["arrowleft"]) p.x -= speed * dt * 3;
+    if (_play.keys["d"] || _play.keys["arrowright"]) p.x += speed * dt * 3;
+    if (_play.keys["w"] || _play.keys["arrowup"]) p.z -= speed * dt * 3;
+    if (_play.keys["s"] || _play.keys["arrowdown"]) p.z += speed * dt * 3;
+    p.x = Math.max(-18, Math.min(18, p.x)); p.z = Math.max(-18, Math.min(18, p.z));
+    _play.camera.position.set(p.x, 8, p.z + 12); _play.camera.lookAt(p.x, 0, p.z);
+    _play.collectMeshes.forEach(function (m) {
+        if (m.userData.taken) return;
+        if (m.userData.hazard) { var dx = m.position.x - p.x, dz = m.position.z - p.z; if (dx * dx + dz * dz < 1.6) _play.lost = true; return; }
+        m.rotation.y += 0.05 * dt;
+        var dx2 = m.position.x - p.x, dz2 = m.position.z - p.z;
+        if (dx2 * dx2 + dz2 * dz2 < 1.3) { m.userData.taken = true; m.visible = false; _play.score++; }
+    });
+}
+window.playCurrentPreview = playCurrentPreview;
+window.playAzoraGame = playAzoraGame;
+window.restartGamePlay = restartGamePlay;
+window.closeGamePlay = closeGamePlay;
 
 function openGamePreview(gameId) {
     loadAzaFnGames();
@@ -1778,6 +2017,7 @@ function renderAzaFnFeed() {
             '<button class="game-action-btn" onclick="azaFnToggleComments(\'' + game.id + '\')">💬 Comments (' + (game.comments||[]).length + ')</button>' +
             '<button class="game-action-btn' + (saved?' saved':'') + '" onclick="azaFnSave(\'' + game.id + '\')">' + (saved?'🔖 Saved':'📑 Save') + '</button>' +
             '<button class="game-action-btn" onclick="azaFnShare(\'' + game.id + '\')">📤 Share</button>' +
+                '<button class="game-action-btn" onclick="playAzoraGame(\'' + game.id + '\')">▶️ Play</button>' +
             (isOwner ? '<button class="game-action-btn" onclick="azaFnToggleEdit(\'' + game.id + '\')">✏️ Edit</button>' : '') +
             '</div>' +
             '<div class="game-comments" id="comments_' + game.id + '">' + commentsHtml +
@@ -1969,6 +2209,7 @@ function renderPublicFeed() {
                 '<button class="game-action-btn" onclick="azaFnToggleComments(\'' + game.id + '\')">💬 Comments (' + (game.comments || []).length + ')</button>' +
                 saveBtn +
                 '<button class="game-action-btn" onclick="azaFnShare(\'' + game.id + '\')">📤 Share</button>' +
+                '<button class="game-action-btn" onclick="playAzoraGame(\'' + game.id + '\')">▶️ Play</button>' +
                 (isOwner ? '<button class="game-action-btn" onclick="azaFnToggleEdit(\'' + game.id + '\')">✏️ Edit</button>' : '') +
                 (isOwner ? '<button class="game-action-btn game-delete-btn" onclick="azaFnDeleteGame(\'' + game.id + '\')">🗑️ Delete</button>' : '') +
             '</div>' +

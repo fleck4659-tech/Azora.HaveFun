@@ -443,10 +443,32 @@
             <p class="game-preview-desc" id="gamePreviewDesc"></p>
             <p class="game-preview-note">Only you can see this until you publish. It will also appear under your profile.</p>
             <div class="game-preview-actions">
+                <button type="button" id="playGameBtn" onclick="playCurrentPreview()" style="background:linear-gradient(180deg,#60a5fa,#1e60ff);color:#fff;">▶️ Play Game</button>
                 <button type="button" id="publishGameBtn" onclick="publishCurrentPreview()" style="background:linear-gradient(180deg,#34d399,#10b981);color:#fff;">🚀 Publish to Feed</button>
                 <button type="button" onclick="closeGamePreview()">Keep Private</button>
             </div>
         </div>
+    </div>
+</div>
+
+
+<!-- Playable Game Runtime -->
+<div id="gamePlayOverlay" class="azafn-overlay" style="display:none;">
+    <div class="azafn-header">
+        <h2><img src="logo.jpg" alt="Azora"> <span id="gamePlayTitle">Playing</span></h2>
+        <div class="azafn-tabs">
+            <button type="button" onclick="restartGamePlay()" style="margin:0;">↺ Restart</button>
+            <button type="button" onclick="closeGamePlay()" style="margin:0;background:#ff3b30;color:#fff;">✕ Exit</button>
+        </div>
+    </div>
+    <div class="game-play-body">
+        <div class="game-play-hud">
+            <span id="gamePlayHudScore">Score: 0</span>
+            <span id="gamePlayHudGoal">Goal: —</span>
+            <span id="gamePlayHudHint">Arrow keys / WASD to move</span>
+        </div>
+        <canvas id="gamePlayCanvas" width="800" height="480"></canvas>
+        <p id="gamePlayStatus" class="game-play-status">Loading…</p>
     </div>
 </div>
 
