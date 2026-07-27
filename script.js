@@ -879,54 +879,91 @@ function makeBox(w, h, d, color) {
 }
 
 function buildAvatarFace(headColor) {
+    // Flat 2D face only — Smile.png decal on the front of the blocky head (no 3D eyes/mouth)
     var face = new THREE.Group();
     face.name = "face";
 
-    // Face decal: Smile.png on a flat plane on the front of the head
-    var plane = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.58, 0.58),
-        new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 1,
-            depthWrite: false,
-            side: THREE.DoubleSide
-        })
-    );
+    var mat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 1,
+        depthWrite: false,
+        side: THREE.FrontSide,
+        alphaTest: 0.05
+    });
+
+    var plane = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.62), mat);
     plane.name = "faceDecal";
-    plane.position.set(0, 0, 0.34);
+    // Sit just in front of the head cube face
+    plane.position.set(0, 0, 0.335);
     face.add(plane);
 
-    // Load smile texture (non-blocking; shows plain until ready)
-    try {
-        var loader = new THREE.TextureLoader();
-        loader.setCrossOrigin("anonymous");
-        loader.load(
-            "Smile.png",
-            function (tex) {
-                tex.minFilter = THREE.LinearFilter;
-                tex.magFilter = THREE.LinearFilter;
-                plane.material.map = tex;
-                plane.material.needsUpdate = true;
-            },
-            undefined,
-            function () {
-                // Fallback if image missing: simple black oval eyes + smile with boxes
-                try {
-                    var eyeL = makeBox(0.12, 0.18, 0.04, 0x111827);
-                    eyeL.position.set(-0.14, 0.08, 0.36);
-                    face.add(eyeL);
-                    var eyeR = makeBox(0.12, 0.18, 0.04, 0x111827);
-                    eyeR.position.set(0.14, 0.08, 0.36);
-                    face.add(eyeR);
-                    var mouth = makeBox(0.28, 0.05, 0.04, 0x111827);
-                    mouth.position.set(0, -0.14, 0.36);
-                    face.add(mouth);
-                } catch (e) {}
-            }
-        );
-    } catch (e) {}
+    function applyTexture(tex) {
+        if (!tex) return;
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        if (tex.format !== undefined) {
+            // keep alpha
+        }
+        mat.map = tex;
+        mat.needsUpdate = true;
+        plane.visible = true;
+    }
 
+    // Prefer loading Smile.png; strip near-white / gray so only the smile shows
+    function loadSmileDecal() {
+        var img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = function () {
+            try {
+                var c = document.createElement("canvas");
+                c.width = img.naturalWidth || img.width;
+                c.height = img.naturalHeight || img.height;
+                var ctx = c.getContext("2d");
+                ctx.clearRect(0, 0, c.width, c.height);
+                ctx.drawImage(img, 0, 0);
+                var data = ctx.getImageData(0, 0, c.width, c.height);
+                var px = data.data;
+                // Keep dark ink; make light / gray pixels fully transparent
+                for (var i = 0; i < px.length; i += 4) {
+                    var r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
+                    var lum = (r + g + b) / 3;
+                    // If already transparent, leave it
+                    if (a < 20) {
+                        px[i + 3] = 0;
+                        continue;
+                    }
+                    // Soft threshold: brighter than mid-gray → transparent
+                    if (lum > 140) {
+                        px[i + 3] = 0;
+                    } else {
+                        // pure black smile on clear
+                        px[i] = 20;
+                        px[i + 1] = 20;
+                        px[i + 2] = 20;
+                        px[i + 3] = 255;
+                    }
+                }
+                ctx.putImageData(data, 0, 0);
+                var tex = new THREE.CanvasTexture(c);
+                applyTexture(tex);
+            } catch (e) {
+                // Fallback: raw image texture
+                try {
+                    var loader = new THREE.TextureLoader();
+                    loader.load("Smile.png", applyTexture);
+                } catch (e2) {}
+            }
+        };
+        img.onerror = function () {
+            console.warn("[Azora] Smile.png not found — face decal skipped (no 3D face fallback)");
+            plane.visible = false;
+        };
+        img.src = "Smile.png";
+    }
+
+    loadSmileDecal();
     return face;
 }
 
