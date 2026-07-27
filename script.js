@@ -1385,13 +1385,83 @@ window.changeBrowserStyle = changeBrowserStyle;
 window.applyBrowserStyle = applyBrowserStyle;
 window.loadBrowserAppearance = loadBrowserAppearance;
 
+
+// ============================================================
+// LOADING SCREEN (~3s average after Welcome / on app open)
+// ============================================================
+var _azoraLoadingTimer = null;
+var _azoraLoadingProgressTimer = null;
+
+function showAzoraLoadingScreen() {
+    var el = document.getElementById("azoraLoadingScreen");
+    if (!el) return;
+    el.classList.add("show");
+    el.style.display = "flex";
+    el.setAttribute("aria-hidden", "false");
+    var fill = document.getElementById("azoraLoadingBarFill");
+    if (fill) fill.style.width = "0%";
+    var hint = document.getElementById("azoraLoadingHint");
+    var hints = [
+        "Getting things ready…",
+        "Loading avatars…",
+        "Checking your session…",
+        "Almost there…"
+    ];
+    var hi = 0;
+    if (hint) hint.textContent = hints[0];
+    var progress = 0;
+    if (_azoraLoadingProgressTimer) clearInterval(_azoraLoadingProgressTimer);
+    _azoraLoadingProgressTimer = setInterval(function () {
+        progress += 8 + Math.random() * 12;
+        if (progress > 96) progress = 96;
+        if (fill) fill.style.width = progress + "%";
+        hi++;
+        if (hint && hi < hints.length) hint.textContent = hints[hi];
+    }, 700);
+}
+
+function hideAzoraLoadingScreen() {
+    var el = document.getElementById("azoraLoadingScreen");
+    if (!el) return;
+    var fill = document.getElementById("azoraLoadingBarFill");
+    if (fill) fill.style.width = "100%";
+    if (_azoraLoadingProgressTimer) {
+        clearInterval(_azoraLoadingProgressTimer);
+        _azoraLoadingProgressTimer = null;
+    }
+    setTimeout(function () {
+        el.classList.remove("show");
+        el.style.display = "none";
+        el.setAttribute("aria-hidden", "true");
+        if (fill) fill.style.width = "0%";
+    }, 200);
+}
+
+/**
+ * Show loading for ~3 seconds (2.5–3.5s range), then run onDone.
+ */
+function runAzoraLoadingThen(onDone) {
+    showAzoraLoadingScreen();
+    var ms = 2500 + Math.floor(Math.random() * 1000); // ~3s average
+    if (_azoraLoadingTimer) clearTimeout(_azoraLoadingTimer);
+    _azoraLoadingTimer = setTimeout(function () {
+        hideAzoraLoadingScreen();
+        setTimeout(function () {
+            try { if (typeof onDone === "function") onDone(); } catch (e) {}
+        }, 220);
+    }, ms);
+}
+
+window.showAzoraLoadingScreen = showAzoraLoadingScreen;
+window.hideAzoraLoadingScreen = hideAzoraLoadingScreen;
+window.runAzoraLoadingThen = runAzoraLoadingThen;
+
 // ============================================================
 // APP START
 // ============================================================
 function dismissIntroSplash(openAccount) {
     var splash = document.getElementById("introSplash");
     if (!splash) return;
-    // Force full-screen background to fade (not only the text)
     splash.classList.add("fade-out");
     splash.style.transition = "opacity 0.6s ease";
     splash.style.opacity = "0";
@@ -1399,15 +1469,18 @@ function dismissIntroSplash(openAccount) {
     setTimeout(function () {
         splash.style.display = "none";
         splash.style.visibility = "hidden";
-        if (openAccount) {
-            try {
-                if (typeof openCreateAccount === "function") openCreateAccount();
-                else {
-                    var ov = document.getElementById("accountOverlay");
-                    if (ov) ov.style.display = "flex";
-                }
-            } catch (e) {}
-        }
+        // After Welcome fades → loading screen (~3s), then account or main app
+        runAzoraLoadingThen(function () {
+            if (openAccount) {
+                try {
+                    if (typeof openCreateAccount === "function") openCreateAccount();
+                    else {
+                        var ov = document.getElementById("accountOverlay");
+                        if (ov) ov.style.display = "flex";
+                    }
+                } catch (e) {}
+            }
+        });
     }, 650);
 }
 
@@ -1415,26 +1488,39 @@ window.addEventListener("DOMContentLoaded", function () {
     var splash = document.getElementById("introSplash");
     var loggedIn = localStorage.getItem("loggedIn");
 
-    // Splash must always clear — never blocked by avatar/Three.js errors
+    // Returning account or guest: skip Welcome text, still show ~3s loading
     if (loggedIn === "true" || loggedIn === "guest") {
         if (splash) {
             splash.style.display = "none";
             splash.style.pointerEvents = "none";
+            splash.style.visibility = "hidden";
         }
+        // Hide account popup while loading
+        try {
+            var ov0 = document.getElementById("accountOverlay");
+            if (ov0) ov0.style.display = "none";
+        } catch (e) {}
+        runAzoraLoadingThen(function () {
+            try {
+                if (typeof ensureGuestButtonsVisible === "function") ensureGuestButtonsVisible();
+                if (typeof restoreAppSessionIfNeeded === "function") restoreAppSessionIfNeeded();
+            } catch (e) {}
+        });
     } else if (splash) {
+        // First visit / logged out: Welcome → loading → join popup
         splash.style.display = "flex";
         splash.style.opacity = "1";
-        // Match animation length (~6.2s), then fade out
         setTimeout(function () {
             dismissIntroSplash(true);
         }, 6500);
-        // Safety net: force hide even if something went wrong
         setTimeout(function () {
             if (splash && splash.style.display !== "none") {
                 splash.style.opacity = "0";
                 splash.style.display = "none";
                 splash.style.pointerEvents = "none";
-                try { if (typeof openCreateAccount === "function") openCreateAccount(); } catch (e) {}
+                runAzoraLoadingThen(function () {
+                    try { if (typeof openCreateAccount === "function") openCreateAccount(); } catch (e) {}
+                });
             }
         }, 9000);
     }

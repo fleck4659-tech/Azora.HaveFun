@@ -1962,3 +1962,63 @@ html[data-azora-shell="app"] #installAppBtn {
   display: none !important;
   visibility: hidden !important;
 }
+
+
+/* === Azora loading screen (after Welcome, and on app open) === */
+.azora-loading-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 99990;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(160deg, #0b1220 0%, #1e3a8a 45%, #1e60ff 100%);
+    color: #fff;
+    pointer-events: all;
+}
+.azora-loading-screen.show {
+    display: flex !important;
+}
+.azora-loading-inner {
+    text-align: center;
+    padding: 24px;
+    max-width: 320px;
+}
+.azora-loading-logo {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.85);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+    margin-bottom: 18px;
+    animation: azoraLoadPulse 1.4s ease-in-out infinite;
+}
+@keyframes azoraLoadPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.06); opacity: 0.9; }
+}
+.azora-loading-title {
+    font-size: 1.35rem;
+    font-weight: bold;
+    margin-bottom: 16px;
+    letter-spacing: 0.02em;
+}
+.azora-loading-bar {
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.2);
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.35);
+}
+.azora-loading-bar-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #00ebd4, #ffffff, #60a5fa);
+    transition: width 0.25s linear;
+}
+.azora-loading-hint {
+    margin-top: 14px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.85);
+}
