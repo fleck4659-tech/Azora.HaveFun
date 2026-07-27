@@ -578,6 +578,88 @@ function finishCreateAccount(username, password, userId) {
     location.reload();
 }
 
+
+// ============================================================
+// Platform owner account: "Azora" — full access, no password code
+// ============================================================
+var AZORA_OWNER_NAME = "Azora";
+
+function isOwnerUsername(name) {
+    return String(name || "").trim().toLowerCase() === "azora";
+}
+
+function isAzoraOwner() {
+    try {
+        if (localStorage.getItem("loggedIn") !== "true") return false;
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        return !!(acc && isOwnerUsername(acc.username));
+    } catch (e) { return false; }
+}
+
+/** Ensure the official owner account exists on this device */
+function ensureOwnerAccount() {
+    migrateLegacyAccount();
+    var map = getSavedAccounts();
+    var existing = null;
+    Object.keys(map).forEach(function (k) {
+        if (isOwnerUsername(k)) existing = map[k];
+    });
+    if (existing) {
+        existing.isOwner = true;
+        existing.username = AZORA_OWNER_NAME;
+        // Owner may have empty password ("no code")
+        if (typeof existing.password !== "string") existing.password = "";
+        map[AZORA_OWNER_NAME] = existing;
+        // remove case variants
+        Object.keys(map).forEach(function (k) {
+            if (k !== AZORA_OWNER_NAME && isOwnerUsername(k)) delete map[k];
+        });
+        saveSavedAccounts(map);
+        return existing;
+    }
+    var owner = {
+        username: AZORA_OWNER_NAME,
+        password: "",
+        email: "",
+        isGuest: false,
+        isOwner: true,
+        userId: "Aza: Owner",
+        bio: "Official Azora account. Build games. Customize avatars. Have fun.",
+        avatar: {
+            head: "#ffcc00",
+            torso: "#1e60ff",
+            leftArm: "#ffcc00",
+            rightArm: "#ffcc00",
+            leftLeg: "#00ebd4",
+            rightLeg: "#00ebd4"
+        },
+        createdAt: Date.now()
+    };
+    map[AZORA_OWNER_NAME] = owner;
+    saveSavedAccounts(map);
+    // registry
+    try {
+        var registry = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+        var found = registry.some(function (r) { return r && isOwnerUsername(r.username); });
+        if (!found) {
+            registry.unshift({
+                userId: "Aza: Owner",
+                username: AZORA_OWNER_NAME,
+                displayName: AZORA_OWNER_NAME,
+                isGuest: false,
+                isOwner: true,
+                createdAt: Date.now()
+            });
+            localStorage.setItem("azoraUserRegistry", JSON.stringify(registry));
+        }
+    } catch (e) {}
+    return owner;
+}
+
+window.isAzoraOwner = isAzoraOwner;
+window.isOwnerUsername = isOwnerUsername;
+window.ensureOwnerAccount = ensureOwnerAccount;
+
 function createAccount() {
     if (typeof clearAccountError === "function") clearAccountError();
     var username = document.getElementById("username").value.trim();
@@ -585,6 +667,10 @@ function createAccount() {
     var confirm = document.getElementById("confirmPassword").value;
     var btn = document.getElementById("mainButton");
 
+    if (isOwnerUsername(username)) {
+        alert("The username \"Azora\" is reserved for the official platform owner. Please choose another name.");
+        return;
+    }
     if (!username || !password) {
         alert("Please fill out username and password!");
         return;
@@ -671,12 +757,30 @@ function loginAccount() {
         showAccountError("Please enter your username.");
         return;
     }
+
+    migrateLegacyAccount();
+    ensureOwnerAccount();
+
+    // Official owner "Azora" — no code/password required
+    if (isOwnerUsername(username)) {
+        var owner = ensureOwnerAccount();
+        owner.isOwner = true;
+        setLoggedInAccount(owner);
+        try {
+            var coins = parseInt(localStorage.getItem("azoraCoins") || "0", 10) || 0;
+            if (coins < 99999) localStorage.setItem("azoraCoins", "99999");
+        } catch (e) {}
+        clearAccountError();
+        alert("Welcome, Azora (Owner)!\nFull platform access unlocked.\nNo password required for this account.");
+        location.reload();
+        return;
+    }
+
     if (password.length === 0) {
         showAccountError("Please enter your password.");
         return;
     }
 
-    migrateLegacyAccount();
     var account = findAccountByUsername(username);
 
     if (!account) {
@@ -688,7 +792,6 @@ function loginAccount() {
     var saved = account.password;
     if (typeof saved !== "string" || saved !== password) {
         showAccountError("The password is incorrect. Please type the correct password");
-        // Clear password field so they re-type
         var pw = document.getElementById("password");
         if (pw) {
             pw.value = "";
@@ -697,7 +800,6 @@ function loginAccount() {
         return;
     }
 
-    // Password matched — restore full saved progress and log in
     setLoggedInAccount(account);
     clearAccountError();
     alert("Welcome back, " + account.username + "!\nYour progress has been restored.");
@@ -2617,6 +2719,8 @@ function renderProfileGames(username, isOwn) {
 }
 
 function openUserProfile(username) {
+    // owner badge applied after render via hook below
+
     if (!username) return;
     var data = getSocialData();
     var u = ensureUserSocial(data, username);
@@ -4347,6 +4451,22 @@ document.addEventListener("input", function (e) {
 });
 
 // Init on DOM ready (append to existing flow)
+(function initOwner() {
+    function run() {
+        try { if (typeof ensureOwnerAccount === "function") ensureOwnerAccount(); } catch (e) {}
+        try {
+            if (typeof isAzoraOwner === "function" && isAzoraOwner()) {
+                var pb = document.getElementById("profileButton");
+                if (pb) pb.textContent = "Owner · Azora";
+                var el = document.getElementById("bucks");
+                if (el) el.textContent = localStorage.getItem("azoraCoins") || "99999";
+            }
+        } catch (e) {}
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
+    else run();
+})();
+
 (function initV39() {
     function run() {
         initStatusSystem();

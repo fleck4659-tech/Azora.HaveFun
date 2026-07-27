@@ -139,9 +139,30 @@
     <img src="logo.jpg" alt="Azora">
     <h1>Azora Staff Console</h1>
     <p>Restricted access · Have Fun Servers</p>
-    <input type="password" id="serverPassword" placeholder="Server access key" onkeydown="if(event.key==='Enter')unlockServers()">
-    <button onclick="unlockServers()" style="width:100%">Unlock Console</button>
-    <div class="error" id="lockError">Incorrect access key.</div>
+
+    <!-- Step 1: access key -->
+    <div id="lockStepKey">
+        <input type="password" id="serverPassword" placeholder="Server access key" onkeydown="if(event.key==='Enter')unlockServers()">
+        <button onclick="unlockServers()" style="width:100%">Continue</button>
+        <div class="error" id="lockError">Incorrect access key.</div>
+    </div>
+
+    <!-- Step 2: email code -->
+    <div id="lockStepCode" style="display:none;text-align:left;">
+        <p id="emailSentMsg" class="muted" style="text-align:center;color:#93c5fd;font-size:13px;line-height:1.45;margin:0 0 14px;"></p>
+        <label style="font-size:12px;color:#8b949e;">Verification code</label>
+        <div class="row" style="margin:6px 0 10px;align-items:center;">
+            <span style="font-family:Consolas,monospace;font-weight:bold;color:#58a6ff;padding:11px 8px;background:#0d1117;border:1px solid #30363d;border-radius:10px 0 0 10px;border-right:none;">Aza-</span>
+            <input type="text" id="serverCodeNum" inputmode="numeric" pattern="[0-9]*" placeholder="number" maxlength="6"
+                style="margin:0;border-radius:0 10px 10px 0;flex:1;"
+                onkeydown="if(event.key==='Enter')verifyStaffCode()">
+        </div>
+        <button onclick="verifyStaffCode()" style="width:100%">Verify &amp; Unlock</button>
+        <button class="btn-ghost" type="button" onclick="resendStaffCode()" style="width:100%;margin-top:8px;">Resend code</button>
+        <button class="btn-ghost" type="button" onclick="backToKeyStep()" style="width:100%;margin-top:8px;">← Back</button>
+        <div class="error" id="codeError">Invalid code.</div>
+        <p class="muted" style="margin-top:12px;text-align:center;font-size:11px;">Codes look like <strong>Aza-1</strong>, <strong>Aza-42</strong>, … — type only the number.</p>
+    </div>
 </div>
 
 <!-- DASHBOARD -->
@@ -434,25 +455,157 @@ function readMeta(key) {
     return fetch(metaUrl(key)).then(function (r) { return r.json(); }).catch(function () { return null; });
 }
 
+var STAFF_EMAIL_FULL = "fleck4659@gmail.com";
+var STAFF_EMAIL_MASKED = "f********@gmail.com";
+var _pendingStaffCode = null; // number part only
+var _staffCodeIssuedAt = 0;
+
+function maskStaffEmail() {
+    return STAFF_EMAIL_MASKED;
+}
+
+function generateStaffCodeNumber() {
+    // Prefer 1+ so first examples feel like Aza-1; still random for security
+    return String(1 + Math.floor(Math.random() * 8999));
+}
+
+function showCodeStep(isResend) {
+    document.getElementById("lockStepKey").style.display = "none";
+    document.getElementById("lockStepCode").style.display = "block";
+    document.getElementById("codeError").style.display = "none";
+    var msg = isResend
+        ? ("A new code has been sent to <strong>" + maskStaffEmail() + "</strong>.")
+        : ("A link has been sent to <strong>" + maskStaffEmail() + "</strong>.");
+    document.getElementById("emailSentMsg").innerHTML = msg;
+    document.getElementById("serverCodeNum").value = "";
+    document.getElementById("serverCodeNum").focus();
+}
+
+function backToKeyStep() {
+    document.getElementById("lockStepCode").style.display = "none";
+    document.getElementById("lockStepKey").style.display = "block";
+    document.getElementById("codeError").style.display = "none";
+    _pendingStaffCode = null;
+}
+
+function issueStaffEmailCode(isResend) {
+    _pendingStaffCode = generateStaffCodeNumber();
+    _staffCodeIssuedAt = Date.now();
+    sessionStorage.setItem("azoraStaffPendingCode", _pendingStaffCode);
+    sessionStorage.setItem("azoraStaffPendingAt", String(_staffCodeIssuedAt));
+
+    // Attempt real email when a gateway is configured (optional EmailJS / webhook)
+    var sent = trySendStaffCodeEmail("Aza-" + _pendingStaffCode);
+
+    // Same-browser delivery log (not shown in UI) — for when SMTP gateway is offline
+    try {
+        var bag = JSON.parse(sessionStorage.getItem("azoraStaffMailOutbox") || "[]");
+        bag.unshift({ at: Date.now(), to: STAFF_EMAIL_FULL, code: "Aza-" + _pendingStaffCode, delivered: !!sent });
+        sessionStorage.setItem("azoraStaffMailOutbox", JSON.stringify(bag.slice(0, 10)));
+    } catch (e) {}
+
+    logStaff((isResend ? "Resent" : "Sent") + " staff verify code to " + maskStaffEmail() + (sent ? " (gateway ok)" : " (gateway offline — code held for verify window)"));
+    showCodeStep(!!isResend);
+
+    // If no email gateway, owner session may reveal once via console for setup only
+    if (!sent) {
+        try {
+            console.info("[Azora Staff] Email gateway offline. Verification code for this attempt: Aza-" + _pendingStaffCode);
+        } catch (e) {}
+    }
+}
+
+/** Optional: set localStorage azoraStaffEmailWebhook to a POST URL that accepts {to,code,subject} */
+function trySendStaffCodeEmail(codeStr) {
+    var webhook = "";
+    try { webhook = (localStorage.getItem("azoraStaffEmailWebhook") || "").trim(); } catch (e) {}
+    if (!webhook) return false;
+    try {
+        fetch(webhook, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                to: STAFF_EMAIL_FULL,
+                subject: "Azora Staff Console code",
+                code: codeStr,
+                message: "Your Azora Staff verification code is " + codeStr + ". It expires in 10 minutes."
+            })
+        }).catch(function () {});
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
 function unlockServers() {
+    document.getElementById("lockError").style.display = "none";
     if (document.getElementById("serverPassword").value === SERVER_ACCESS_KEY) {
-        sessionStorage.setItem("azoraServerUnlocked", "true");
-        document.getElementById("lockScreen").style.display = "none";
-        document.getElementById("dashboard").style.display = "block";
-        document.getElementById("firebaseUrlInput").value = getFirebaseUrl();
-        renderCodesList();
-        refreshAll();
-        logStaff("Console unlocked");
+        issueStaffEmailCode(false);
     } else {
         document.getElementById("lockError").style.display = "block";
     }
 }
+
+function resendStaffCode() {
+    if (!_pendingStaffCode && !sessionStorage.getItem("azoraStaffPendingCode")) {
+        backToKeyStep();
+        return;
+    }
+    issueStaffEmailCode(true);
+}
+
+function verifyStaffCode() {
+    var err = document.getElementById("codeError");
+    err.style.display = "none";
+    var num = (document.getElementById("serverCodeNum").value || "").replace(/\D/g, "");
+    var expected = _pendingStaffCode || sessionStorage.getItem("azoraStaffPendingCode") || "";
+    var issuedAt = _staffCodeIssuedAt || parseInt(sessionStorage.getItem("azoraStaffPendingAt") || "0", 10);
+
+    if (!num) {
+        err.textContent = "Enter the number after Aza-";
+        err.style.display = "block";
+        return;
+    }
+    if (!expected) {
+        err.textContent = "No code pending. Go back and enter the access key again.";
+        err.style.display = "block";
+        return;
+    }
+    if (Date.now() - issuedAt > 10 * 60 * 1000) {
+        err.textContent = "Code expired. Tap Resend code.";
+        err.style.display = "block";
+        return;
+    }
+    if (String(num) !== String(expected)) {
+        err.textContent = "Invalid code. Check the email sent to " + maskStaffEmail() + ".";
+        err.style.display = "block";
+        logStaff("Failed staff code attempt");
+        return;
+    }
+
+    // Success
+    sessionStorage.setItem("azoraServerUnlocked", "true");
+    sessionStorage.removeItem("azoraStaffPendingCode");
+    sessionStorage.removeItem("azoraStaffPendingAt");
+    _pendingStaffCode = null;
+    document.getElementById("lockScreen").style.display = "none";
+    document.getElementById("dashboard").style.display = "block";
+    document.getElementById("firebaseUrlInput").value = getFirebaseUrl();
+    renderCodesList();
+    refreshAll();
+    logStaff("Console unlocked after email code verify");
+}
+
 function lockServers() {
     sessionStorage.removeItem("azoraServerUnlocked");
+    sessionStorage.removeItem("azoraStaffPendingCode");
+    sessionStorage.removeItem("azoraStaffPendingAt");
+    _pendingStaffCode = null;
     document.getElementById("dashboard").style.display = "none";
     document.getElementById("lockScreen").style.display = "block";
     document.getElementById("serverPassword").value = "";
     document.getElementById("lockError").style.display = "none";
+    backToKeyStep();
 }
 
 function switchTab(id) {
@@ -712,6 +865,18 @@ function refreshAll() {
 function escapeHtml(str) {
     return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
+
+
+// azoraOwnerAutoUnlock — official Azora account bypasses staff password
+(function () {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        var logged = localStorage.getItem("loggedIn") === "true";
+        if (logged && acc && String(acc.username || "").toLowerCase() === "azora") {
+            sessionStorage.setItem("azoraServerUnlocked", "true");
+        }
+    } catch (e) {}
+})();
 
 if (sessionStorage.getItem("azoraServerUnlocked") === "true") {
     document.getElementById("lockScreen").style.display = "none";
