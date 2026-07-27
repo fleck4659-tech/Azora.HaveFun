@@ -1949,3 +1949,16 @@ footer {
 html[data-azora-shell="app"] #installAppBtn {
   display: none !important;
 }
+
+
+/* Get the App — always on website, never inside installed app */
+.install-app-btn,
+#installAppBtn {
+  display: inline-block !important;
+  visibility: visible !important;
+}
+html[data-azora-shell="app"] .install-app-btn,
+html[data-azora-shell="app"] #installAppBtn {
+  display: none !important;
+  visibility: hidden !important;
+}
