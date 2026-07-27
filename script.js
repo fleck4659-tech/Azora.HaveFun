@@ -882,26 +882,50 @@ function buildAvatarFace(headColor) {
     var face = new THREE.Group();
     face.name = "face";
 
-    // Simple blocky eyes (white squares)
-    var eyeL = makeBox(0.14, 0.14, 0.05, 0xffffff);
-    eyeL.position.set(-0.14, 0.08, 0.36);
-    face.add(eyeL);
-    var eyeR = makeBox(0.14, 0.14, 0.05, 0xffffff);
-    eyeR.position.set(0.14, 0.08, 0.36);
-    face.add(eyeR);
+    // Face decal: Smile.png on a flat plane on the front of the head
+    var plane = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.58, 0.58),
+        new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 1,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        })
+    );
+    plane.name = "faceDecal";
+    plane.position.set(0, 0, 0.34);
+    face.add(plane);
 
-    // Simple black pupils
-    var pupilL = makeBox(0.07, 0.07, 0.04, 0x111827);
-    pupilL.position.set(-0.14, 0.08, 0.39);
-    face.add(pupilL);
-    var pupilR = makeBox(0.07, 0.07, 0.04, 0x111827);
-    pupilR.position.set(0.14, 0.08, 0.39);
-    face.add(pupilR);
-
-    // Simple smile (one wide red block)
-    var mouth = makeBox(0.28, 0.06, 0.04, 0xb91c1c);
-    mouth.position.set(0, -0.14, 0.37);
-    face.add(mouth);
+    // Load smile texture (non-blocking; shows plain until ready)
+    try {
+        var loader = new THREE.TextureLoader();
+        loader.setCrossOrigin("anonymous");
+        loader.load(
+            "Smile.png",
+            function (tex) {
+                tex.minFilter = THREE.LinearFilter;
+                tex.magFilter = THREE.LinearFilter;
+                plane.material.map = tex;
+                plane.material.needsUpdate = true;
+            },
+            undefined,
+            function () {
+                // Fallback if image missing: simple black oval eyes + smile with boxes
+                try {
+                    var eyeL = makeBox(0.12, 0.18, 0.04, 0x111827);
+                    eyeL.position.set(-0.14, 0.08, 0.36);
+                    face.add(eyeL);
+                    var eyeR = makeBox(0.12, 0.18, 0.04, 0x111827);
+                    eyeR.position.set(0.14, 0.08, 0.36);
+                    face.add(eyeR);
+                    var mouth = makeBox(0.28, 0.05, 0.04, 0x111827);
+                    mouth.position.set(0, -0.14, 0.36);
+                    face.add(mouth);
+                } catch (e) {}
+            }
+        );
+    } catch (e) {}
 
     return face;
 }
