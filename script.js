@@ -869,77 +869,154 @@ function closeTOS() {
 // --- 3D Avatar Global Variables ---
 let scene, camera, renderer;
 let headMesh, torsoMesh, leftArmMesh, rightArmMesh, leftLegMesh, rightLegMesh;
+let faceGroup, neckMesh, avatarCharacterGroup;
+
+function makeBox(w, h, d, color) {
+    return new THREE.Mesh(
+        new THREE.BoxGeometry(w, h, d),
+        new THREE.MeshLambertMaterial({ color: color })
+    );
+}
+
+function buildAvatarFace(headColor) {
+    var face = new THREE.Group();
+    face.name = "face";
+
+    // Simple blocky eyes (white squares)
+    var eyeL = makeBox(0.14, 0.14, 0.05, 0xffffff);
+    eyeL.position.set(-0.14, 0.08, 0.36);
+    face.add(eyeL);
+    var eyeR = makeBox(0.14, 0.14, 0.05, 0xffffff);
+    eyeR.position.set(0.14, 0.08, 0.36);
+    face.add(eyeR);
+
+    // Simple black pupils
+    var pupilL = makeBox(0.07, 0.07, 0.04, 0x111827);
+    pupilL.position.set(-0.14, 0.08, 0.39);
+    face.add(pupilL);
+    var pupilR = makeBox(0.07, 0.07, 0.04, 0x111827);
+    pupilR.position.set(0.14, 0.08, 0.39);
+    face.add(pupilR);
+
+    // Simple smile (one wide red block)
+    var mouth = makeBox(0.28, 0.06, 0.04, 0xb91c1c);
+    mouth.position.set(0, -0.14, 0.37);
+    face.add(mouth);
+
+    return face;
+}
 
 function init3DAvatar() {
     const container = document.getElementById("avatar3d-canvas");
     if (!container) return;
 
+    while (container.firstChild) container.removeChild(container.firstChild);
+
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
-    camera.position.set(0, 1.3, 4.2);
+    camera = new THREE.PerspectiveCamera(45, container.clientWidth / Math.max(container.clientHeight, 1), 0.1, 100);
+    camera.position.set(0, 1.2, 4.2);
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     container.appendChild(renderer.domElement);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
     scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.65);
     directionalLight.position.set(5, 10, 7);
     scene.add(directionalLight);
 
-    const characterGroup = new THREE.Group();
+    avatarCharacterGroup = new THREE.Group();
+    const characterGroup = avatarCharacterGroup;
 
-    const headGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
-    const headMat = new THREE.MeshLambertMaterial({ color: 0xffcc00 });
-    headMesh = new THREE.Mesh(headGeo, headMat);
-    headMesh.position.y = 1.1;
+    // Blocky head
+    headMesh = makeBox(0.65, 0.65, 0.65, 0xffcc00);
+    headMesh.position.y = 1.12;
     characterGroup.add(headMesh);
 
-    const torsoGeo = new THREE.BoxGeometry(0.8, 1.0, 0.4);
-    const torsoMat = new THREE.MeshLambertMaterial({ color: 0x1e60ff });
-    torsoMesh = new THREE.Mesh(torsoGeo, torsoMat);
+    // Simple face on front
+    faceGroup = buildAvatarFace(0xffcc00);
+    faceGroup.position.y = 1.12;
+    characterGroup.add(faceGroup);
+
+    // Blocky torso
+    torsoMesh = makeBox(0.85, 1.0, 0.45, 0x1e60ff);
     torsoMesh.position.y = 0.3;
     characterGroup.add(torsoMesh);
 
-    const armGeo = new THREE.BoxGeometry(0.35, 1.0, 0.35);
-    const armMat = new THREE.MeshLambertMaterial({ color: 0xffcc00 });
-
-    leftArmMesh = new THREE.Mesh(armGeo, armMat);
-    leftArmMesh.position.set(-0.6, 0.3, 0);
+    // Blocky arms
+    leftArmMesh = makeBox(0.35, 1.0, 0.35, 0xffcc00);
+    leftArmMesh.position.set(-0.62, 0.3, 0);
     characterGroup.add(leftArmMesh);
 
-    rightArmMesh = new THREE.Mesh(armGeo, armMat);
-    rightArmMesh.position.set(0.6, 0.3, 0);
+    rightArmMesh = makeBox(0.35, 1.0, 0.35, 0xffcc00);
+    rightArmMesh.position.set(0.62, 0.3, 0);
     characterGroup.add(rightArmMesh);
 
-    const legGeo = new THREE.BoxGeometry(0.35, 1.0, 0.35);
-    const legMat = new THREE.MeshLambertMaterial({ color: 0x00ebd4 });
-
-    leftLegMesh = new THREE.Mesh(legGeo, legMat);
-    leftLegMesh.position.set(-0.2, -0.7, 0);
+    // Blocky legs
+    leftLegMesh = makeBox(0.35, 1.0, 0.35, 0x00ebd4);
+    leftLegMesh.position.set(-0.22, -0.7, 0);
     characterGroup.add(leftLegMesh);
 
-    rightLegMesh = new THREE.Mesh(legGeo, legMat);
-    rightLegMesh.position.set(0.2, -0.7, 0);
+    rightLegMesh = makeBox(0.35, 1.0, 0.35, 0x00ebd4);
+    rightLegMesh.position.set(0.22, -0.7, 0);
     characterGroup.add(rightLegMesh);
 
     scene.add(characterGroup);
 
     function animate() {
         requestAnimationFrame(animate);
-        characterGroup.rotation.y += 0.008;
-        renderer.render(scene, camera);
+        if (avatarCharacterGroup) avatarCharacterGroup.rotation.y += 0.008;
+        if (renderer && scene && camera) renderer.render(scene, camera);
     }
     animate();
+
+    try {
+        setTimeout(function () {
+            try {
+                var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+                if (acc && acc.avatar) {
+                    if (document.getElementById("colorHead")) document.getElementById("colorHead").value = acc.avatar.head || "#ffcc00";
+                    if (document.getElementById("colorTorso")) document.getElementById("colorTorso").value = acc.avatar.torso || "#1e60ff";
+                    if (document.getElementById("colorLeftArm")) document.getElementById("colorLeftArm").value = acc.avatar.leftArm || "#ffcc00";
+                    if (document.getElementById("colorRightArm")) document.getElementById("colorRightArm").value = acc.avatar.rightArm || "#ffcc00";
+                    if (document.getElementById("colorLeftLeg")) document.getElementById("colorLeftLeg").value = acc.avatar.leftLeg || "#00ebd4";
+                    if (document.getElementById("colorRightLeg")) document.getElementById("colorRightLeg").value = acc.avatar.rightLeg || "#00ebd4";
+                }
+            } catch (e) {}
+            if (localStorage.getItem("loggedIn") === "true" && typeof updateAvatarColors === "function") {
+                updateAvatarColors();
+            }
+        }, 50);
+    } catch (e) {}
 }
 
-// --- Dynamic Color Moderation Rules ---
-const RESTRICTED_COLORS = {
-    white: ["#ffffff", "#f0f0f0", "#e6e6e6"],
-    red: ["#ff0000", "#e60000", "#cc0000"],
-    blue: ["#0000ff", "#0000e6", "#0000cc"]
-};
+function paintAvatarDefaults() {
+    if (!headMesh) return;
+    try {
+        headMesh.material.color.set("#ffcc00");
+        if (neckMesh) neckMesh.material.color.set("#ffcc00");
+        if (torsoMesh) torsoMesh.material.color.set("#1e60ff");
+        if (leftArmMesh) leftArmMesh.material.color.set("#ffcc00");
+        if (rightArmMesh) rightArmMesh.material.color.set("#ffcc00");
+        if (leftLegMesh) leftLegMesh.material.color.set("#00ebd4");
+        if (rightLegMesh) rightLegMesh.material.color.set("#00ebd4");
+        syncAvatarExtraColors("#ffcc00", "#1e60ff", "#ffcc00", "#ffcc00");
+    } catch (e) {}
+}
+
+function syncAvatarExtraColors(head, torso, leftArm, rightArm) {
+    if (!avatarCharacterGroup) return;
+    avatarCharacterGroup.traverse(function (obj) {
+        if (!obj.isMesh || !obj.material) return;
+        if (obj.name === "nose" && head) obj.material.color.set(head);
+        if (obj.name === "handL" && leftArm) obj.material.color.set(leftArm);
+        if (obj.name === "handR" && rightArm) obj.material.color.set(rightArm);
+        if ((obj.name === "shoulderL" || obj.name === "shoulderR") && torso) obj.material.color.set(torso);
+    });
+    if (neckMesh && head) neckMesh.material.color.set(head);
+}
 
 function moderateCharacterColors(head, torso, leftArm, rightArm, leftLeg, rightLeg) {
     const cHead = head.toLowerCase();
@@ -1018,12 +1095,16 @@ function updateAvatarColors() {
 
     const validated = moderateCharacterColors(rawHead, rawTorso, rawLeftArm, rawRightArm, rawLeftLeg, rawRightLeg);
 
+    if (!headMesh) return;
     headMesh.material.color.set(validated.head);
     torsoMesh.material.color.set(validated.torso);
     leftArmMesh.material.color.set(validated.leftArm);
     rightArmMesh.material.color.set(validated.rightArm);
     leftLegMesh.material.color.set(validated.leftLeg);
     rightLegMesh.material.color.set(validated.rightLeg);
+    if (typeof syncAvatarExtraColors === "function") {
+        syncAvatarExtraColors(validated.head, validated.torso, validated.leftArm, validated.rightArm);
+    }
 
     const warning = document.getElementById("modWarning");
     if (validated.wasModerated) {
