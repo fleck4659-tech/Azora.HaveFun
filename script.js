@@ -1539,10 +1539,7 @@ function azaFnBuild(msgIndex) {
         saveAzaFnGames();
 
         addAzaFnAIMessage(
-            "Ok I have created the game for you! Check it out — explore this <strong>" + finalDims +
-            "</strong> game!<br><br>🎮 <strong>" + escapeHtml(game.title) +
-            "</strong><br><br>Opening your <strong>private preview</strong> now. Only you can see it under your profile until you press <strong>Publish to Feed</strong>. " +
-            "Other people cannot edit your game."
+            "Ok I have created the game for you! Explore this <strong>" + finalDims + "</strong> world.<br><br>🎮 <strong>" + escapeHtml(game.title) + "</strong><br>🗺️ <strong>" + escapeHtml(playConfig.summary || playConfig.theme) + "</strong><br>📦 Collect <strong>" + playConfig.goalCount + " " + escapeHtml(playConfig.collectName || "orb") + "s</strong><br><br>Press <strong>Play Game</strong> to explore."
         );
         renderAzaFnMessages();
         openGamePreview(game.id);
@@ -1570,34 +1567,96 @@ function buildPlayConfig(description, dimensions) {
     var d = (description || "").toLowerCase();
     var seed = hashString(d + "|" + (dimensions || "2D"));
     var rand = mulberry32(seed);
-    var genre = "collector";
+
+    // --- Theme (order matters: more specific first) ---
+    var theme = "default";
+    if (/\b(boat|ship|sinking|sink|yacht|ferry|raft|canoe|sail|vessel|submarine)\b/.test(d)) theme = "boat";
+    else if (/\b(city|cities|urban|town|street|building|skyscraper|downtown|metropolis)\b/.test(d)) theme = "city";
+    else if (/\b(space|planet|galaxy|alien|moon|starfield|orbit)\b/.test(d)) theme = "space";
+    else if (/\b(forest|jungle|tree|nature|park|woods)\b/.test(d)) theme = "forest";
+    else if (/\b(ocean|sea|beach|underwater|fish|island|water)\b/.test(d)) theme = "ocean";
+    else if (/\b(snow|ice|winter|arctic|frozen)\b/.test(d)) theme = "snow";
+    else if (/\b(desert|sand|cactus|dune)\b/.test(d)) theme = "desert";
+    else if (/\b(castle|medieval|knight|kingdom)\b/.test(d)) theme = "castle";
+    else if (/\b(farm|barn|animal|village)\b/.test(d)) theme = "farm";
+    else if (/\b(volcano|lava|magma)\b/.test(d)) theme = "volcano";
+    else if (/\b(night|neon|cyber|future)\b/.test(d)) theme = "neon";
+
+    // --- Genre: only pick "survive/dodge" if user asked for it ---
+    var genre = "explorer";
     if (/\b(platform|jump|runner|parkour)\b/.test(d)) genre = "platformer";
     else if (/\b(maze|labyrinth|puzzle)\b/.test(d)) genre = "maze";
-    else if (/\b(dodge|avoid|survive|asteroid|rain)\b/.test(d)) genre = "dodger";
-    else if (/\b(race|speed|car|drive)\b/.test(d)) genre = "racer";
+    else if (/\b(dodge|avoid|asteroid)\b/.test(d)) genre = "dodger";
+    else if (/\b(race|speed|car|drive|traffic)\b/.test(d)) genre = "racer";
     else if (/\b(fight|arena|battle|combat)\b/.test(d)) genre = "arena";
     else if (/\b(fly|flight|plane|bird)\b/.test(d)) genre = "flyer";
-    else if (/\b(collect|coin|gem|treasure)\b/.test(d)) genre = "collector";
-    else {
-        var picks = ["collector", "platformer", "dodger", "maze", "racer"];
-        genre = picks[Math.floor(rand() * picks.length)];
-    }
-    var palettes = [
-        ["#1e60ff", "#00ebd4", "#ffcc00", "#0f172a"],
-        ["#7c3aed", "#f472b6", "#34d399", "#111827"],
-        ["#ef4444", "#f59e0b", "#3b82f6", "#0b1220"],
-        ["#10b981", "#60a5fa", "#fbbf24", "#0f172a"],
-        ["#06b6d4", "#a78bfa", "#fb7185", "#020617"]
-    ];
-    var palette = palettes[seed % palettes.length];
+    else if (/\b(collect|coin|gem|treasure|pickup)\b/.test(d)) genre = "collector";
+    else if (/\b(surviv|don't die|dont die|not die|stay alive)\b/.test(d)) genre = "dodger";
+    else if (theme === "boat") genre = "boat_rescue"; // special: stay on boat / collect while it sinks feel
+    else if (theme === "city" || theme === "forest" || theme === "castle" || theme === "ocean") genre = "explorer";
+    // NEVER random into dodger — default explorer/collector
+    else genre = rand() > 0.5 ? "explorer" : "collector";
+
+    var collectName = "orb";
+    if (/\b(coin|coins)\b/.test(d)) collectName = "coin";
+    else if (/\b(gem|crystal|jewel)\b/.test(d)) collectName = "gem";
+    else if (/\b(star|stars)\b/.test(d)) collectName = "star";
+    else if (/\b(key|keys)\b/.test(d)) collectName = "key";
+    else if (theme === "boat") collectName = "life-ring";
+    else if (theme === "city") collectName = "package";
+    else if (theme === "forest") collectName = "fruit";
+    else if (theme === "ocean") collectName = "pearl";
+    else if (theme === "space") collectName = "crystal";
+
+    var mood = "day";
+    if (/\b(night|dark|evening)\b/.test(d)) mood = "night";
+    else if (/\b(sunset|dusk)\b/.test(d)) mood = "sunset";
+    else if (/\b(rain|storm|sinking)\b/.test(d)) mood = "storm";
+
+    var density = 1;
+    if (/\b(huge|giant|massive|big|detailed|complex)\b/.test(d)) density = 1.45;
+    else if (/\b(small|tiny|simple|mini)\b/.test(d)) density = 0.7;
+
+    var themePalettes = {
+        boat: ["#0c4a6e", "#38bdf8", "#fbbf24", "#082f49"],
+        city: ["#334155", "#38bdf8", "#fbbf24", "#0f172a"],
+        space: ["#1e1b4b", "#a78bfa", "#f0abfc", "#020617"],
+        forest: ["#166534", "#86efac", "#facc15", "#052e16"],
+        ocean: ["#0e7490", "#67e8f9", "#fde68a", "#082f49"],
+        snow: ["#94a3b8", "#e2e8f0", "#38bdf8", "#1e293b"],
+        desert: ["#d97706", "#fcd34d", "#fb923c", "#451a03"],
+        castle: ["#57534e", "#a8a29e", "#fbbf24", "#1c1917"],
+        farm: ["#65a30d", "#bef264", "#fdba74", "#14532d"],
+        volcano: ["#7f1d1d", "#f97316", "#fde047", "#1c1917"],
+        neon: ["#0f172a", "#22d3ee", "#e879f9", "#020617"],
+        default: ["#1e60ff", "#00ebd4", "#ffcc00", "#0f172a"]
+    };
+    var palette = themePalettes[theme] || themePalettes.default;
+    if (mood === "night" || mood === "storm") palette = [palette[0], palette[1], palette[2], "#020617"];
+
+    var buildingCount = Math.round((theme === "city" ? 28 : theme === "castle" ? 12 : theme === "boat" ? 0 : 8) * density);
+    var propCount = Math.round((14 + rand() * 10) * density);
+    var goalCount = Math.round((theme === "boat" ? 6 : theme === "city" ? 7 : 5) + rand() * 5 * density);
+
     return {
         seed: seed,
         genre: genre,
+        theme: theme,
+        mood: mood,
+        collectName: collectName,
+        density: density,
+        buildingCount: buildingCount,
+        propCount: propCount,
         dimensions: dimensions === "3D" ? "3D" : "2D",
         colors: { primary: palette[0], secondary: palette[1], accent: palette[2], bg: palette[3] },
-        goalCount: 5 + Math.floor(rand() * 8),
-        speed: 2.2 + rand() * 2.5,
-        difficulty: 0.6 + rand() * 0.9
+        goalCount: Math.max(4, Math.min(16, goalCount)),
+        speed: 2.1 + rand() * 2.0,
+        difficulty: (genre === "explorer" || genre === "boat_rescue" || theme === "city" || theme === "boat")
+            ? 0.3 + rand() * 0.25
+            : 0.55 + rand() * 0.8,
+        summary: theme === "boat"
+            ? ("sinking boat · collect " + collectName + "s")
+            : (theme + " " + genre + " collecting " + collectName + "s")
     };
 }
 var _play = { running: false, raf: null, keys: {}, game: null, cfg: null, score: 0, won: false, lost: false, entities: [], player: null, canvas: null, ctx: null, renderer: null, scene: null, camera: null, meshPlayer: null, collectMeshes: [], _last: 0 };
@@ -1606,7 +1665,7 @@ function playAzoraGame(gameId) {
     loadAzaFnGames();
     var game = azaFnGames.find(function (g) { return g.id === gameId; });
     if (!game) { alert("Game not found."); return; }
-    if (!game.playConfig) { game.playConfig = buildPlayConfig(game.description || game.title || "", game.dimensions || "2D"); saveAzaFnGames(); }
+    if (!game.playConfig || !game.playConfig.theme) { game.playConfig = buildPlayConfig(game.description || game.title || "", game.dimensions || "2D"); game.genre = game.playConfig.genre; saveAzaFnGames(); }
     startGamePlay(game);
 }
 function startGamePlay(game) {
@@ -1616,7 +1675,7 @@ function startGamePlay(game) {
     _play.score = 0; _play.won = false; _play.lost = false; _play.running = true; _play.keys = {}; _play._last = 0;
     document.getElementById("gamePlayTitle").textContent = game.title || "Game";
     document.getElementById("gamePlayHudScore").textContent = "Score: 0";
-    document.getElementById("gamePlayHudGoal").textContent = "Genre: " + _play.cfg.genre + " | Goal " + _play.cfg.goalCount;
+    document.getElementById("gamePlayHudGoal").textContent = (_play.cfg.summary || (_play.cfg.theme + " " + _play.cfg.genre)) + " | Goal " + _play.cfg.goalCount + " " + (_play.cfg.collectName || "orb") + "s";
     document.getElementById("gamePlayHudHint").textContent = _play.cfg.dimensions === "3D" ? "WASD move | collect orbs | avoid red boxes" : "Arrows/WASD move | Space jump (platformer)";
     document.getElementById("gamePlayStatus").textContent = "Go!";
     document.getElementById("gamePlayOverlay").style.display = "flex";
@@ -1669,43 +1728,247 @@ function initPlay2D() {
         _play.player.x = w / 2; _play.player.y = h - 80;
         for (var r = 0; r < 12; r++) _play.entities.push({ type: "hazard", x: rand() * w, y: -r * 80 - rand() * 40, w: 30, h: 30, vy: 3 + _play.cfg.speed * 0.5 });
         for (var o = 0; o < _play.cfg.goalCount; o++) _play.entities.push({ type: "coin", x: 40 + rand() * (w - 80), y: -o * 100 - 50, r: 12, taken: false, vy: 3 });
+    } else if (genre === "boat_rescue" || _play.cfg.theme === "boat") {
+        // Boat deck rectangle + life-rings in water
+        _play.entities.push({ type: "plat", x: w * 0.22, y: h * 0.32, w: w * 0.56, h: h * 0.36 });
+        for (var cabin = 0; cabin < 3; cabin++) {
+            _play.entities.push({ type: "wall", x: w * 0.3 + cabin * 50, y: h * 0.38, w: 36, h: 28 });
+        }
+        for (var j = 0; j < _play.cfg.goalCount; j++) {
+            _play.entities.push({ type: "coin", x: 40 + rand() * (w - 80), y: 40 + rand() * (h - 80), r: 12, taken: false });
+        }
+        for (var e = 0; e < 2; e++) {
+            _play.entities.push({ type: "hazard", x: rand() * w, y: rand() * h, w: 18, h: 18, vx: (rand() - 0.5) * 1.2, vy: (rand() - 0.5) * 1.2 });
+        }
     } else {
-        for (var j = 0; j < _play.cfg.goalCount; j++) _play.entities.push({ type: "coin", x: 50 + rand() * (w - 100), y: 50 + rand() * (h - 100), r: 12, taken: false });
-        for (var e = 0; e < 4; e++) _play.entities.push({ type: "hazard", x: rand() * w, y: rand() * h, w: 22, h: 22, vx: (rand() - 0.5) * 3, vy: (rand() - 0.5) * 3 });
+        // explorer / collector / city default — low hazard
+        var hz = (_play.cfg.theme === "city" || genre === "explorer") ? 2 : 3;
+        for (var j2 = 0; j2 < _play.cfg.goalCount; j2++) _play.entities.push({ type: "coin", x: 50 + rand() * (w - 100), y: 50 + rand() * (h - 100), r: 12, taken: false });
+        for (var e2 = 0; e2 < hz; e2++) _play.entities.push({ type: "hazard", x: rand() * w, y: rand() * h, w: 22, h: 22, vx: (rand() - 0.5) * 2, vy: (rand() - 0.5) * 2 });
     }
 }
 function initPlay3D() {
     var canvas = _play.canvas; canvas.style.display = "none";
     var host = canvas.parentElement;
-    var w = Math.min(900, host.clientWidth || 800); var h = Math.round(w * 0.6);
+    var w = Math.min(960, host.clientWidth || 800); var h = Math.round(w * 0.6);
+    var cfg = _play.cfg;
+    var rand = mulberry32(cfg.seed);
     _play.scene = new THREE.Scene();
-    _play.scene.background = new THREE.Color(_play.cfg.colors.bg);
-    _play.camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 200);
-    _play.camera.position.set(0, 8, 14);
+    _play.scene.background = new THREE.Color(cfg.colors.bg);
+    if (cfg.mood === "night" || cfg.theme === "space" || cfg.theme === "neon") {
+        _play.scene.fog = new THREE.FogExp2(cfg.colors.bg, 0.012);
+    }
+    _play.camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 300);
+    _play.camera.position.set(0, 12, 18);
     _play.renderer = new THREE.WebGLRenderer({ antialias: true });
     _play.renderer.setSize(w, h);
     _play.renderer.domElement.style.borderRadius = "12px";
     _play.renderer.domElement.style.border = "3px solid #1e60ff";
     host.insertBefore(_play.renderer.domElement, canvas);
-    _play.scene.add(new THREE.AmbientLight(0xffffff, 0.45));
-    var light = new THREE.DirectionalLight(0xffffff, 0.9); light.position.set(5, 12, 8); _play.scene.add(light);
-    var floor = new THREE.Mesh(new THREE.BoxGeometry(40, 1, 40), new THREE.MeshLambertMaterial({ color: _play.cfg.colors.primary }));
-    floor.position.y = -0.5; _play.scene.add(floor);
-    _play.meshPlayer = new THREE.Mesh(new THREE.BoxGeometry(1, 1.4, 1), new THREE.MeshLambertMaterial({ color: _play.cfg.colors.accent }));
-    _play.meshPlayer.position.set(0, 0.7, 0); _play.scene.add(_play.meshPlayer);
-    _play.collectMeshes = [];
-    var rand = mulberry32(_play.cfg.seed);
-    for (var i = 0; i < _play.cfg.goalCount; i++) {
-        var orb = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 12), new THREE.MeshLambertMaterial({ color: _play.cfg.colors.secondary, emissive: _play.cfg.colors.secondary }));
-        orb.position.set((rand() - 0.5) * 30, 0.5, (rand() - 0.5) * 30);
-        orb.userData.taken = false; _play.scene.add(orb); _play.collectMeshes.push(orb);
+
+    _play.scene.add(new THREE.AmbientLight(0xffffff, cfg.mood === "night" ? 0.35 : 0.55));
+    var sun = new THREE.DirectionalLight(cfg.mood === "sunset" ? 0xffedd5 : 0xffffff, cfg.mood === "night" ? 0.4 : 0.95);
+    sun.position.set(10, 22, 12);
+    _play.scene.add(sun);
+    if (cfg.mood === "night" || cfg.theme === "neon") {
+        var neon = new THREE.PointLight(0x22d3ee, 1.2, 40);
+        neon.position.set(0, 6, 0);
+        _play.scene.add(neon);
     }
-    for (var o = 0; o < 6; o++) {
-        var box = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 1.5), new THREE.MeshLambertMaterial({ color: 0xef4444 }));
-        box.position.set((rand() - 0.5) * 28, 0.75, (rand() - 0.5) * 28);
-        box.userData.hazard = true; _play.scene.add(box); _play.collectMeshes.push(box);
+
+    // Ground by theme
+    var floorColor = 0x1e293b;
+    if (cfg.theme === "forest") floorColor = 0x14532d;
+    else if (cfg.theme === "ocean") floorColor = 0x0e7490;
+    else if (cfg.theme === "desert") floorColor = 0xd97706;
+    else if (cfg.theme === "snow") floorColor = 0xe2e8f0;
+    else if (cfg.theme === "city" || cfg.theme === "neon") floorColor = 0x1e293b;
+    else if (cfg.theme === "volcano") floorColor = 0x292524;
+    var floor = new THREE.Mesh(new THREE.BoxGeometry(60, 1, 60), new THREE.MeshLambertMaterial({ color: floorColor }));
+    floor.position.y = -0.5;
+    _play.scene.add(floor);
+
+    // === Detailed scenery ===
+    if (cfg.theme === "boat") {
+        // Ocean water surface
+        var water = new THREE.Mesh(
+            new THREE.BoxGeometry(70, 0.4, 70),
+            new THREE.MeshLambertMaterial({ color: 0x0369a1 })
+        );
+        water.position.y = -0.2;
+        _play.scene.add(water);
+        // Waves
+        for (var wv = 0; wv < 16; wv++) {
+            var wave = new THREE.Mesh(
+                new THREE.BoxGeometry(4 + rand() * 6, 0.25, 1.2),
+                new THREE.MeshLambertMaterial({ color: 0x38bdf8 })
+            );
+            wave.position.set((rand() - 0.5) * 50, 0.15, (rand() - 0.5) * 50);
+            _play.scene.add(wave);
+        }
+        // Main boat hull
+        var hull = new THREE.Mesh(
+            new THREE.BoxGeometry(10, 1.4, 4),
+            new THREE.MeshLambertMaterial({ color: 0x92400e })
+        );
+        hull.position.set(0, 0.5, 0);
+        // slight tilt = "sinking" feel
+        hull.rotation.z = -0.12;
+        hull.rotation.x = 0.05;
+        _play.scene.add(hull);
+        var cabin = new THREE.Mesh(
+            new THREE.BoxGeometry(3.5, 2, 3.2),
+            new THREE.MeshLambertMaterial({ color: 0xf5f5f4 })
+        );
+        cabin.position.set(-1.5, 1.8, 0);
+        cabin.rotation.z = -0.12;
+        _play.scene.add(cabin);
+        // mast
+        var mast = new THREE.Mesh(
+            new THREE.BoxGeometry(0.25, 5, 0.25),
+            new THREE.MeshLambertMaterial({ color: 0x44403c })
+        );
+        mast.position.set(2, 3.2, 0);
+        mast.rotation.z = -0.12;
+        _play.scene.add(mast);
+        // floating debris crates
+        for (var cr = 0; cr < 8; cr++) {
+            var crate = new THREE.Mesh(
+                new THREE.BoxGeometry(1, 1, 1),
+                new THREE.MeshLambertMaterial({ color: 0xb45309 })
+            );
+            crate.position.set((rand() - 0.5) * 30, 0.4, (rand() - 0.5) * 30);
+            _play.scene.add(crate);
+        }
+        // rocks / icebergs
+        for (var rk = 0; rk < 6; rk++) {
+            var rock = new THREE.Mesh(
+                new THREE.BoxGeometry(2 + rand() * 2, 1 + rand(), 2 + rand() * 2),
+                new THREE.MeshLambertMaterial({ color: 0x57534e })
+            );
+            rock.position.set((rand() - 0.5) * 40, 0.3, (rand() - 0.5) * 40);
+            if (Math.abs(rock.position.x) < 6 && Math.abs(rock.position.z) < 4) rock.position.x += 12;
+            _play.scene.add(rock);
+        }
+    } else if (cfg.theme === "city" || cfg.theme === "neon") {
+        // road grid
+        for (var r = -2; r <= 2; r++) {
+            var roadZ = new THREE.Mesh(new THREE.BoxGeometry(6, 0.12, 60), new THREE.MeshLambertMaterial({ color: 0x0f172a }));
+            roadZ.position.set(r * 12, 0.04, 0); _play.scene.add(roadZ);
+            var roadX = new THREE.Mesh(new THREE.BoxGeometry(60, 0.12, 6), new THREE.MeshLambertMaterial({ color: 0x0f172a }));
+            roadX.position.set(0, 0.04, r * 12); _play.scene.add(roadX);
+        }
+        // street lines
+        for (var ln = -2; ln <= 2; ln++) {
+            for (var seg = 0; seg < 8; seg++) {
+                var line = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.13, 2), new THREE.MeshLambertMaterial({ color: 0xfbbf24 }));
+                line.position.set(ln * 12, 0.08, -24 + seg * 7 + (rand() * 1.5));
+                _play.scene.add(line);
+            }
+        }
+        var bCount = cfg.buildingCount || 28;
+        for (var bi = 0; bi < bCount; bi++) {
+            var bw = 2 + rand() * 4, bh = 5 + rand() * 16, bd = 2 + rand() * 4;
+            var bcol = cfg.theme === "neon" ? (rand() > 0.5 ? 0x312e81 : 0x1e3a5f) : (rand() > 0.5 ? 0x64748b : 0x475569);
+            var building = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), new THREE.MeshLambertMaterial({ color: bcol }));
+            var gx = Math.floor((rand() - 0.5) * 5);
+            var gz = Math.floor((rand() - 0.5) * 5);
+            var px = gx * 12 + (rand() - 0.5) * 5;
+            var pz = gz * 12 + (rand() - 0.5) * 5;
+            // avoid exact road centers slightly
+            if (Math.abs(px) < 3.5) px += 5;
+            if (Math.abs(pz) < 3.5) pz += 5;
+            building.position.set(px, bh / 2, pz);
+            _play.scene.add(building);
+            // window glow
+            if (bh > 6 && (cfg.mood === "night" || cfg.theme === "neon" || rand() > 0.4)) {
+                var win = new THREE.Mesh(
+                    new THREE.BoxGeometry(bw * 0.75, bh * 0.55, 0.15),
+                    new THREE.MeshLambertMaterial({ color: 0xfde68a, emissive: 0xb45309 })
+                );
+                win.position.set(px, bh * 0.4, pz + bd * 0.5);
+                _play.scene.add(win);
+            }
+        }
+        // traffic cones / street props
+        for (var pr = 0; pr < (cfg.propCount || 10); pr++) {
+            var cone = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.9, 8), new THREE.MeshLambertMaterial({ color: 0xf97316 }));
+            cone.position.set((rand() - 0.5) * 40, 0.45, (rand() - 0.5) * 40);
+            _play.scene.add(cone);
+        }
+    } else if (cfg.theme === "forest") {
+        for (var t = 0; t < 35 * (cfg.density || 1); t++) {
+            var tx = (rand() - 0.5) * 48, tz = (rand() - 0.5) * 48;
+            if (Math.abs(tx) < 3 && Math.abs(tz) < 3) tx += 7;
+            var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 2.2, 6), new THREE.MeshLambertMaterial({ color: 0x78350f }));
+            var leaves = new THREE.Mesh(new THREE.SphereGeometry(1.1 + rand() * 0.6, 8, 8), new THREE.MeshLambertMaterial({ color: rand() > 0.3 ? 0x16a34a : 0x15803d }));
+            trunk.position.set(tx, 1.1, tz); leaves.position.set(tx, 2.7, tz);
+            _play.scene.add(trunk); _play.scene.add(leaves);
+        }
+    } else if (cfg.theme === "space") {
+        for (var s = 0; s < 70; s++) {
+            var star = new THREE.Mesh(new THREE.SphereGeometry(0.06 + rand() * 0.08, 4, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+            star.position.set((rand() - 0.5) * 80, 3 + rand() * 30, (rand() - 0.5) * 80);
+            _play.scene.add(star);
+        }
+        for (var pl = 0; pl < 5; pl++) {
+            var planet = new THREE.Mesh(new THREE.SphereGeometry(1 + rand() * 2, 12, 12), new THREE.MeshLambertMaterial({ color: rand() > 0.5 ? 0x818cf8 : 0xf472b6 }));
+            planet.position.set((rand() - 0.5) * 40, 4 + rand() * 8, (rand() - 0.5) * 40);
+            _play.scene.add(planet);
+        }
+    } else if (cfg.theme === "castle") {
+        for (var tw = 0; tw < 8; tw++) {
+            var tower = new THREE.Mesh(new THREE.BoxGeometry(3, 8 + rand() * 6, 3), new THREE.MeshLambertMaterial({ color: 0x78716c }));
+            tower.position.set((rand() - 0.5) * 30, 5, (rand() - 0.5) * 30);
+            _play.scene.add(tower);
+        }
+    } else if (cfg.theme === "volcano") {
+        var vol = new THREE.Mesh(new THREE.ConeGeometry(8, 10, 10), new THREE.MeshLambertMaterial({ color: 0x44403c }));
+        vol.position.set(12, 5, -10); _play.scene.add(vol);
+        var lava = new THREE.Mesh(new THREE.CircleGeometry(2, 12), new THREE.MeshLambertMaterial({ color: 0xf97316, emissive: 0x9a3412 }));
+        lava.rotation.x = -Math.PI / 2; lava.position.set(12, 9.2, -10); _play.scene.add(lava);
+    } else {
+        for (var p = 0; p < (cfg.propCount || 12); p++) {
+            var rock = new THREE.Mesh(new THREE.BoxGeometry(1 + rand(), 0.5 + rand(), 1 + rand()), new THREE.MeshLambertMaterial({ color: 0x64748b }));
+            rock.position.set((rand() - 0.5) * 35, 0.4, (rand() - 0.5) * 35);
+            _play.scene.add(rock);
+        }
+    }
+
+    // Player
+    _play.meshPlayer = new THREE.Mesh(new THREE.BoxGeometry(1, 1.4, 1), new THREE.MeshLambertMaterial({ color: cfg.colors.accent }));
+    _play.meshPlayer.position.set(0, 0.7, 0);
+    _play.scene.add(_play.meshPlayer);
+
+    // Collectibles
+    _play.collectMeshes = [];
+    for (var i = 0; i < cfg.goalCount; i++) {
+        var shape = (cfg.collectName === "package")
+            ? new THREE.BoxGeometry(0.7, 0.7, 0.7)
+            : new THREE.SphereGeometry(0.45, 12, 12);
+        var orb = new THREE.Mesh(shape, new THREE.MeshLambertMaterial({ color: cfg.colors.secondary, emissive: cfg.colors.secondary }));
+        var ox = (rand() - 0.5) * 42, oz = (rand() - 0.5) * 42;
+        if (Math.abs(ox) < 2 && Math.abs(oz) < 2) ox += 7;
+        orb.position.set(ox, 0.55, oz);
+        orb.userData.taken = false; orb.userData.hazard = false;
+        _play.scene.add(orb); _play.collectMeshes.push(orb);
+    }
+
+    // Sparse hazards for explorer themes
+    var hazardCount = 2;
+    if (cfg.genre === "dodger" || cfg.genre === "arena" || cfg.genre === "racer") hazardCount = 7;
+    else if (cfg.genre === "explorer" || cfg.genre === "boat_rescue" || cfg.theme === "city" || cfg.theme === "boat") hazardCount = 2;
+    else hazardCount = 3;
+    for (var o = 0; o < hazardCount; o++) {
+        var box = new THREE.Mesh(new THREE.BoxGeometry(1.15, 1.15, 1.15), new THREE.MeshLambertMaterial({ color: 0xef4444 }));
+        var hx = (rand() - 0.5) * 36, hz = (rand() - 0.5) * 36;
+        if (Math.abs(hx) < 6 && Math.abs(hz) < 6) hx += 12;
+        box.position.set(hx, 0.6, hz);
+        box.userData.hazard = true; box.userData.taken = false;
+        _play.scene.add(box); _play.collectMeshes.push(box);
     }
 }
+
 function playLoop(now) {
     if (!_play.running) return;
     var dt = Math.min(32, now - (_play._last || now)) / 16.67; _play._last = now;
