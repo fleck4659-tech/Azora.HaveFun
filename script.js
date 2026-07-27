@@ -4676,24 +4676,75 @@ window.changePassword = changePassword;
 window.refreshSecurityPanel = refreshSecurityPanel;
 
 
-// --- PWA install (Azora app only; staff console stays a website) ---
+
+// --- PWA: "Get the App" on website only (hidden inside installed app) ---
 var _azoraDeferredPrompt = null;
+
+function isAzoraRunningAsApp() {
+  try {
+    if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) return true;
+    if (window.matchMedia && window.matchMedia("(display-mode: fullscreen)").matches) return true;
+    if (typeof navigator !== "undefined" && navigator.standalone === true) return true; // iOS Safari
+    if (document.referrer && document.referrer.indexOf("android-app://") === 0) return true;
+  } catch (e) {}
+  return false;
+}
+
+function syncInstallAppButton() {
+  var btn = document.getElementById("installAppBtn");
+  if (!btn) return;
+  if (isAzoraRunningAsApp()) {
+    btn.style.display = "none";
+    try { document.documentElement.setAttribute("data-azora-shell", "app"); } catch (e) {}
+  } else {
+    btn.style.display = "inline-block";
+    try { document.documentElement.setAttribute("data-azora-shell", "web"); } catch (e) {}
+  }
+}
+
 window.addEventListener("beforeinstallprompt", function (e) {
   e.preventDefault();
   _azoraDeferredPrompt = e;
-  var btn = document.getElementById("installAppBtn");
-  if (btn) btn.style.display = "inline-block";
+  syncInstallAppButton();
 });
+
+window.addEventListener("appinstalled", function () {
+  _azoraDeferredPrompt = null;
+  syncInstallAppButton();
+  alert("Azora is installed! Open it from your home screen or apps list.");
+});
+
 function installAzoraApp() {
-  var btn = document.getElementById("installAppBtn");
+  if (isAzoraRunningAsApp()) {
+    return; // should not be visible, but safety
+  }
   if (_azoraDeferredPrompt) {
     _azoraDeferredPrompt.prompt();
-    _azoraDeferredPrompt.userChoice.then(function () {
+    _azoraDeferredPrompt.userChoice.then(function (choice) {
       _azoraDeferredPrompt = null;
-      if (btn) btn.style.display = "none";
+      if (choice && choice.outcome === "accepted") {
+        syncInstallAppButton();
+      }
     });
     return;
   }
-  alert("To install Azora as an app:\n\n• Chrome/Edge: menu → Install app / Add to home screen\n• Safari (iPhone): Share → Add to Home Screen\n\nThe Staff Console (servers) stays a normal website and is not installed as an app.");
+  // No native prompt available (iPhone, already dismissed, etc.)
+  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (isIOS) {
+    alert("Install Azora on iPhone / iPad:\n\n1. Tap the Share button (square with arrow)\n2. Scroll and tap Add to Home Screen\n3. Tap Add\n\nThen open Azora from your home screen — that is the app (this button will not appear there).");
+  } else {
+    alert("Install Azora as an app:\n\n• Chrome / Edge: click the install icon in the address bar, or Menu → Install Azora\n• Or use your browser's Add to Home Screen option\n\nAfter installing, open Azora from your apps list — the Get the App button only shows on the website, not inside the app.");
+  }
 }
+
 window.installAzoraApp = installAzoraApp;
+window.isAzoraRunningAsApp = isAzoraRunningAsApp;
+window.syncInstallAppButton = syncInstallAppButton;
+
+(function initInstallBtn() {
+  function run() { syncInstallAppButton(); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
+  else run();
+  window.addEventListener("load", run);
+})();
