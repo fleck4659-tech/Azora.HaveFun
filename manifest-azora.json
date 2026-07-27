@@ -1,0 +1,19 @@
+{
+  "name": "Azora",
+  "short_name": "Azora",
+  "description": "Build games. Customize avatars. Have fun.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1e60ff",
+  "theme_color": "#1e60ff",
+  "icons": [
+    {
+      "src": "logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}

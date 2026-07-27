@@ -2,8 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Azora.HaveFun</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Azora</title>
+    <meta name="application-name" content="Azora">
+    <meta name="theme-color" content="#1e60ff">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Azora">
+    <link rel="manifest" href="manifest-azora.json">
+    <link rel="apple-touch-icon" href="logo.jpg">
+    <link rel="icon" href="logo.jpg">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
@@ -180,6 +189,7 @@
         <div class="currency-display">🪙 AzoraCoins: <span id="bucks">0</span></div>
     </div>
     <button id="publicFeedButton" onclick="openPublicFeed()" style="margin:0;">🎮 Feed</button>
+    <button type="button" id="installAppBtn" onclick="installAzoraApp()" style="margin:0;display:none;">📲 Install App</button>
     <div id="guestButtons" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <button onclick="openCreateAccount()" style="margin:0;">Create Account</button>
         <button onclick="openLogin()" style="margin:0;">Log In</button>
@@ -473,5 +483,13 @@
 </div>
 
 <script src="script.js"></script>
+<script>
+// Register Azora as installable app (not the staff website)
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("./sw-azora.js").catch(function () {});
+  });
+}
+</script>
 </body>
 </html>

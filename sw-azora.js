@@ -1,0 +1,19 @@
+/* Azora main app service worker */
+var CACHE = "azora-app-v2";
+var ASSETS = ["./", "./index.html", "./style.css", "./script.js", "./logo.jpg", "./manifest-azora.json"];
+self.addEventListener("install", function (e) {
+  e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ASSETS).catch(function () {}); }).then(function () { return self.skipWaiting(); }));
+});
+self.addEventListener("activate", function (e) {
+  e.waitUntil(caches.keys().then(function (keys) {
+    return Promise.all(keys.map(function (k) { if (k !== CACHE) return caches.delete(k); }));
+  }).then(function () { return self.clients.claim(); }));
+});
+self.addEventListener("fetch", function (e) {
+  if (e.request.method !== "GET") return;
+  if (e.request.url.indexOf("servers.html") !== -1) return;
+  if (e.request.url.indexOf("creator.html") !== -1) return;
+  e.respondWith(caches.match(e.request).then(function (cached) {
+    return cached || fetch(e.request).catch(function () { return cached || Response.error(); });
+  }));
+});

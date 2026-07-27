@@ -838,6 +838,7 @@ document.querySelectorAll(".overlay").forEach(overlay => {
 function handleCreateClick() {
     const loggedIn = localStorage.getItem("loggedIn");
     if (loggedIn === "true") {
+        // Creator stays a normal website (not part of the installable app)
         window.open("creator.html", "_blank");
     } else if (loggedIn === "guest") {
         alert("Guests can't use Creator Studio. Create a free account first!");
@@ -4673,3 +4674,26 @@ function changePassword() {
 window.switchSettingsTab = switchSettingsTab;
 window.changePassword = changePassword;
 window.refreshSecurityPanel = refreshSecurityPanel;
+
+
+// --- PWA install (Azora app only; staff console stays a website) ---
+var _azoraDeferredPrompt = null;
+window.addEventListener("beforeinstallprompt", function (e) {
+  e.preventDefault();
+  _azoraDeferredPrompt = e;
+  var btn = document.getElementById("installAppBtn");
+  if (btn) btn.style.display = "inline-block";
+});
+function installAzoraApp() {
+  var btn = document.getElementById("installAppBtn");
+  if (_azoraDeferredPrompt) {
+    _azoraDeferredPrompt.prompt();
+    _azoraDeferredPrompt.userChoice.then(function () {
+      _azoraDeferredPrompt = null;
+      if (btn) btn.style.display = "none";
+    });
+    return;
+  }
+  alert("To install Azora as an app:\n\n• Chrome/Edge: menu → Install app / Add to home screen\n• Safari (iPhone): Share → Add to Home Screen\n\nThe Staff Console (servers) stays a normal website and is not installed as an app.");
+}
+window.installAzoraApp = installAzoraApp;
