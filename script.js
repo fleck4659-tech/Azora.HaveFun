@@ -470,11 +470,6 @@ function continueAsGuest() {
     localStorage.setItem("azoraAccount", JSON.stringify(account));
     localStorage.setItem("loggedIn", "guest");
 
-    // First-time welcome from official Azora for this guest session
-    if (typeof sendOwnerWelcomeNotification === "function") {
-        sendOwnerWelcomeNotification(userId, true);
-    }
-
     alert("Welcome, Guest!\n\nYour public User ID is " + userId + "\n\n• No username or password\n• Avatar cannot be saved\n• Progress is not saved\n\nCreate an account anytime to unlock everything.");
     location.reload();
 }
@@ -579,10 +574,6 @@ function finishCreateAccount(username, password, userId) {
     localStorage.setItem("azoraUserRegistry", JSON.stringify(registry));
 
     setLoggedInAccount(account);
-    // First-time welcome from official Azora (not sent on later Log In)
-    if (typeof sendOwnerWelcomeNotification === "function") {
-        sendOwnerWelcomeNotification(username, false);
-    }
     alert("Welcome to Azora, " + username + "!\nYour User ID is " + userId + "\nYour account has been saved.");
     location.reload();
 }
@@ -1002,6 +993,10 @@ function buildAvatarFace(headColor) {
 function init3DAvatar() {
     const container = document.getElementById("avatar3d-canvas");
     if (!container) return;
+    if (typeof THREE === "undefined") {
+        console.warn("[Azora] Three.js not loaded — avatar preview unavailable");
+        return;
+    }
 
     while (container.firstChild) container.removeChild(container.firstChild);
 
@@ -1065,23 +1060,32 @@ function init3DAvatar() {
     }
     animate();
 
+    // Resize canvas when container size is known
     try {
+        if (!window._azoraAvatarResizeBound) {
+            window._azoraAvatarResizeBound = true;
+            window.addEventListener("resize", function () {
+                var c = document.getElementById("avatar3d-canvas");
+                if (!c || !renderer || !camera) return;
+                var w = c.clientWidth, h = Math.max(c.clientHeight, 1);
+                camera.aspect = w / h;
+                camera.updateProjectionMatrix();
+                renderer.setSize(w, h);
+            });
+        }
+    } catch (e) {}
+
+    try {
+        if (typeof wireAvatarColorInputs === "function") wireAvatarColorInputs();
         setTimeout(function () {
-            try {
-                var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
-                if (acc && acc.avatar) {
-                    if (document.getElementById("colorHead")) document.getElementById("colorHead").value = acc.avatar.head || "#ffcc00";
-                    if (document.getElementById("colorTorso")) document.getElementById("colorTorso").value = acc.avatar.torso || "#1e60ff";
-                    if (document.getElementById("colorLeftArm")) document.getElementById("colorLeftArm").value = acc.avatar.leftArm || "#ffcc00";
-                    if (document.getElementById("colorRightArm")) document.getElementById("colorRightArm").value = acc.avatar.rightArm || "#ffcc00";
-                    if (document.getElementById("colorLeftLeg")) document.getElementById("colorLeftLeg").value = acc.avatar.leftLeg || "#00ebd4";
-                    if (document.getElementById("colorRightLeg")) document.getElementById("colorRightLeg").value = acc.avatar.rightLeg || "#00ebd4";
-                }
-            } catch (e) {}
-            if (localStorage.getItem("loggedIn") === "true" && typeof updateAvatarColors === "function") {
+            if (typeof loadAvatarFromStorage === "function") loadAvatarFromStorage();
+            else if (localStorage.getItem("loggedIn") === "true" && typeof updateAvatarColors === "function") {
                 updateAvatarColors();
             }
         }, 50);
+        setTimeout(function () {
+            if (typeof loadAvatarFromStorage === "function") loadAvatarFromStorage();
+        }, 300);
     } catch (e) {}
 }
 
@@ -1161,10 +1165,17 @@ function applyGuestAvatarLock(locked) {
         else box.classList.remove("avatar-locked");
     }
     if (lockMsg) lockMsg.style.display = locked ? "block" : "none";
-    if (saveBtn) saveBtn.style.display = locked ? "none" : "block";
+    if (saveBtn) {
+        saveBtn.style.display = locked ? "none" : "block";
+        saveBtn.disabled = !!locked;
+    }
     ["colorHead","colorTorso","colorLeftArm","colorRightArm","colorLeftLeg","colorRightLeg"].forEach(function (id) {
         var el = document.getElementById(id);
-        if (el) el.disabled = !!locked;
+        if (el) {
+            el.disabled = !!locked;
+            // Guests / logged-out: block interaction even if CSS fails
+            el.style.pointerEvents = locked ? "none" : "";
+        }
     });
 }
 
@@ -1177,56 +1188,135 @@ function refreshAvatarLock() {
     applyGuestAvatarLock(!isAvatarUnlocked());
 }
 
+function readAvatarColorInputs() {
+    function v(id, fallback) {
+        var el = document.getElementById(id);
+        var x = el && el.value ? String(el.value).trim() : fallback;
+        if (!x || x.charAt(0) !== "#") x = fallback;
+        return x;
+    }
+    return {
+        head: v("colorHead", "#ffcc00"),
+        torso: v("colorTorso", "#1e60ff"),
+        leftArm: v("colorLeftArm", "#ffcc00"),
+        rightArm: v("colorRightArm", "#ffcc00"),
+        leftLeg: v("colorLeftLeg", "#00ebd4"),
+        rightLeg: v("colorRightLeg", "#00ebd4")
+    };
+}
+
+function setAvatarColorInputs(avatar) {
+    if (!avatar) return;
+    var map = {
+        colorHead: avatar.head || "#ffcc00",
+        colorTorso: avatar.torso || "#1e60ff",
+        colorLeftArm: avatar.leftArm || "#ffcc00",
+        colorRightArm: avatar.rightArm || "#ffcc00",
+        colorLeftLeg: avatar.leftLeg || "#00ebd4",
+        colorRightLeg: avatar.rightLeg || "#00ebd4"
+    };
+    Object.keys(map).forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.value = map[id];
+    });
+}
+
+/** Apply validated colors to live 3D meshes (returns true if applied) */
+function applyColorsToMeshes(validated) {
+    if (!validated) return false;
+    if (!headMesh || !torsoMesh || !leftArmMesh || !rightArmMesh || !leftLegMesh || !rightLegMesh) {
+        return false;
+    }
+    try {
+        function paint(mesh, hex) {
+            if (!mesh || !mesh.material) return;
+            mesh.material.color.set(hex);
+            mesh.material.needsUpdate = true;
+        }
+        paint(headMesh, validated.head);
+        paint(torsoMesh, validated.torso);
+        paint(leftArmMesh, validated.leftArm);
+        paint(rightArmMesh, validated.rightArm);
+        paint(leftLegMesh, validated.leftLeg);
+        paint(rightLegMesh, validated.rightLeg);
+        if (typeof syncAvatarExtraColors === "function") {
+            syncAvatarExtraColors(validated.head, validated.torso, validated.leftArm, validated.rightArm);
+        }
+        return true;
+    } catch (e) {
+        console.warn("[Azora] applyColorsToMeshes failed", e);
+        return false;
+    }
+}
+
 function updateAvatarColors() {
-    if (localStorage.getItem("loggedIn") !== "true") return;
-    const rawHead = document.getElementById("colorHead").value;
-    const rawTorso = document.getElementById("colorTorso").value;
-    const rawLeftArm = document.getElementById("colorLeftArm").value;
-    const rawRightArm = document.getElementById("colorRightArm").value;
-    const rawLeftLeg = document.getElementById("colorLeftLeg").value;
-    const rawRightLeg = document.getElementById("colorRightLeg").value;
+    // Guests / logged-out cannot customize
+    if (localStorage.getItem("loggedIn") !== "true") {
+        return;
+    }
+    var raw = readAvatarColorInputs();
+    var validated = moderateCharacterColors(
+        raw.head, raw.torso, raw.leftArm, raw.rightArm, raw.leftLeg, raw.rightLeg
+    );
 
-    const validated = moderateCharacterColors(rawHead, rawTorso, rawLeftArm, rawRightArm, rawLeftLeg, rawRightLeg);
-
-    if (!headMesh) return;
-    headMesh.material.color.set(validated.head);
-    torsoMesh.material.color.set(validated.torso);
-    leftArmMesh.material.color.set(validated.leftArm);
-    rightArmMesh.material.color.set(validated.rightArm);
-    leftLegMesh.material.color.set(validated.leftLeg);
-    rightLegMesh.material.color.set(validated.rightLeg);
-    if (typeof syncAvatarExtraColors === "function") {
-        syncAvatarExtraColors(validated.head, validated.torso, validated.leftArm, validated.rightArm);
+    // If 3D not ready yet, retry shortly
+    if (!applyColorsToMeshes(validated)) {
+        setTimeout(function () {
+            if (localStorage.getItem("loggedIn") === "true") {
+                applyColorsToMeshes(validated);
+            }
+        }, 120);
+        setTimeout(function () {
+            if (localStorage.getItem("loggedIn") === "true") {
+                applyColorsToMeshes(validated);
+            }
+        }, 400);
     }
 
-    const warning = document.getElementById("modWarning");
+    // Keep torso picker in sync if moderation changed it
     if (validated.wasModerated) {
-        warning.style.display = "block";
-    } else {
-        warning.style.display = "none";
+        var torsoEl = document.getElementById("colorTorso");
+        if (torsoEl) torsoEl.value = validated.torso;
+    }
+
+    var warning = document.getElementById("modWarning");
+    if (warning) {
+        warning.style.display = validated.wasModerated ? "block" : "none";
     }
 }
 
 function saveAvatar() {
     if (localStorage.getItem("loggedIn") !== "true") {
         alert("You need an account to customize or save avatars.\nCreate an account or log in to unlock this!");
-        openCreateAccount();
-        return;
-    }
-    const account = JSON.parse(localStorage.getItem("azoraAccount"));
-    if (!account) {
-        alert("Please log in or create an account to save your custom 3D avatar!");
+        if (typeof openCreateAccount === "function") openCreateAccount();
         return;
     }
 
-    const validated = moderateCharacterColors(
-        document.getElementById("colorHead").value,
-        document.getElementById("colorTorso").value,
-        document.getElementById("colorLeftArm").value,
-        document.getElementById("colorRightArm").value,
-        document.getElementById("colorLeftLeg").value,
-        document.getElementById("colorRightLeg").value
+    var account = null;
+    try {
+        account = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+    } catch (e) {
+        account = null;
+    }
+    if (!account || account.isGuest || !account.username) {
+        alert("Please log in or create an account to save your custom 3D avatar!");
+        if (typeof openCreateAccount === "function") openCreateAccount();
+        return;
+    }
+
+    var raw = readAvatarColorInputs();
+    var validated = moderateCharacterColors(
+        raw.head, raw.torso, raw.leftArm, raw.rightArm, raw.leftLeg, raw.rightLeg
     );
+
+    // Paint mesh immediately so user sees the result
+    applyColorsToMeshes(validated);
+    if (validated.wasModerated) {
+        var torsoEl = document.getElementById("colorTorso");
+        if (torsoEl) torsoEl.value = validated.torso;
+        var warning = document.getElementById("modWarning");
+        if (warning) warning.style.display = "block";
+    }
 
     account.avatar = {
         head: validated.head,
@@ -1238,17 +1328,60 @@ function saveAvatar() {
         face: "default"
     };
 
-    localStorage.setItem("azoraAccount", JSON.stringify(account));
+    try {
+        localStorage.setItem("azoraAccount", JSON.stringify(account));
+    } catch (e) {
+        alert("Could not save avatar (storage full or blocked).");
+        return;
+    }
+
     // Keep multi-account store in sync so progress survives log out / log in
     try {
-        if (account.username && !account.isGuest) {
+        if (account.username && typeof getSavedAccounts === "function" && typeof saveSavedAccounts === "function") {
             var map = getSavedAccounts();
             map[account.username] = account;
             saveSavedAccounts(map);
         }
     } catch (e) {}
+
+    // Confirm by re-reading storage
+    try {
+        var check = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+        if (!check.avatar || check.avatar.head !== validated.head) {
+            console.warn("[Azora] Avatar save verification mismatch", check.avatar);
+        }
+    } catch (e) {}
+
     alert("3D Avatar saved successfully to your Azora account!");
 }
+
+/** Load saved avatar onto pickers + 3D model (safe to call multiple times) */
+function loadAvatarFromStorage() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc && acc.avatar) {
+            setAvatarColorInputs(acc.avatar);
+        }
+    } catch (e) {}
+    if (localStorage.getItem("loggedIn") === "true") {
+        updateAvatarColors();
+    } else if (typeof paintAvatarDefaults === "function") {
+        paintAvatarDefaults();
+    }
+}
+
+function wireAvatarColorInputs() {
+    ["colorHead","colorTorso","colorLeftArm","colorRightArm","colorLeftLeg","colorRightLeg"].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (!el || el.getAttribute("data-azora-wired") === "1") return;
+        el.setAttribute("data-azora-wired", "1");
+        el.addEventListener("input", function () { updateAvatarColors(); });
+        el.addEventListener("change", function () { updateAvatarColors(); });
+    });
+    // Save uses onclick="saveAvatar()" in HTML — no second listener (avoids double alert)
+}
+
+
 
 // ============================================================
 // THEME SYSTEM — MUST stay OUTSIDE DOMContentLoaded
@@ -1623,21 +1756,13 @@ window.addEventListener("DOMContentLoaded", function () {
                 }
                 // Only full accounts can customize avatars
                 refreshAvatarLock();
-
-
-                if (account.avatar) {
-                    var map = {
-                        colorHead: "head", colorTorso: "torso",
-                        colorLeftArm: "leftArm", colorRightArm: "rightArm",
-                        colorLeftLeg: "leftLeg", colorRightLeg: "rightLeg"
-                    };
-                    for (var id in map) {
-                        var el = document.getElementById(id);
-                        if (el && account.avatar[map[id]]) {
-                            el.value = account.avatar[map[id]];
-                        }
-                    }
-                    if (typeof updateAvatarColors === "function") updateAvatarColors();
+                if (typeof wireAvatarColorInputs === "function") wireAvatarColorInputs();
+                if (typeof loadAvatarFromStorage === "function") {
+                    loadAvatarFromStorage();
+                    setTimeout(loadAvatarFromStorage, 200);
+                    setTimeout(loadAvatarFromStorage, 600);
+                } else if (account.avatar && typeof updateAvatarColors === "function") {
+                    updateAvatarColors();
                 }
             }
         } catch (e) {}
@@ -2875,57 +3000,6 @@ function getDisplayName() {
         if (acc.isGuest) return "Guest";
         return acc.username || "Guest";
     } catch (e) { return "Guest"; }
-}
-
-
-/** Storage key for notifications: username for accounts, userId for guests */
-function getNotifKey() {
-    try {
-        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
-        var logged = localStorage.getItem("loggedIn");
-        if (logged === "guest" && acc.userId) return String(acc.userId);
-        if (logged === "true" && acc.username) return String(acc.username);
-        if (acc.isGuest && acc.userId) return String(acc.userId);
-        if (acc.username) return String(acc.username);
-    } catch (e) {}
-    return "";
-}
-
-/**
- * One-time welcome from official owner "Azora".
- * Only for brand-new account creation or new guest sessions — never on Log In.
- */
-function sendOwnerWelcomeNotification(targetKey, isGuest) {
-    if (!targetKey) return;
-    var flagKey = "azoraWelcomeFromOwner:" + targetKey;
-    try {
-        if (localStorage.getItem(flagKey) === "1") return;
-    } catch (e) {}
-
-    var msg = isGuest
-        ? "Azora: Welcome to Azora! You're exploring as a Guest — play games and look around. Create an account anytime to save progress and unlock more features."
-        : "Azora: Welcome to Azora! We're glad you're here. Build games, customize your avatar, and have fun. — Official Azora";
-
-    if (typeof pushNotification === "function") {
-        pushNotification(targetKey, msg, "welcome");
-    } else {
-        // Fallback if called before pushNotification is defined
-        try {
-            var all = JSON.parse(localStorage.getItem("azoraNotifications") || "{}");
-            var list = all[targetKey] || [];
-            list.unshift({
-                id: "n_welcome_" + Date.now(),
-                message: msg,
-                type: "welcome",
-                read: false,
-                at: Date.now(),
-                from: "Azora"
-            });
-            all[targetKey] = list.slice(0, 50);
-            localStorage.setItem("azoraNotifications", JSON.stringify(all));
-        } catch (e2) {}
-    }
-    try { localStorage.setItem(flagKey, "1"); } catch (e) {}
 }
 
 function isGuestSession() {
@@ -4671,17 +4745,15 @@ function pushNotification(toUsername, message, type) {
         message: message,
         type: type || "info",
         read: false,
-        at: Date.now(),
-        from: (type === "welcome") ? "Azora" : undefined
+        at: Date.now()
     });
     saveNotifications(toUsername, list);
-    // Update badge if it's the current user (account username or guest userId)
-    var meKey = (typeof getNotifKey === "function") ? getNotifKey() : getMyUsername();
-    if (toUsername === meKey || toUsername === getMyUsername()) updateNotifBadge();
+    // Update badge if it's me
+    if (toUsername === getMyUsername()) updateNotifBadge();
 }
 
 function updateNotifBadge() {
-    var me = (typeof getNotifKey === "function") ? getNotifKey() : getMyUsername();
+    var me = getMyUsername();
     var badge = document.getElementById("notifBadge");
     if (!badge || !me) return;
     var list = getNotifications(me);
@@ -4704,10 +4776,12 @@ function toggleNotifPanel() {
 }
 
 function openNotifPanel() {
-    var logged = localStorage.getItem("loggedIn");
-    // Guests can see their welcome (and any limited notices); full features still restricted elsewhere
-    if (logged !== "true" && logged !== "guest") {
-        alert("Please log in or continue as Guest to see notifications!");
+    if (localStorage.getItem("loggedIn") === "guest") {
+        alert("Guests don't receive notifications. Create an account to stay updated!");
+        return;
+    }
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Please log in to see notifications!");
         return;
     }
     document.getElementById("notifOverlay").style.display = "flex";
@@ -4721,7 +4795,7 @@ function closeNotifPanel() {
 function renderNotifList() {
     var listEl = document.getElementById("notifList");
     if (!listEl) return;
-    var me = (typeof getNotifKey === "function") ? getNotifKey() : getMyUsername();
+    var me = getMyUsername();
     var list = getNotifications(me);
     if (list.length === 0) {
         listEl.innerHTML = '<div class="notif-empty">No notifications yet.</div>';
@@ -4744,7 +4818,7 @@ function renderNotifList() {
 }
 
 function markAllNotifsRead() {
-    var me = (typeof getNotifKey === "function") ? getNotifKey() : getMyUsername();
+    var me = getMyUsername();
     var list = getNotifications(me);
     list.forEach(function (n) { n.read = true; });
     saveNotifications(me, list);
@@ -4801,8 +4875,6 @@ window.closeNotifPanel = closeNotifPanel;
 window.markAllNotifsRead = markAllNotifsRead;
 window.pushNotification = pushNotification;
 window.notifyGameMilestone = notifyGameMilestone;
-window.sendOwnerWelcomeNotification = sendOwnerWelcomeNotification;
-window.getNotifKey = getNotifKey;
 
 
 // Keep guest buttons correct even if something else toggles the topbar
@@ -5110,3 +5182,9 @@ window.restoreAppSessionIfNeeded = restoreAppSessionIfNeeded;
   setTimeout(run, 2500);
 })();
 
+
+window.updateAvatarColors = updateAvatarColors;
+window.saveAvatar = saveAvatar;
+window.loadAvatarFromStorage = loadAvatarFromStorage;
+window.refreshAvatarLock = refreshAvatarLock;
+window.wireAvatarColorInputs = wireAvatarColorInputs;

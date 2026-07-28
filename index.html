@@ -225,16 +225,16 @@
     <div class="customizer-controls">
         <h3>My Avatar</h3>
         <label>Head:</label>
-        <input type="color" id="colorHead" value="#ffcc00" onchange="updateAvatarColors()">
+        <input type="color" id="colorHead" value="#ffcc00" oninput="updateAvatarColors()" onchange="updateAvatarColors()">
         <label>Torso:</label>
-        <input type="color" id="colorTorso" value="#1e60ff" onchange="updateAvatarColors()">
+        <input type="color" id="colorTorso" value="#1e60ff" oninput="updateAvatarColors()" onchange="updateAvatarColors()">
         <div style="display:flex;gap:8px;">
-            <div style="flex:1;"><label>Left Arm:</label><input type="color" id="colorLeftArm" value="#ffcc00" onchange="updateAvatarColors()"></div>
-            <div style="flex:1;"><label>Right Arm:</label><input type="color" id="colorRightArm" value="#ffcc00" onchange="updateAvatarColors()"></div>
+            <div style="flex:1;"><label>Left Arm:</label><input type="color" id="colorLeftArm" value="#ffcc00" oninput="updateAvatarColors()" onchange="updateAvatarColors()"></div>
+            <div style="flex:1;"><label>Right Arm:</label><input type="color" id="colorRightArm" value="#ffcc00" oninput="updateAvatarColors()" onchange="updateAvatarColors()"></div>
         </div>
         <div style="display:flex;gap:8px;">
-            <div style="flex:1;"><label>Left Leg:</label><input type="color" id="colorLeftLeg" value="#00ebd4" onchange="updateAvatarColors()"></div>
-            <div style="flex:1;"><label>Right Leg:</label><input type="color" id="colorRightLeg" value="#00ebd4" onchange="updateAvatarColors()"></div>
+            <div style="flex:1;"><label>Left Leg:</label><input type="color" id="colorLeftLeg" value="#00ebd4" oninput="updateAvatarColors()" onchange="updateAvatarColors()"></div>
+            <div style="flex:1;"><label>Right Leg:</label><input type="color" id="colorRightLeg" value="#00ebd4" oninput="updateAvatarColors()" onchange="updateAvatarColors()"></div>
         </div>
         <button onclick="saveAvatar()" id="saveAvatarBtn">Save Avatar</button>
         <p id="guestAvatarLock" style="display:none;color:#ffcc00;font-size:12px;font-weight:bold;text-align:center;margin-top:8px;">
@@ -488,19 +488,6 @@
         </div>
         <canvas id="gamePlayCanvas" width="800" height="480"></canvas>
         <p id="gamePlayStatus" class="game-play-status">Loading…</p>
-    </div>
-</div>
-
-
-<!-- Update Azora (black/grey — only shows when a new version is ready) -->
-<div id="azoraUpdateBanner" class="azora-update-banner" style="display:none;" role="dialog" aria-live="polite" aria-label="Update available">
-    <div class="azora-update-inner">
-        <div class="azora-update-text">
-            <strong>Update available</strong>
-            <span>A newer version of Azora is ready on this device.</span>
-        </div>
-        <button type="button" id="azoraUpdateBtn" class="azora-update-btn" onclick="applyAzoraUpdate()">Update Azora to the latest version</button>
-        <button type="button" class="azora-update-later" onclick="dismissAzoraUpdate()" title="Remind me later">Later</button>
     </div>
 </div>
 
