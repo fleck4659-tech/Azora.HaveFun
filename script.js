@@ -879,91 +879,90 @@ function makeBox(w, h, d, color) {
 }
 
 function buildAvatarFace(headColor) {
-    // Flat 2D face only — Smile.png decal on the front of the blocky head (no 3D eyes/mouth)
+    // Flat 2D face only — Smile.png decal (no 3D eyes/mouth).
+    // Plane stays invisible until the transparent smile texture is ready
+    // so desktop never shows a solid white square.
     var face = new THREE.Group();
     face.name = "face";
 
     var mat = new THREE.MeshBasicMaterial({
         color: 0xffffff,
         transparent: true,
-        opacity: 1,
+        opacity: 0,
         depthWrite: false,
         side: THREE.FrontSide,
-        alphaTest: 0.05
+        alphaTest: 0.15
     });
 
-    var plane = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.62), mat);
+    var plane = new THREE.Mesh(new THREE.PlaneGeometry(0.58, 0.58), mat);
     plane.name = "faceDecal";
-    // Sit just in front of the head cube face
-    plane.position.set(0, 0, 0.335);
+    plane.position.set(0, 0.02, 0.34);
+    plane.visible = false;
     face.add(plane);
 
-    function applyTexture(tex) {
-        if (!tex) return;
-        tex.minFilter = THREE.LinearFilter;
-        tex.magFilter = THREE.LinearFilter;
-        tex.generateMipmaps = false;
-        if (tex.format !== undefined) {
-            // keep alpha
+    function applyCleanTexture(sourceImage) {
+        try {
+            var w = sourceImage.naturalWidth || sourceImage.width || 256;
+            var h = sourceImage.naturalHeight || sourceImage.height || 256;
+            var c = document.createElement("canvas");
+            c.width = w;
+            c.height = h;
+            var ctx = c.getContext("2d", { willReadFrequently: true });
+            ctx.clearRect(0, 0, w, h);
+            ctx.drawImage(sourceImage, 0, 0, w, h);
+            var data = ctx.getImageData(0, 0, w, h);
+            var px = data.data;
+            // Keep only dark ink (eyes + smile). Everything else → fully transparent.
+            // Fixes gray/white backgrounds that show as a white face on desktop.
+            for (var i = 0; i < px.length; i += 4) {
+                var r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
+                var lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                if (a < 15 || lum > 95) {
+                    px[i] = 0;
+                    px[i + 1] = 0;
+                    px[i + 2] = 0;
+                    px[i + 3] = 0;
+                } else {
+                    // solid black smile lines
+                    px[i] = 15;
+                    px[i + 1] = 15;
+                    px[i + 2] = 15;
+                    px[i + 3] = 255;
+                }
+            }
+            ctx.putImageData(data, 0, 0);
+            var tex = new THREE.CanvasTexture(c);
+            tex.minFilter = THREE.LinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            tex.generateMipmaps = false;
+            tex.needsUpdate = true;
+            mat.map = tex;
+            mat.opacity = 1;
+            mat.transparent = true;
+            mat.needsUpdate = true;
+            plane.visible = true;
+        } catch (err) {
+            console.warn("[Azora] face texture process failed", err);
         }
-        mat.map = tex;
-        mat.needsUpdate = true;
-        plane.visible = true;
     }
 
-    // Prefer loading Smile.png; strip near-white / gray so only the smile shows
-    function loadSmileDecal() {
+    function tryLoad(url, next) {
         var img = new Image();
         img.crossOrigin = "anonymous";
-        img.onload = function () {
-            try {
-                var c = document.createElement("canvas");
-                c.width = img.naturalWidth || img.width;
-                c.height = img.naturalHeight || img.height;
-                var ctx = c.getContext("2d");
-                ctx.clearRect(0, 0, c.width, c.height);
-                ctx.drawImage(img, 0, 0);
-                var data = ctx.getImageData(0, 0, c.width, c.height);
-                var px = data.data;
-                // Keep dark ink; make light / gray pixels fully transparent
-                for (var i = 0; i < px.length; i += 4) {
-                    var r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
-                    var lum = (r + g + b) / 3;
-                    // If already transparent, leave it
-                    if (a < 20) {
-                        px[i + 3] = 0;
-                        continue;
-                    }
-                    // Soft threshold: brighter than mid-gray → transparent
-                    if (lum > 140) {
-                        px[i + 3] = 0;
-                    } else {
-                        // pure black smile on clear
-                        px[i] = 20;
-                        px[i + 1] = 20;
-                        px[i + 2] = 20;
-                        px[i + 3] = 255;
-                    }
-                }
-                ctx.putImageData(data, 0, 0);
-                var tex = new THREE.CanvasTexture(c);
-                applyTexture(tex);
-            } catch (e) {
-                // Fallback: raw image texture
-                try {
-                    var loader = new THREE.TextureLoader();
-                    loader.load("Smile.png", applyTexture);
-                } catch (e2) {}
-            }
-        };
-        img.onerror = function () {
-            console.warn("[Azora] Smile.png not found — face decal skipped (no 3D face fallback)");
-            plane.visible = false;
-        };
-        img.src = "Smile.png";
+        img.onload = function () { applyCleanTexture(img); };
+        img.onerror = function () { if (typeof next === "function") next(); };
+        img.src = url;
     }
 
-    loadSmileDecal();
+    // Try common paths (GitHub Pages / local / app)
+    tryLoad("Smile.png", function () {
+        tryLoad("./Smile.png", function () {
+            tryLoad("smile.png", function () {
+                console.warn("[Azora] Smile.png missing — face left blank (no white plane, no 3D face)");
+            });
+        });
+    });
+
     return face;
 }
 
