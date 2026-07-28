@@ -491,6 +491,19 @@
     </div>
 </div>
 
+
+<!-- Update Azora (black/grey — only shows when a new version is ready) -->
+<div id="azoraUpdateBanner" class="azora-update-banner" style="display:none;" role="dialog" aria-live="polite" aria-label="Update available">
+    <div class="azora-update-inner">
+        <div class="azora-update-text">
+            <strong>Update available</strong>
+            <span>A newer version of Azora is ready on this device.</span>
+        </div>
+        <button type="button" id="azoraUpdateBtn" class="azora-update-btn" onclick="applyAzoraUpdate()">Update Azora to the latest version</button>
+        <button type="button" class="azora-update-later" onclick="dismissAzoraUpdate()" title="Remind me later">Later</button>
+    </div>
+</div>
+
 <script src="script.js"></script>
 <script>
 // Register Azora as installable app (not the staff website)

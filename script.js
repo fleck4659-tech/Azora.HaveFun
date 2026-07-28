@@ -5048,3 +5048,123 @@ window.restoreAppSessionIfNeeded = restoreAppSessionIfNeeded;
   setTimeout(run, 2500);
 })();
 
+
+
+// ============================================================
+// Azora self-update (PWA service worker)
+// Black/grey banner appears when a newer version is waiting.
+// Tap "Update Azora to the latest version" → reloads app with new files.
+// ============================================================
+var _azoraWaitingWorker = null;
+var _azoraUpdateDismissed = false;
+
+function showAzoraUpdateBanner() {
+  if (_azoraUpdateDismissed) return;
+  var el = document.getElementById("azoraUpdateBanner");
+  if (!el) return;
+  el.classList.add("show");
+  el.style.display = "block";
+}
+
+function hideAzoraUpdateBanner() {
+  var el = document.getElementById("azoraUpdateBanner");
+  if (!el) return;
+  el.classList.remove("show");
+  el.style.display = "none";
+}
+
+function dismissAzoraUpdate() {
+  _azoraUpdateDismissed = true;
+  hideAzoraUpdateBanner();
+}
+
+function applyAzoraUpdate() {
+  var btn = document.getElementById("azoraUpdateBtn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Updating…";
+  }
+  try {
+    if (_azoraWaitingWorker) {
+      _azoraWaitingWorker.postMessage({ type: "SKIP_WAITING" });
+    }
+  } catch (e) {}
+
+  var reloaded = false;
+  function doReload() {
+    if (reloaded) return;
+    reloaded = true;
+    try { sessionStorage.setItem("azoraJustUpdated", "1"); } catch (e) {}
+    window.location.reload();
+  }
+
+  if (navigator.serviceWorker) {
+    navigator.serviceWorker.addEventListener("controllerchange", doReload);
+  }
+  setTimeout(doReload, 1200);
+}
+
+function trackWaitingWorker(worker) {
+  if (!worker) return;
+  _azoraWaitingWorker = worker;
+  worker.addEventListener("statechange", function () {
+    if (worker.state === "installed") {
+      if (navigator.serviceWorker.controller) {
+        showAzoraUpdateBanner();
+      }
+    }
+  });
+  if (worker.state === "installed" && navigator.serviceWorker.controller) {
+    showAzoraUpdateBanner();
+  }
+}
+
+function initAzoraUpdateChecker() {
+  if (!("serviceWorker" in navigator)) return;
+
+  navigator.serviceWorker.getRegistration("./sw-azora.js").then(function (reg) {
+    if (!reg) return navigator.serviceWorker.getRegistration();
+    return reg;
+  }).then(function (reg) {
+    if (!reg) return;
+
+    if (reg.waiting) {
+      trackWaitingWorker(reg.waiting);
+      showAzoraUpdateBanner();
+    }
+
+    reg.addEventListener("updatefound", function () {
+      trackWaitingWorker(reg.installing);
+    });
+
+    setInterval(function () {
+      try { reg.update(); } catch (e) {}
+    }, 5 * 60 * 1000);
+
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") {
+        try { reg.update(); } catch (e) {}
+      }
+    });
+  }).catch(function () {});
+
+  navigator.serviceWorker.ready.then(function (reg) {
+    if (reg && reg.waiting) {
+      trackWaitingWorker(reg.waiting);
+      showAzoraUpdateBanner();
+    }
+  }).catch(function () {});
+}
+
+window.applyAzoraUpdate = applyAzoraUpdate;
+window.dismissAzoraUpdate = dismissAzoraUpdate;
+window.showAzoraUpdateBanner = showAzoraUpdateBanner;
+
+(function bootUpdateChecker() {
+  function run() { initAzoraUpdateChecker(); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
+  else run();
+  window.addEventListener("load", function () {
+    setTimeout(initAzoraUpdateChecker, 800);
+  });
+})();

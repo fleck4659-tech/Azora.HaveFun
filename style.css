@@ -2022,3 +2022,93 @@ html[data-azora-shell="app"] #installAppBtn {
     font-size: 13px;
     color: rgba(255,255,255,0.85);
 }
+
+
+/* === Update Azora banner (black / grey only — stands out from colorful UI) === */
+.azora-update-banner {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2147483000;
+    display: none;
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+    background: #111111;
+    border-top: 2px solid #4b5563;
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.55);
+    font-family: Arial, Helvetica, sans-serif;
+}
+.azora-update-banner.show {
+    display: block !important;
+}
+.azora-update-inner {
+    max-width: 720px;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    justify-content: center;
+}
+.azora-update-text {
+    flex: 1 1 200px;
+    min-width: 0;
+    color: #d1d5db;
+    text-align: left;
+}
+.azora-update-text strong {
+    display: block;
+    color: #f3f4f6;
+    font-size: 15px;
+    margin-bottom: 2px;
+    letter-spacing: 0.02em;
+}
+.azora-update-text span {
+    font-size: 13px;
+    color: #9ca3af;
+}
+.azora-update-btn {
+    margin: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    flex: 0 0 auto;
+    padding: 12px 18px !important;
+    border-radius: 10px !important;
+    border: 2px solid #6b7280 !important;
+    background: #1f2937 !important;
+    color: #f9fafb !important;
+    font-weight: bold !important;
+    font-size: 14px !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    cursor: pointer;
+}
+.azora-update-btn:hover {
+    background: #374151 !important;
+    border-color: #9ca3af !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+.azora-update-btn:active {
+    background: #111827 !important;
+}
+.azora-update-later {
+    margin: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    padding: 10px 12px !important;
+    border-radius: 8px !important;
+    border: 1px solid #4b5563 !important;
+    background: transparent !important;
+    color: #9ca3af !important;
+    font-weight: normal !important;
+    font-size: 13px !important;
+    box-shadow: none !important;
+    cursor: pointer;
+}
+.azora-update-later:hover {
+    color: #e5e7eb !important;
+    border-color: #6b7280 !important;
+    transform: none !important;
+    background: #1f2937 !important;
+}
