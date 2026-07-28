@@ -880,8 +880,7 @@ function makeBox(w, h, d, color) {
 
 function buildAvatarFace(headColor) {
     // Flat 2D face only — Smile.png decal (no 3D eyes/mouth).
-    // Plane stays invisible until the transparent smile texture is ready
-    // so desktop never shows a solid white square.
+    // Smile.png is a transparent PNG (black smile only). Plane stays hidden until texture loads.
     var face = new THREE.Group();
     face.name = "face";
 
@@ -891,74 +890,99 @@ function buildAvatarFace(headColor) {
         opacity: 0,
         depthWrite: false,
         side: THREE.FrontSide,
-        alphaTest: 0.15
+        alphaTest: 0.2
     });
 
-    var plane = new THREE.Mesh(new THREE.PlaneGeometry(0.58, 0.58), mat);
+    var plane = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.56), mat);
     plane.name = "faceDecal";
     plane.position.set(0, 0.02, 0.34);
     plane.visible = false;
     face.add(plane);
 
-    function applyCleanTexture(sourceImage) {
+    function showTex(tex) {
+        if (!tex) return;
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        tex.needsUpdate = true;
+        mat.map = tex;
+        mat.transparent = true;
+        mat.opacity = 1;
+        mat.alphaTest = 0.2;
+        mat.needsUpdate = true;
+        plane.visible = true;
+    }
+
+    // Prefer TextureLoader (works on https / PWA). Avoid crossOrigin on file:// so local tests work.
+    function loadWithThree(url, onFail) {
         try {
-            var w = sourceImage.naturalWidth || sourceImage.width || 256;
-            var h = sourceImage.naturalHeight || sourceImage.height || 256;
-            var c = document.createElement("canvas");
-            c.width = w;
-            c.height = h;
-            var ctx = c.getContext("2d", { willReadFrequently: true });
-            ctx.clearRect(0, 0, w, h);
-            ctx.drawImage(sourceImage, 0, 0, w, h);
-            var data = ctx.getImageData(0, 0, w, h);
-            var px = data.data;
-            // Keep only dark ink (eyes + smile). Everything else → fully transparent.
-            // Fixes gray/white backgrounds that show as a white face on desktop.
-            for (var i = 0; i < px.length; i += 4) {
-                var r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
-                var lum = 0.299 * r + 0.587 * g + 0.114 * b;
-                if (a < 15 || lum > 95) {
-                    px[i] = 0;
-                    px[i + 1] = 0;
-                    px[i + 2] = 0;
-                    px[i + 3] = 0;
-                } else {
-                    // solid black smile lines
-                    px[i] = 15;
-                    px[i + 1] = 15;
-                    px[i + 2] = 15;
-                    px[i + 3] = 255;
-                }
+            var loader = new THREE.TextureLoader();
+            // only set CORS when not opening as a local file
+            if (typeof location !== "undefined" && location.protocol !== "file:") {
+                loader.setCrossOrigin("anonymous");
             }
-            ctx.putImageData(data, 0, 0);
-            var tex = new THREE.CanvasTexture(c);
-            tex.minFilter = THREE.LinearFilter;
-            tex.magFilter = THREE.LinearFilter;
-            tex.generateMipmaps = false;
-            tex.needsUpdate = true;
-            mat.map = tex;
-            mat.opacity = 1;
-            mat.transparent = true;
-            mat.needsUpdate = true;
-            plane.visible = true;
-        } catch (err) {
-            console.warn("[Azora] face texture process failed", err);
+            loader.load(
+                url,
+                function (tex) { showTex(tex); },
+                undefined,
+                function () { if (onFail) onFail(); }
+            );
+        } catch (e) {
+            if (onFail) onFail();
         }
     }
 
-    function tryLoad(url, next) {
-        var img = new Image();
-        img.crossOrigin = "anonymous";
-        img.onload = function () { applyCleanTexture(img); };
-        img.onerror = function () { if (typeof next === "function") next(); };
-        img.src = url;
+    // Image + canvas fallback strips any leftover gray if an old Smile.png is cached
+    function loadWithImage(url, onFail) {
+        try {
+            var img = new Image();
+            if (typeof location !== "undefined" && location.protocol !== "file:") {
+                img.crossOrigin = "anonymous";
+            }
+            img.onload = function () {
+                try {
+                    var c = document.createElement("canvas");
+                    c.width = img.naturalWidth || img.width;
+                    c.height = img.naturalHeight || img.height;
+                    var ctx = c.getContext("2d");
+                    ctx.clearRect(0, 0, c.width, c.height);
+                    ctx.drawImage(img, 0, 0);
+                    var data = ctx.getImageData(0, 0, c.width, c.height);
+                    var px = data.data;
+                    for (var i = 0; i < px.length; i += 4) {
+                        var lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+                        if (px[i + 3] < 15 || lum > 90) {
+                            px[i] = px[i + 1] = px[i + 2] = px[i + 3] = 0;
+                        } else {
+                            px[i] = px[i + 1] = px[i + 2] = 12;
+                            px[i + 3] = 255;
+                        }
+                    }
+                    ctx.putImageData(data, 0, 0);
+                    showTex(new THREE.CanvasTexture(c));
+                } catch (e) {
+                    // canvas tainted (common on file://) — try raw texture without process
+                    try {
+                        showTex(new THREE.Texture(img));
+                        mat.map.needsUpdate = true;
+                    } catch (e2) {
+                        if (onFail) onFail();
+                    }
+                }
+            };
+            img.onerror = function () { if (onFail) onFail(); };
+            img.src = url;
+        } catch (e) {
+            if (onFail) onFail();
+        }
     }
 
-    // Try common paths (GitHub Pages / local / app)
-    tryLoad("Smile.png", function () {
-        tryLoad("./Smile.png", function () {
-            tryLoad("smile.png", function () {
-                console.warn("[Azora] Smile.png missing — face left blank (no white plane, no 3D face)");
+    loadWithThree("Smile.png", function () {
+        loadWithThree("./Smile.png", function () {
+            loadWithImage("Smile.png", function () {
+                loadWithImage("./Smile.png", function () {
+                    console.warn("[Azora] Smile.png missing — face left blank (no white square)");
+                });
             });
         });
     });
