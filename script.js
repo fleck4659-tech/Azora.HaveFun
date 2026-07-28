@@ -470,6 +470,11 @@ function continueAsGuest() {
     localStorage.setItem("azoraAccount", JSON.stringify(account));
     localStorage.setItem("loggedIn", "guest");
 
+    // First-time welcome from official Azora for this guest session
+    if (typeof sendOwnerWelcomeNotification === "function") {
+        sendOwnerWelcomeNotification(userId, true);
+    }
+
     alert("Welcome, Guest!\n\nYour public User ID is " + userId + "\n\n• No username or password\n• Avatar cannot be saved\n• Progress is not saved\n\nCreate an account anytime to unlock everything.");
     location.reload();
 }
@@ -574,6 +579,10 @@ function finishCreateAccount(username, password, userId) {
     localStorage.setItem("azoraUserRegistry", JSON.stringify(registry));
 
     setLoggedInAccount(account);
+    // First-time welcome from official Azora (not sent on later Log In)
+    if (typeof sendOwnerWelcomeNotification === "function") {
+        sendOwnerWelcomeNotification(username, false);
+    }
     alert("Welcome to Azora, " + username + "!\nYour User ID is " + userId + "\nYour account has been saved.");
     location.reload();
 }
@@ -2868,6 +2877,57 @@ function getDisplayName() {
     } catch (e) { return "Guest"; }
 }
 
+
+/** Storage key for notifications: username for accounts, userId for guests */
+function getNotifKey() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+        var logged = localStorage.getItem("loggedIn");
+        if (logged === "guest" && acc.userId) return String(acc.userId);
+        if (logged === "true" && acc.username) return String(acc.username);
+        if (acc.isGuest && acc.userId) return String(acc.userId);
+        if (acc.username) return String(acc.username);
+    } catch (e) {}
+    return "";
+}
+
+/**
+ * One-time welcome from official owner "Azora".
+ * Only for brand-new account creation or new guest sessions — never on Log In.
+ */
+function sendOwnerWelcomeNotification(targetKey, isGuest) {
+    if (!targetKey) return;
+    var flagKey = "azoraWelcomeFromOwner:" + targetKey;
+    try {
+        if (localStorage.getItem(flagKey) === "1") return;
+    } catch (e) {}
+
+    var msg = isGuest
+        ? "Azora: Welcome to Azora! You're exploring as a Guest — play games and look around. Create an account anytime to save progress and unlock more features."
+        : "Azora: Welcome to Azora! We're glad you're here. Build games, customize your avatar, and have fun. — Official Azora";
+
+    if (typeof pushNotification === "function") {
+        pushNotification(targetKey, msg, "welcome");
+    } else {
+        // Fallback if called before pushNotification is defined
+        try {
+            var all = JSON.parse(localStorage.getItem("azoraNotifications") || "{}");
+            var list = all[targetKey] || [];
+            list.unshift({
+                id: "n_welcome_" + Date.now(),
+                message: msg,
+                type: "welcome",
+                read: false,
+                at: Date.now(),
+                from: "Azora"
+            });
+            all[targetKey] = list.slice(0, 50);
+            localStorage.setItem("azoraNotifications", JSON.stringify(all));
+        } catch (e2) {}
+    }
+    try { localStorage.setItem(flagKey, "1"); } catch (e) {}
+}
+
 function isGuestSession() {
     return localStorage.getItem("loggedIn") === "guest";
 }
@@ -4611,15 +4671,17 @@ function pushNotification(toUsername, message, type) {
         message: message,
         type: type || "info",
         read: false,
-        at: Date.now()
+        at: Date.now(),
+        from: (type === "welcome") ? "Azora" : undefined
     });
     saveNotifications(toUsername, list);
-    // Update badge if it's me
-    if (toUsername === getMyUsername()) updateNotifBadge();
+    // Update badge if it's the current user (account username or guest userId)
+    var meKey = (typeof getNotifKey === "function") ? getNotifKey() : getMyUsername();
+    if (toUsername === meKey || toUsername === getMyUsername()) updateNotifBadge();
 }
 
 function updateNotifBadge() {
-    var me = getMyUsername();
+    var me = (typeof getNotifKey === "function") ? getNotifKey() : getMyUsername();
     var badge = document.getElementById("notifBadge");
     if (!badge || !me) return;
     var list = getNotifications(me);
@@ -4642,12 +4704,10 @@ function toggleNotifPanel() {
 }
 
 function openNotifPanel() {
-    if (localStorage.getItem("loggedIn") === "guest") {
-        alert("Guests don't receive notifications. Create an account to stay updated!");
-        return;
-    }
-    if (localStorage.getItem("loggedIn") !== "true") {
-        alert("Please log in to see notifications!");
+    var logged = localStorage.getItem("loggedIn");
+    // Guests can see their welcome (and any limited notices); full features still restricted elsewhere
+    if (logged !== "true" && logged !== "guest") {
+        alert("Please log in or continue as Guest to see notifications!");
         return;
     }
     document.getElementById("notifOverlay").style.display = "flex";
@@ -4661,7 +4721,7 @@ function closeNotifPanel() {
 function renderNotifList() {
     var listEl = document.getElementById("notifList");
     if (!listEl) return;
-    var me = getMyUsername();
+    var me = (typeof getNotifKey === "function") ? getNotifKey() : getMyUsername();
     var list = getNotifications(me);
     if (list.length === 0) {
         listEl.innerHTML = '<div class="notif-empty">No notifications yet.</div>';
@@ -4684,7 +4744,7 @@ function renderNotifList() {
 }
 
 function markAllNotifsRead() {
-    var me = getMyUsername();
+    var me = (typeof getNotifKey === "function") ? getNotifKey() : getMyUsername();
     var list = getNotifications(me);
     list.forEach(function (n) { n.read = true; });
     saveNotifications(me, list);
@@ -4741,6 +4801,8 @@ window.closeNotifPanel = closeNotifPanel;
 window.markAllNotifsRead = markAllNotifsRead;
 window.pushNotification = pushNotification;
 window.notifyGameMilestone = notifyGameMilestone;
+window.sendOwnerWelcomeNotification = sendOwnerWelcomeNotification;
+window.getNotifKey = getNotifKey;
 
 
 // Keep guest buttons correct even if something else toggles the topbar
@@ -5048,123 +5110,3 @@ window.restoreAppSessionIfNeeded = restoreAppSessionIfNeeded;
   setTimeout(run, 2500);
 })();
 
-
-
-// ============================================================
-// Azora self-update (PWA service worker)
-// Black/grey banner appears when a newer version is waiting.
-// Tap "Update Azora to the latest version" → reloads app with new files.
-// ============================================================
-var _azoraWaitingWorker = null;
-var _azoraUpdateDismissed = false;
-
-function showAzoraUpdateBanner() {
-  if (_azoraUpdateDismissed) return;
-  var el = document.getElementById("azoraUpdateBanner");
-  if (!el) return;
-  el.classList.add("show");
-  el.style.display = "block";
-}
-
-function hideAzoraUpdateBanner() {
-  var el = document.getElementById("azoraUpdateBanner");
-  if (!el) return;
-  el.classList.remove("show");
-  el.style.display = "none";
-}
-
-function dismissAzoraUpdate() {
-  _azoraUpdateDismissed = true;
-  hideAzoraUpdateBanner();
-}
-
-function applyAzoraUpdate() {
-  var btn = document.getElementById("azoraUpdateBtn");
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = "Updating…";
-  }
-  try {
-    if (_azoraWaitingWorker) {
-      _azoraWaitingWorker.postMessage({ type: "SKIP_WAITING" });
-    }
-  } catch (e) {}
-
-  var reloaded = false;
-  function doReload() {
-    if (reloaded) return;
-    reloaded = true;
-    try { sessionStorage.setItem("azoraJustUpdated", "1"); } catch (e) {}
-    window.location.reload();
-  }
-
-  if (navigator.serviceWorker) {
-    navigator.serviceWorker.addEventListener("controllerchange", doReload);
-  }
-  setTimeout(doReload, 1200);
-}
-
-function trackWaitingWorker(worker) {
-  if (!worker) return;
-  _azoraWaitingWorker = worker;
-  worker.addEventListener("statechange", function () {
-    if (worker.state === "installed") {
-      if (navigator.serviceWorker.controller) {
-        showAzoraUpdateBanner();
-      }
-    }
-  });
-  if (worker.state === "installed" && navigator.serviceWorker.controller) {
-    showAzoraUpdateBanner();
-  }
-}
-
-function initAzoraUpdateChecker() {
-  if (!("serviceWorker" in navigator)) return;
-
-  navigator.serviceWorker.getRegistration("./sw-azora.js").then(function (reg) {
-    if (!reg) return navigator.serviceWorker.getRegistration();
-    return reg;
-  }).then(function (reg) {
-    if (!reg) return;
-
-    if (reg.waiting) {
-      trackWaitingWorker(reg.waiting);
-      showAzoraUpdateBanner();
-    }
-
-    reg.addEventListener("updatefound", function () {
-      trackWaitingWorker(reg.installing);
-    });
-
-    setInterval(function () {
-      try { reg.update(); } catch (e) {}
-    }, 5 * 60 * 1000);
-
-    document.addEventListener("visibilitychange", function () {
-      if (document.visibilityState === "visible") {
-        try { reg.update(); } catch (e) {}
-      }
-    });
-  }).catch(function () {});
-
-  navigator.serviceWorker.ready.then(function (reg) {
-    if (reg && reg.waiting) {
-      trackWaitingWorker(reg.waiting);
-      showAzoraUpdateBanner();
-    }
-  }).catch(function () {});
-}
-
-window.applyAzoraUpdate = applyAzoraUpdate;
-window.dismissAzoraUpdate = dismissAzoraUpdate;
-window.showAzoraUpdateBanner = showAzoraUpdateBanner;
-
-(function bootUpdateChecker() {
-  function run() { initAzoraUpdateChecker(); }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
-  else run();
-  window.addEventListener("load", function () {
-    setTimeout(initAzoraUpdateChecker, 800);
-  });
-})();
