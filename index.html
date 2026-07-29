@@ -18,6 +18,37 @@
 </head>
 <body>
 
+<!-- Offline / no internet full-screen -->
+<div id="azoraOfflineScreen" class="azora-offline-screen" style="display:none;" aria-hidden="true" role="alert">
+    <div class="azora-offline-inner">
+        <div class="azora-offline-icon" aria-hidden="true">
+            <svg class="azora-wifi-svg" viewBox="0 0 64 64" width="88" height="88" xmlns="http://www.w3.org/2000/svg">
+                <!-- Tilted wifi arcs + slash -->
+                <g transform="rotate(-18 32 32)">
+                    <path d="M8 26c13-13 35-13 48 0" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" opacity="0.35"/>
+                    <path d="M16 34c9-9 23-9 32 0" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" opacity="0.55"/>
+                    <path d="M24 42c5-5 11-5 16 0" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" opacity="0.75"/>
+                    <circle cx="32" cy="50" r="3.5" fill="currentColor"/>
+                    <line x1="14" y1="52" x2="50" y2="16" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+                </g>
+            </svg>
+        </div>
+        <div class="azora-offline-text">
+            <h1>It looks like you haven&apos;t connected to the internet.</h1>
+            <p class="azora-offline-lead">Azora needs a connection for some features — like cloud accounts, updates, and joining live Norm Games.</p>
+            <ul class="azora-offline-list">
+                <li>Check your Wi‑Fi or mobile data</li>
+                <li>Turn airplane mode off if it&apos;s on</li>
+                <li>Then tap Try again below</li>
+            </ul>
+            <p class="azora-offline-note">Saved progress on this device still stays on this device. You can keep using offline parts once you&apos;re back online.</p>
+            <button type="button" class="azora-offline-retry" id="azoraOfflineRetryBtn" onclick="retryAzoraConnection()">Try again</button>
+            <p class="azora-offline-status" id="azoraOfflineStatus"></p>
+        </div>
+    </div>
+</div>
+
+
 <div id="introSplash" class="intro-splash">
     <div class="intro-content">
         <h2 class="slide-text text-welcome">Welcome to</h2>
@@ -206,7 +237,7 @@
     </div>
     <div id="userPanel" style="display:none;">
         <button id="searchButton" onclick="openSearch()">🔍 Search</button>
-        <button id="azafnButton" onclick="openAzaFn()">🤖 AzaFn</button>
+        <button id="azafnButton" class="azora-temp-disabled" type="button" aria-disabled="true" onclick="handleDisabledFeatureClick(event, this)">🤖 AzaFn</button>
         <button id="chatButton" onclick="openChatPanel()">💬 Chat</button>
         <button id="notifButton" class="notif-bell-btn" onclick="toggleNotifPanel()">
             🔔<span id="notifBadge" class="notif-badge" style="display:none;">0</span>
@@ -259,6 +290,7 @@
         <p>Welcome to the official Azora website! This website is currently under construction. More features will be added soon!</p>
         <h3>Coming Soon</h3>
         <p>More website features are currently being developed.</p>
+        <p><strong>Temporary:</strong> Create a Game and AzaFn are paused while we finish <em>Norm Games</em> — including the official <strong>Azora Roleplay</strong> world you can Join below.</p>
     </div>
     <h2>About Azora</h2>
     <p>Azora is a community-focused platform where you can build games, customize avatars, make friends, and explore creations made by players around the world. We're committed to keeping Azora friendly, creative, and fun for everyone.</p>
@@ -272,6 +304,28 @@
             <span class="slider"></span>
         </label>
     </div>
+
+    <section class="azora-games-section" id="azoraGamesSection">
+        <h2 class="azora-games-title">GAMES</h2>
+        <p class="azora-games-intro">Pick how you want to play. <strong>Norm Games</strong> are multiplayer servers you join. <strong>Quick Games</strong> are short scrollable experiences on Feed (not multiplayer).</p>
+        <h3 class="azora-games-sub">Norm Games</h3>
+        <p class="azora-games-hint">Join a 3D world with other players, chat, and friend requests. Your avatar comes with you.</p>
+        <div class="norm-games-list" id="normGamesList">
+            <article class="norm-game-card" data-game-id="azora-roleplay">
+                <div class="norm-game-icon">🎭</div>
+                <div class="norm-game-info">
+                    <h4>Azora Roleplay</h4>
+                    <p>Official world by <strong>Azora</strong>. Explore, chat, and roleplay with others in 3D.</p>
+                    <span class="norm-game-meta">3D · Multiplayer · Chat · Friends</span>
+                </div>
+                <button type="button" class="norm-join-btn" onclick="joinNormGame('azora-roleplay')">Join</button>
+            </article>
+        </div>
+        <h3 class="azora-games-sub">Quick Games</h3>
+        <p class="azora-games-hint">TikTok-style scroll feed. Play alone — no in-game friend requests (those are for Norm Games only).</p>
+        <button type="button" class="quick-games-open-btn" onclick="openPublicFeed()">🎮 Open Quick Games (Feed)</button>
+    </section>
+
     <div class="menu">
         <div class="dropdown">
             <button class="dropbtn" onclick="toggleDropdown()">Other Socials ▼</button>
@@ -283,7 +337,7 @@
             </div>
         </div>
         <button onclick="window.open('https://www.roblox.com/users/9744531169/profile','_blank')">Roblox Profile</button>
-        <button onclick="handleCreateClick()">🛠️ Create a Game</button>
+        <button id="createGameBtn" class="azora-temp-disabled" type="button" aria-disabled="true" onclick="handleDisabledFeatureClick(event, this)">🛠️ Create a Game</button>
     </div>
 </div>
 
@@ -491,6 +545,55 @@
     </div>
 </div>
 
+
+<div id="azoraDisabledTip" class="azora-disabled-tip" style="display:none;" role="status">Oops! Looks like this button is disabled!</div>
+<div id="normGameOverlay" class="azafn-overlay" style="display:none;">
+    <div class="azafn-header">
+        <h2><img src="logo.jpg" alt="Azora"> <span id="normGameTitle">Norm Game</span></h2>
+        <div class="azafn-tabs">
+            <button type="button" onclick="requestLeaveNormGame()" style="margin:0;background:#ff3b30;color:#fff;">Leave</button>
+        </div>
+    </div>
+    <div class="norm-game-body">
+        <div id="normGameLoading" class="norm-game-loading">
+            <img src="logo.jpg" alt="" class="norm-load-logo">
+            <div class="norm-load-title">Loading assets…</div>
+            <div class="norm-load-bar"><div class="norm-load-fill" id="normLoadFill"></div></div>
+            <div class="norm-load-hint" id="normLoadHint">Preparing the world</div>
+        </div>
+        <div id="normGamePlay" class="norm-game-play" style="display:none;">
+            <div class="norm-game-stage">
+                <div id="normGameCanvas" class="norm-game-canvas"></div>
+                <div class="norm-game-hud">
+                    <span id="normHudPlayers">Players: 1</span>
+                    <span id="normHudHint">WASD / arrows move</span>
+                </div>
+            </div>
+            <aside class="norm-game-side">
+                <div class="norm-side-block"><h3>Players</h3><div id="normPlayerList" class="norm-player-list"></div></div>
+                <div class="norm-side-block norm-chat-block">
+                    <h3>Server Chat</h3>
+                    <div id="normChatMessages" class="norm-chat-messages"></div>
+                    <div class="norm-chat-input-row">
+                        <input type="text" id="normChatInput" maxlength="200" placeholder="Say something…" onkeydown="if(event.key==='Enter')sendNormChat()">
+                        <button type="button" onclick="sendNormChat()">Send</button>
+                    </div>
+                    <p class="norm-chat-note">Friend requests work here (Norm Games). Guests show as ___.</p>
+                </div>
+            </aside>
+        </div>
+    </div>
+</div>
+<div id="normLeaveConfirm" class="overlay" style="display:none;">
+    <div class="popup" style="max-width:360px;">
+        <h2 style="color:#1e60ff !important;">Are you sure?</h2>
+        <p style="color:#333 !important;">Leave this Norm Game and return to Azora?</p>
+        <div style="display:flex;gap:10px;margin-top:8px;">
+            <button type="button" onclick="confirmLeaveNormGame(true)" style="flex:1;background:linear-gradient(180deg,#f87171,#ef4444);color:#fff;">Yes</button>
+            <button type="button" onclick="confirmLeaveNormGame(false)" style="flex:1;">No</button>
+        </div>
+    </div>
+</div>
 <script src="script.js"></script>
 <script>
 // Register Azora as installable app (not the staff website)

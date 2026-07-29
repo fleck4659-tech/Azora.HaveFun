@@ -2112,3 +2112,160 @@ html[data-azora-shell="app"] #installAppBtn {
     transform: none !important;
     background: #1f2937 !important;
 }
+
+
+
+/* === Offline full-screen (no internet) === */
+.azora-offline-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483640;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 18px;
+    box-sizing: border-box;
+    background: linear-gradient(165deg, #020617 0%, #0c1a3a 28%, #0f2a6b 55%, #122b5c 78%, #0a1628 100%);
+    color: #e8eefc;
+    font-family: Arial, Helvetica, sans-serif;
+    overflow: auto;
+}
+.azora-offline-screen.show {
+    display: flex !important;
+}
+.azora-offline-inner {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 28px;
+    max-width: 720px;
+    width: 100%;
+}
+.azora-offline-icon {
+    flex-shrink: 0;
+    color: #93c5fd;
+    filter: drop-shadow(0 8px 24px rgba(30, 96, 255, 0.35));
+}
+.azora-wifi-svg {
+    display: block;
+    transform: rotate(-6deg);
+}
+.azora-offline-text {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+}
+.azora-offline-text h1 {
+    margin: 0 0 12px 0;
+    font-size: clamp(1.25rem, 4vw, 1.75rem);
+    line-height: 1.3;
+    color: #f8fafc !important;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    font-weight: bold;
+}
+.azora-offline-lead {
+    margin: 0 0 14px 0;
+    font-size: 15px;
+    line-height: 1.5;
+    color: #bfdbfe !important;
+}
+.azora-offline-list {
+    margin: 0 0 14px 0;
+    padding-left: 1.2em;
+    color: #dbeafe;
+    font-size: 14px;
+    line-height: 1.55;
+}
+.azora-offline-list li {
+    margin-bottom: 4px;
+}
+.azora-offline-note {
+    margin: 0 0 18px 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #94a3b8 !important;
+}
+.azora-offline-retry {
+    margin: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    padding: 12px 22px !important;
+    border-radius: 12px !important;
+    border: 2px solid rgba(147, 197, 253, 0.55) !important;
+    background: linear-gradient(180deg, #1e40af, #1e3a8a) !important;
+    color: #f8fafc !important;
+    font-weight: bold !important;
+    font-size: 15px !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35) !important;
+    cursor: pointer;
+}
+.azora-offline-retry:hover {
+    background: linear-gradient(180deg, #2563eb, #1e40af) !important;
+    transform: none !important;
+}
+.azora-offline-status {
+    margin: 12px 0 0 0;
+    font-size: 13px;
+    color: #7dd3fc !important;
+    min-height: 1.2em;
+}
+@media (max-width: 640px) {
+    .azora-offline-inner {
+        flex-direction: column;
+        text-align: center;
+        gap: 18px;
+    }
+    .azora-offline-text {
+        text-align: center;
+    }
+    .azora-offline-list {
+        text-align: left;
+        display: inline-block;
+    }
+}
+
+
+button.azora-temp-disabled,.azora-temp-disabled{opacity:.42!important;filter:grayscale(.35);cursor:not-allowed!important;box-shadow:none!important;transform:none!important;background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(200,200,200,.45))!important;color:rgba(30,96,255,.55)!important;border:2px solid rgba(255,255,255,.35)!important}
+button.azora-temp-disabled:hover{transform:none!important;box-shadow:none!important;opacity:.5!important}
+.azora-disabled-tip{position:fixed;z-index:2147483646;max-width:220px;padding:8px 12px;background:#fff;color:#111;border:1px solid #d1d5db;border-radius:10px;font-size:12px;font-weight:bold;line-height:1.35;box-shadow:0 6px 18px rgba(0,0,0,.25);pointer-events:none;text-align:center}
+.azora-games-section{margin:28px 0 20px;padding:18px 16px 20px;border-radius:18px;background:var(--card-bg,rgba(255,255,255,.18));border:2px solid var(--card-border,#fff);box-shadow:0 4px 16px rgba(0,0,0,.12)}
+.azora-games-title{margin:0 0 8px;font-size:2rem;letter-spacing:.06em;text-transform:uppercase}
+.azora-games-intro,.azora-games-hint{margin:0 0 12px;font-size:14px;line-height:1.45}
+.azora-games-sub{margin:18px 0 6px;font-size:1.15rem}
+.norm-games-list{display:flex;flex-direction:column;gap:12px}
+.norm-game-card{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px;border-radius:14px;background:rgba(0,0,0,.18);border:2px solid rgba(255,255,255,.35)}
+.norm-game-icon{font-size:2rem;width:52px;height:52px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.15);border-radius:12px;flex-shrink:0}
+.norm-game-info{flex:1 1 180px;min-width:0}
+.norm-game-info h4{margin:0 0 4px;font-size:1.1rem}
+.norm-game-info p{margin:0 0 6px;font-size:13px;line-height:1.4}
+.norm-game-meta{font-size:11px;font-weight:bold;opacity:.85}
+.norm-join-btn{margin:0!important;width:auto!important;max-width:none!important;padding:12px 22px!important;background:linear-gradient(180deg,#34d399,#059669)!important;color:#fff!important;border:2px solid rgba(255,255,255,.5)!important}
+.quick-games-open-btn{margin:8px 0 0!important;background:linear-gradient(180deg,#60a5fa,#1e60ff)!important;color:#fff!important}
+.norm-game-body{flex:1;min-height:0;display:flex;flex-direction:column;background:#0b1220}
+.norm-game-loading{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;color:#e2e8f0}
+.norm-load-logo{width:80px;height:80px;border-radius:50%;margin-bottom:16px;border:3px solid rgba(255,255,255,.8);animation:azoraLoadPulse 1.4s ease-in-out infinite}
+.norm-load-title{font-size:1.25rem;font-weight:bold;margin-bottom:14px}
+.norm-load-bar{width:min(320px,80vw);height:10px;border-radius:999px;background:rgba(255,255,255,.15);overflow:hidden;border:1px solid rgba(255,255,255,.3)}
+.norm-load-fill{height:100%;width:0%;background:linear-gradient(90deg,#00ebd4,#60a5fa,#fff);transition:width .2s linear}
+.norm-load-hint{margin-top:12px;font-size:13px;color:#93c5fd}
+.norm-game-play{flex:1;min-height:0;display:flex;flex-direction:row}
+.norm-game-stage{flex:1;min-width:0;display:flex;flex-direction:column;padding:10px}
+.norm-game-canvas{flex:1;min-height:220px;border-radius:12px;border:3px solid #1e60ff;background:#111827;overflow:hidden;position:relative}
+.norm-game-hud{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;color:#cbd5e1;font-size:13px;font-weight:bold}
+.norm-game-side{width:min(320px,38vw);flex-shrink:0;display:flex;flex-direction:column;border-left:2px solid rgba(255,255,255,.15);background:rgba(0,0,0,.35)}
+.norm-side-block{padding:12px}
+.norm-side-block h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#93c5fd}
+.norm-player-list{max-height:160px;overflow-y:auto}
+.norm-player-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;margin-bottom:6px;border-radius:10px;background:rgba(255,255,255,.08);color:#fff;font-size:13px}
+.norm-player-row .np-name{font-weight:bold}
+.norm-player-row .np-actions button{margin:0!important;padding:4px 8px!important;font-size:11px!important;width:auto!important;background:linear-gradient(180deg,#a78bfa,#7c3aed)!important;color:#fff!important}
+.norm-chat-block{flex:1;display:flex;flex-direction:column;min-height:0;border-top:1px solid rgba(255,255,255,.12)}
+.norm-chat-messages{flex:1;min-height:120px;max-height:40vh;overflow-y:auto;background:rgba(0,0,0,.25);border-radius:10px;padding:10px;font-size:13px;color:#e2e8f0}
+.norm-chat-line{margin-bottom:8px;line-height:1.35}
+.norm-chat-line .nc-user{font-weight:bold;color:#60a5fa}
+.norm-chat-line .nc-user.guest{color:#94a3b8}
+.norm-chat-input-row{display:flex;gap:6px;margin-top:8px}
+.norm-chat-input-row input{flex:1;padding:10px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#fff}
+.norm-chat-input-row button{margin:0!important;width:auto!important;padding:10px 14px!important}
+.norm-chat-note{font-size:11px;color:#94a3b8;margin:8px 0 0}
+@media(max-width:800px){.norm-game-play{flex-direction:column}.norm-game-side{width:100%;border-left:none;border-top:2px solid rgba(255,255,255,.15);max-height:45vh}}

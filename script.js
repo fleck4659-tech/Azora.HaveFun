@@ -23,6 +23,45 @@ const database = {
 
 let currentSearchTab = "users";
 
+var AZORA_TEMP_DISABLE_CREATE = true;
+var AZORA_TEMP_DISABLE_AZAFN = true;
+function showDisabledFeatureTip(event, btnEl) {
+    var tip = document.getElementById("azoraDisabledTip");
+    if (!tip) return;
+    tip.textContent = "Oops! Looks like this button is disabled!";
+    tip.style.display = "block";
+    var pad = 12, tw = tip.offsetWidth || 200, th = tip.offsetHeight || 40;
+    var br = btnEl ? btnEl.getBoundingClientRect() : null;
+    var mx = (event && typeof event.clientX === "number") ? event.clientX : (br ? br.left + br.width / 2 : 40);
+    var my = (event && typeof event.clientY === "number") ? event.clientY : (br ? br.top : 40);
+    var x = mx + 14, y = my + 14;
+    if (br) {
+        var left = br.left - pad, right = br.right + pad, top = br.top - pad, bottom = br.bottom + pad;
+        var overlaps = !(x + tw < left || x > right || y + th < top || y > bottom);
+        if (overlaps) {
+            var spaceRight = window.innerWidth - br.right, spaceLeft = br.left, spaceBelow = window.innerHeight - br.bottom, spaceAbove = br.top;
+            var best = Math.max(spaceRight, spaceLeft, spaceBelow, spaceAbove);
+            if (best === spaceRight) { x = br.right + pad; y = Math.min(Math.max(my - th / 2, 8), window.innerHeight - th - 8); }
+            else if (best === spaceLeft) { x = br.left - pad - tw; y = Math.min(Math.max(my - th / 2, 8), window.innerHeight - th - 8); }
+            else if (best === spaceBelow) { y = br.bottom + pad; x = Math.min(Math.max(mx - tw / 2, 8), window.innerWidth - tw - 8); }
+            else { y = br.top - pad - th; x = Math.min(Math.max(mx - tw / 2, 8), window.innerWidth - tw - 8); }
+        }
+    }
+    x = Math.max(8, Math.min(x, window.innerWidth - tw - 8));
+    y = Math.max(8, Math.min(y, window.innerHeight - th - 8));
+    tip.style.left = x + "px"; tip.style.top = y + "px";
+    clearTimeout(showDisabledFeatureTip._t);
+    showDisabledFeatureTip._t = setTimeout(function () { tip.style.display = "none"; }, 2200);
+}
+function handleDisabledFeatureClick(event, btnEl) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    showDisabledFeatureTip(event || window.event, btnEl || (event && event.currentTarget));
+    return false;
+}
+window.showDisabledFeatureTip = showDisabledFeatureTip;
+window.handleDisabledFeatureClick = handleDisabledFeatureClick;
+
+
 // ============================================================
 // GLOBAL USER REGISTRY (shared across all devices)
 // GitHub Pages is static — real multi-user tracking needs a free
@@ -835,10 +874,13 @@ document.querySelectorAll(".overlay").forEach(overlay => {
 });
 
 // --- Creator site handling ---
-function handleCreateClick() {
+function handleCreateClick(event) {
+    if (typeof AZORA_TEMP_DISABLE_CREATE !== "undefined" && AZORA_TEMP_DISABLE_CREATE) {
+        handleDisabledFeatureClick(event || window.event, document.getElementById("createGameBtn"));
+        return;
+    }
     const loggedIn = localStorage.getItem("loggedIn");
     if (loggedIn === "true") {
-        // Creator stays a normal website (not part of the installable app)
         window.open("creator.html", "_blank");
     } else if (loggedIn === "guest") {
         alert("Guests can't use Creator Studio. Create a free account first!");
@@ -1788,6 +1830,11 @@ let azaFnPendingDescription = "";
 let azaFnGames = [];
 
 function openAzaFn() {
+    if (typeof AZORA_TEMP_DISABLE_AZAFN !== "undefined" && AZORA_TEMP_DISABLE_AZAFN) {
+        handleDisabledFeatureClick(window.event, document.getElementById("azafnButton"));
+        return;
+    }
+
     if (localStorage.getItem("loggedIn") === "guest") {
         alert("Guests can't use AzaFn. Create a free account to build games!");
         openCreateAccount();
@@ -5188,3 +5235,137 @@ window.saveAvatar = saveAvatar;
 window.loadAvatarFromStorage = loadAvatarFromStorage;
 window.refreshAvatarLock = refreshAvatarLock;
 window.wireAvatarColorInputs = wireAvatarColorInputs;
+
+
+
+// ============================================================
+// OFFLINE / NO INTERNET full-screen
+// ============================================================
+function isAzoraOnline() {
+    try {
+        if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+    } catch (e) {}
+    return true;
+}
+
+function showAzoraOfflineScreen(show) {
+    var el = document.getElementById("azoraOfflineScreen");
+    if (!el) return;
+    if (show) {
+        el.classList.add("show");
+        el.style.display = "flex";
+        el.setAttribute("aria-hidden", "false");
+        document.documentElement.setAttribute("data-azora-offline", "1");
+    } else {
+        el.classList.remove("show");
+        el.style.display = "none";
+        el.setAttribute("aria-hidden", "true");
+        document.documentElement.removeAttribute("data-azora-offline");
+        var st = document.getElementById("azoraOfflineStatus");
+        if (st) st.textContent = "";
+    }
+}
+
+function updateAzoraOnlineStatus() {
+    var online = isAzoraOnline();
+    showAzoraOfflineScreen(!online);
+    return online;
+}
+
+function retryAzoraConnection() {
+    var st = document.getElementById("azoraOfflineStatus");
+    if (st) st.textContent = "Checking connection…";
+
+    // navigator.onLine is fast; also try a tiny network check when possible
+    function finish(ok) {
+        if (ok) {
+            if (st) st.textContent = "Connected! Loading Azora…";
+            showAzoraOfflineScreen(false);
+        } else {
+            if (st) st.textContent = "Still offline. Check Wi‑Fi or data and try again.";
+            showAzoraOfflineScreen(true);
+        }
+    }
+
+    if (!isAzoraOnline()) {
+        finish(false);
+        return;
+    }
+
+    // Probe the network (may fail on pure offline / blocked fetch)
+    var ctrl = null;
+    var timer = null;
+    try {
+        if (typeof AbortController !== "undefined") ctrl = new AbortController();
+        timer = setTimeout(function () {
+            try { if (ctrl) ctrl.abort(); } catch (e) {}
+        }, 4000);
+        // Prefer same-origin so SW / CORS don't false-fail when online
+        var url = (typeof location !== "undefined" ? location.href.split("#")[0] : "./") + (location.search ? "" : "") ;
+        // cache-bust
+        var probe = "./manifest-azora.json?azora_ping=" + Date.now();
+        fetch(probe, {
+            method: "GET",
+            cache: "no-store",
+            signal: ctrl ? ctrl.signal : undefined
+        }).then(function (r) {
+            if (timer) clearTimeout(timer);
+            // Even a 404 means the network reached something
+            finish(true);
+        }).catch(function () {
+            if (timer) clearTimeout(timer);
+            // If browser says online but fetch fails, still trust onLine for file:// / local
+            if (typeof location !== "undefined" && location.protocol === "file:") {
+                finish(isAzoraOnline());
+            } else {
+                finish(isAzoraOnline());
+            }
+        });
+    } catch (e) {
+        if (timer) clearTimeout(timer);
+        finish(isAzoraOnline());
+    }
+}
+
+function initAzoraOfflineDetection() {
+    updateAzoraOnlineStatus();
+    window.addEventListener("online", function () {
+        updateAzoraOnlineStatus();
+    });
+    window.addEventListener("offline", function () {
+        updateAzoraOnlineStatus();
+    });
+    // Re-check when tab becomes visible
+    document.addEventListener("visibilitychange", function () {
+        if (!document.hidden) updateAzoraOnlineStatus();
+    });
+}
+
+window.isAzoraOnline = isAzoraOnline;
+window.showAzoraOfflineScreen = showAzoraOfflineScreen;
+window.updateAzoraOnlineStatus = updateAzoraOnlineStatus;
+window.retryAzoraConnection = retryAzoraConnection;
+window.initAzoraOfflineDetection = initAzoraOfflineDetection;
+
+(function bootOffline() {
+    function run() { initAzoraOfflineDetection(); }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
+    else run();
+    window.addEventListener("load", function () { updateAzoraOnlineStatus(); });
+})();
+
+
+var _normSession=null,_normAnim=null,_normScene=null,_normRenderer=null,_normCamera=null,_normPlayers=[],_normKeys={},_normLocalMesh=null;
+var NORM_GAMES={"azora-roleplay":{id:"azora-roleplay",title:"Azora Roleplay",owner:"Azora",dimensions:"3D"}};
+function getNormDisplayName(){try{var acc=JSON.parse(localStorage.getItem("azoraAccount")||"{}");var logged=localStorage.getItem("loggedIn");if(logged==="guest"||acc.isGuest||!acc.username)return"___";return acc.username||"___"}catch(e){return"___"}}
+function isNormGuest(){return localStorage.getItem("loggedIn")==="guest"||getNormDisplayName()==="___"}
+function joinNormGame(gameId){var def=NORM_GAMES[gameId];if(!def){alert("That Norm Game is not available yet.");return}var logged=localStorage.getItem("loggedIn");if(logged!=="true"&&logged!=="guest"){alert("Log in or continue as Guest to join Norm Games!");if(typeof openCreateAccount==="function")openCreateAccount();return}_normSession={id:def.id,title:def.title,startedAt:Date.now()};var ov=document.getElementById("normGameOverlay"),loading=document.getElementById("normGameLoading"),play=document.getElementById("normGamePlay"),title=document.getElementById("normGameTitle");if(title)title.textContent=def.title;if(loading)loading.style.display="flex";if(play)play.style.display="none";if(ov)ov.style.display="flex";var fill=document.getElementById("normLoadFill"),hint=document.getElementById("normLoadHint"),hints=["Loading terrain…","Loading avatars…","Connecting to server…","Almost ready…"],t0=Date.now(),duration=2800+Math.random()*1200;function tick(){var p=Math.min(1,(Date.now()-t0)/duration);if(fill)fill.style.width=Math.round(p*100)+"%";if(hint)hint.textContent=hints[Math.min(hints.length-1,Math.floor(p*hints.length))];if(p<1)requestAnimationFrame(tick);else{if(loading)loading.style.display="none";if(play)play.style.display="flex";startNormGameWorld(def)}}requestAnimationFrame(tick)}
+function startNormGameWorld(def){disposeNormWorld();var meName=getNormDisplayName();_normPlayers=[{id:"me",name:meName,isMe:true,isGuest:isNormGuest()},{id:"p2",name:"Azora",isMe:false,isGuest:false},{id:"p3",name:"BuilderBee",isMe:false,isGuest:false},{id:"p4",name:"___",isMe:false,isGuest:true}];if(meName.toLowerCase()==="azora"){_normPlayers=_normPlayers.filter(function(p){return p.id==="me"||p.name.toLowerCase()!=="azora"});_normPlayers.push({id:"p5",name:"SkyPilot",isMe:false,isGuest:false})}renderNormPlayerList();var chat=document.getElementById("normChatMessages");if(chat){chat.innerHTML="";appendNormChat("System","Welcome to "+def.title+"! Be kind and have fun.",true);appendNormChat("Azora","Hey everyone — official roleplay world is open!")}var container=document.getElementById("normGameCanvas");if(!container||typeof THREE==="undefined"){if(container)container.innerHTML="<p style='color:#fff;padding:20px;text-align:center;'>3D needs Three.js. Chat still works.</p>";return}while(container.firstChild)container.removeChild(container.firstChild);var w=container.clientWidth||640,h=container.clientHeight||360;_normScene=new THREE.Scene();_normScene.background=new THREE.Color(0x87b8ff);_normScene.fog=new THREE.Fog(0x87b8ff,25,90);_normCamera=new THREE.PerspectiveCamera(60,w/Math.max(h,1),0.1,200);_normCamera.position.set(0,4,10);_normRenderer=new THREE.WebGLRenderer({antialias:true});_normRenderer.setSize(w,h);container.appendChild(_normRenderer.domElement);_normScene.add(new THREE.AmbientLight(0xffffff,0.7));var sun=new THREE.DirectionalLight(0xffffff,0.85);sun.position.set(8,20,10);_normScene.add(sun);var ground=new THREE.Mesh(new THREE.BoxGeometry(80,1,80),new THREE.MeshLambertMaterial({color:0x3d9e5f}));ground.position.y=-0.5;_normScene.add(ground);for(var i=0;i<8;i++){var box=new THREE.Mesh(new THREE.BoxGeometry(2+Math.random()*2,1+Math.random()*3,2+Math.random()*2),new THREE.MeshLambertMaterial({color:0x1e60ff}));box.position.set((Math.random()-0.5)*40,box.geometry.parameters.height/2,(Math.random()-0.5)*40);_normScene.add(box)}function makeAvatar(ch,ct){var g=new THREE.Group();var head=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.55,0.55),new THREE.MeshLambertMaterial({color:ch}));head.position.y=1.55;var torso=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.9,0.4),new THREE.MeshLambertMaterial({color:ct}));torso.position.y=0.85;var legL=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.7,0.28),new THREE.MeshLambertMaterial({color:0x00ebd4}));legL.position.set(-0.18,0.2,0);var legR=legL.clone();legR.position.x=0.18;g.add(head);g.add(torso);g.add(legL);g.add(legR);return g}var av={head:"#ffcc00",torso:"#1e60ff"};try{var acc=JSON.parse(localStorage.getItem("azoraAccount")||"{}");if(acc.avatar){av.head=acc.avatar.head||av.head;av.torso=acc.avatar.torso||av.torso}}catch(e){}_normLocalMesh=makeAvatar(av.head,av.torso);_normScene.add(_normLocalMesh);[{x:4,z:-3,h:"#f472b6",t:"#1e60ff"},{x:-5,z:2,h:"#fbbf24",t:"#334155"},{x:3,z:5,h:"#94a3b8",t:"#64748b"}].forEach(function(o){var m=makeAvatar(o.h,o.t);m.position.set(o.x,0,o.z);_normScene.add(m)});_normKeys={};function onKey(e,down){var k=e.key.toLowerCase();if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"].indexOf(k)!==-1){_normKeys[k]=down;e.preventDefault()}}_normSession._kd=function(e){onKey(e,true)};_normSession._ku=function(e){onKey(e,false)};window.addEventListener("keydown",_normSession._kd);window.addEventListener("keyup",_normSession._ku);function animate(){_normAnim=requestAnimationFrame(animate);if(!_normLocalMesh||!_normRenderer)return;var sp=0.12,dx=0,dz=0;if(_normKeys.w||_normKeys.arrowup)dz-=sp;if(_normKeys.s||_normKeys.arrowdown)dz+=sp;if(_normKeys.a||_normKeys.arrowleft)dx-=sp;if(_normKeys.d||_normKeys.arrowright)dx+=sp;_normLocalMesh.position.x+=dx;_normLocalMesh.position.z+=dz;_normCamera.position.x=_normLocalMesh.position.x;_normCamera.position.z=_normLocalMesh.position.z+10;_normCamera.position.y=4;_normCamera.lookAt(_normLocalMesh.position.x,1.2,_normLocalMesh.position.z);_normRenderer.render(_normScene,_normCamera)}animate();var hud=document.getElementById("normHudPlayers");if(hud)hud.textContent="Players: "+_normPlayers.length}
+function renderNormPlayerList(){var el=document.getElementById("normPlayerList");if(!el)return;el.innerHTML="";_normPlayers.forEach(function(p){var row=document.createElement("div");row.className="norm-player-row";var label=document.createElement("span");label.className="np-name";label.textContent=p.name+(p.isMe?" (you)":"");row.appendChild(label);if(!p.isMe&&!p.isGuest&&p.name!=="___"&&localStorage.getItem("loggedIn")==="true"){var act=document.createElement("div");act.className="np-actions";var btn=document.createElement("button");btn.type="button";btn.textContent="Add Friend";btn.onclick=function(){alert("Friend request sent to "+p.name+"!")};act.appendChild(btn);row.appendChild(act)}else if(!p.isMe&&(p.isGuest||p.name==="___")){var tip=document.createElement("span");tip.style.fontSize="11px";tip.style.opacity="0.7";tip.textContent="Guest";row.appendChild(tip)}el.appendChild(row)})}
+function appendNormChat(user,text,isSystem){var box=document.getElementById("normChatMessages");if(!box)return;var line=document.createElement("div");line.className="norm-chat-line";var u=document.createElement("span");u.className="nc-user"+((user==="___"||user==="Guest")?" guest":"");u.textContent=isSystem?"• ":(user+": ");line.appendChild(u);line.appendChild(document.createTextNode(text));box.appendChild(line);box.scrollTop=box.scrollHeight}
+function sendNormChat(){var input=document.getElementById("normChatInput");if(!input)return;var msg=(input.value||"").trim();if(!msg)return;appendNormChat(getNormDisplayName(),msg);input.value="";if(Math.random()<0.45)setTimeout(function(){var bots=["Azora","BuilderBee","SkyPilot"];appendNormChat(bots[Math.floor(Math.random()*bots.length)],["Nice!","Welcome to the plaza!","Anyone want to explore?","Haha true"][Math.floor(Math.random()*4)])},800+Math.random()*1500)}
+function requestLeaveNormGame(){var c=document.getElementById("normLeaveConfirm");if(c)c.style.display="flex"}
+function confirmLeaveNormGame(yes){var c=document.getElementById("normLeaveConfirm");if(c)c.style.display="none";if(yes)leaveNormGame()}
+function disposeNormWorld(){if(_normAnim){cancelAnimationFrame(_normAnim);_normAnim=null}if(_normSession&&_normSession._kd){window.removeEventListener("keydown",_normSession._kd);window.removeEventListener("keyup",_normSession._ku)}if(_normRenderer){try{_normRenderer.dispose()}catch(e){}_normRenderer=null}_normScene=null;_normCamera=null;_normLocalMesh=null;var container=document.getElementById("normGameCanvas");if(container)while(container.firstChild)container.removeChild(container.firstChild)}
+function leaveNormGame(){disposeNormWorld();_normSession=null;var ov=document.getElementById("normGameOverlay");if(ov)ov.style.display="none";var fill=document.getElementById("normLoadFill");if(fill)fill.style.width="0%"}
+window.joinNormGame=joinNormGame;window.sendNormChat=sendNormChat;window.requestLeaveNormGame=requestLeaveNormGame;window.confirmLeaveNormGame=confirmLeaveNormGame;window.leaveNormGame=leaveNormGame;
