@@ -5479,6 +5479,7 @@ var _normCamera = null;
 var _normPlayers = []; // filled only from live presence / local you
 var _normRemoteMeshes = {};
 var _normKeys = {};
+var _normWallColliders = []; // AABB walls for hollow buildings
 var _normLocalMesh = null;
 var _normPresenceTimer = null;
 var _normMyPresenceId = null;
@@ -5894,7 +5895,35 @@ function joinNormGame(gameId) {
     requestAnimationFrame(tick);
 }
 
+
+/** Keep player outside wall AABBs (hollow buildings — walls only, not solid cubes) */
+function resolveNormWallCollisions(mesh) {
+    if (!mesh || !_normWallColliders || !_normWallColliders.length) return;
+    var r = 0.45; // player radius
+    var px = mesh.position.x;
+    var pz = mesh.position.z;
+    for (var i = 0; i < _normWallColliders.length; i++) {
+        var c = _normWallColliders[i];
+        var minX = c.minX - r, maxX = c.maxX + r, minZ = c.minZ - r, maxZ = c.maxZ + r;
+        if (px > minX && px < maxX && pz > minZ && pz < maxZ) {
+            // Push out along smallest overlap axis
+            var pushL = px - minX;
+            var pushR = maxX - px;
+            var pushB = pz - minZ;
+            var pushF = maxZ - pz;
+            var m = Math.min(pushL, pushR, pushB, pushF);
+            if (m === pushL) px = minX;
+            else if (m === pushR) px = maxX;
+            else if (m === pushB) pz = minZ;
+            else pz = maxZ;
+        }
+    }
+    mesh.position.x = px;
+    mesh.position.z = pz;
+}
+
 function buildNormCity(scene) {
+    _normWallColliders = [];
     // Large ground
     var ground = new THREE.Mesh(
         new THREE.BoxGeometry(400, 1.2, 400),
@@ -5923,34 +5952,73 @@ function buildNormCity(scene) {
         scene.add(w);
     });
 
+    // Hollow building: 4 separate exterior walls (not a solid cube).
+    // Optional door gap on the front so interiors are reachable.
+    function addWallCollider(minX, maxX, minZ, maxZ) {
+        _normWallColliders.push({ minX: minX, maxX: maxX, minZ: minZ, maxZ: maxZ });
+    }
+
     function building(x, z, w, h, d, color) {
-        var mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(w, h, d),
-            new THREE.MeshLambertMaterial({ color: color })
-        );
-        mesh.position.set(x, h / 2, z);
-        scene.add(mesh);
-        // Window rows
+        var wallT = 0.55; // wall thickness
+        var mat = new THREE.MeshLambertMaterial({ color: color });
         var winMat = new THREE.MeshLambertMaterial({ color: 0x93c5fd });
+        var doorW = Math.min(3.2, w * 0.35); // front door opening
+
+        function wallBox(ww, hh, dd, px, py, pz) {
+            var m = new THREE.Mesh(new THREE.BoxGeometry(ww, hh, dd), mat);
+            m.position.set(px, py, pz);
+            scene.add(m);
+            return m;
+        }
+
+        // --- 4 walls (hollow interior) ---
+        // Left wall (full)
+        wallBox(wallT, h, d, x - w / 2 + wallT / 2, h / 2, z);
+        addWallCollider(x - w / 2, x - w / 2 + wallT, z - d / 2, z + d / 2);
+
+        // Right wall (full)
+        wallBox(wallT, h, d, x + w / 2 - wallT / 2, h / 2, z);
+        addWallCollider(x + w / 2 - wallT, x + w / 2, z - d / 2, z + d / 2);
+
+        // Back wall (full)
+        wallBox(w, h, wallT, x, h / 2, z - d / 2 + wallT / 2);
+        addWallCollider(x - w / 2, x + w / 2, z - d / 2, z - d / 2 + wallT);
+
+        // Front wall = two segments with a door gap in the middle (not completely solid)
+        var sideSpan = (w - doorW) / 2;
+        if (sideSpan > 0.4) {
+            // front-left segment
+            wallBox(sideSpan, h, wallT, x - w / 2 + sideSpan / 2, h / 2, z + d / 2 - wallT / 2);
+            addWallCollider(x - w / 2, x - w / 2 + sideSpan, z + d / 2 - wallT, z + d / 2);
+            // front-right segment
+            wallBox(sideSpan, h, wallT, x + w / 2 - sideSpan / 2, h / 2, z + d / 2 - wallT / 2);
+            addWallCollider(x + w / 2 - sideSpan, x + w / 2, z + d / 2 - wallT, z + d / 2);
+        } else {
+            // tiny building — solid front (still a separate wall piece)
+            wallBox(w, h, wallT, x, h / 2, z + d / 2 - wallT / 2);
+            addWallCollider(x - w / 2, x + w / 2, z + d / 2 - wallT, z + d / 2);
+        }
+
+        // Roof (covers top; not a collision for walking at ground level)
+        var roof = new THREE.Mesh(
+            new THREE.BoxGeometry(w + 0.4, 0.35, d + 0.4),
+            new THREE.MeshLambertMaterial({ color: 0x1f2937 })
+        );
+        roof.position.set(x, h + 0.12, z);
+        scene.add(roof);
+
+        // Windows on left/right outer faces
         var floors = Math.max(2, Math.floor(h / 3.2));
         for (var f = 0; f < floors; f++) {
             for (var side = 0; side < 2; side++) {
-                var wx = side === 0 ? x - w / 2 - 0.05 : x + w / 2 + 0.05;
+                var wx = side === 0 ? x - w / 2 - 0.06 : x + w / 2 + 0.06;
                 for (var col = -1; col <= 1; col++) {
-                    var win = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 1.1), winMat);
-                    win.position.set(wx, 1.4 + f * 3.0, z + col * Math.min(2.2, d * 0.28));
-                    if (side === 1) win.rotation.y = Math.PI;
+                    var win = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.0, 1.0), winMat);
+                    win.position.set(wx, 1.3 + f * 3.0, z + col * Math.min(2.0, d * 0.25));
                     scene.add(win);
                 }
             }
         }
-        // Flat roof lip
-        var roof = new THREE.Mesh(
-            new THREE.BoxGeometry(w + 0.6, 0.4, d + 0.6),
-            new THREE.MeshLambertMaterial({ color: 0x1f2937 })
-        );
-        roof.position.set(x, h + 0.15, z);
-        scene.add(roof);
     }
 
     // Realistic-scale city blocks (much larger than before)
@@ -6148,6 +6216,11 @@ function startNormGameWorld(def) {
         if (Math.abs(throttle) > 0.001) {
             _normLocalMesh.position.x += fwdX * throttle * sp;
             _normLocalMesh.position.z += fwdZ * throttle * sp;
+        }
+
+        // Can't walk through building walls (hollow shells, solid walls)
+        if (typeof resolveNormWallCollisions === "function") {
+            resolveNormWallCollisions(_normLocalMesh);
         }
 
         _normLocalMesh.position.x = Math.max(-180, Math.min(180, _normLocalMesh.position.x));
