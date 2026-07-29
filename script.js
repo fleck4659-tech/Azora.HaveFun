@@ -5266,9 +5266,98 @@ function showAzoraOfflineScreen(show) {
     }
 }
 
+var _azoraLostTimer = null;
+var _azoraWasOnline = true;
+
+function showConnectionLostReminder(show) {
+    var el = document.getElementById("azoraConnectionLostToast");
+    if (!el) return;
+    if (show) {
+        el.classList.add("show");
+        el.style.display = "block";
+        // restart progress bar animation
+        var bar = document.getElementById("azoraConnectionLostBar");
+        if (bar) {
+            bar.style.animation = "none";
+            void bar.offsetWidth;
+            bar.style.animation = "";
+        }
+    } else {
+        el.classList.remove("show");
+        el.style.display = "none";
+    }
+}
+
+function clearConnectionLostTimer() {
+    if (_azoraLostTimer) {
+        clearTimeout(_azoraLostTimer);
+        _azoraLostTimer = null;
+    }
+}
+
+/** After 10s offline: leave any Norm Game, then show full Wi‑Fi screen */
+function finishConnectionLostSequence() {
+    _azoraLostTimer = null;
+    showConnectionLostReminder(false);
+
+    // Leave Norm Game if currently in one
+    try {
+        if (typeof _normSession !== "undefined" && _normSession) {
+            if (typeof leaveNormGame === "function") leaveNormGame();
+        }
+        // Also leave playable Quick Game runtime if open
+        if (typeof closeGamePlay === "function") {
+            var gp = document.getElementById("gamePlayOverlay");
+            if (gp && gp.style.display !== "none" && gp.style.display !== "") {
+                try { closeGamePlay(); } catch (e) {}
+            }
+        }
+    } catch (e) {}
+
+    // Full offline / Wi‑Fi error screen
+    showAzoraOfflineScreen(true);
+}
+
+function handleAzoraWentOffline() {
+    if (!isAzoraOnline()) {
+        // Already showing full screen? still ok
+        clearConnectionLostTimer();
+        showConnectionLostReminder(true);
+        _azoraLostTimer = setTimeout(function () {
+            // Only finish if still offline
+            if (!isAzoraOnline()) {
+                finishConnectionLostSequence();
+            } else {
+                showConnectionLostReminder(false);
+            }
+        }, 10000);
+    }
+}
+
+function handleAzoraWentOnline() {
+    clearConnectionLostTimer();
+    showConnectionLostReminder(false);
+    showAzoraOfflineScreen(false);
+}
+
 function updateAzoraOnlineStatus() {
     var online = isAzoraOnline();
-    showAzoraOfflineScreen(!online);
+    if (online) {
+        handleAzoraWentOnline();
+    } else {
+        // On first load already offline → go straight to full Wi‑Fi screen
+        // (no 10s wait). Mid-session drop uses handleAzoraWentOffline.
+        var el = document.getElementById("azoraOfflineScreen");
+        var toast = document.getElementById("azoraConnectionLostToast");
+        var toastShowing = toast && toast.classList.contains("show");
+        var fullShowing = el && (el.classList.contains("show") || el.style.display === "flex");
+        if (!toastShowing && !fullShowing && _azoraWasOnline) {
+            handleAzoraWentOffline();
+        } else if (!online && !toastShowing && !fullShowing) {
+            showAzoraOfflineScreen(true);
+        }
+    }
+    _azoraWasOnline = online;
     return online;
 }
 
@@ -5328,16 +5417,31 @@ function retryAzoraConnection() {
 }
 
 function initAzoraOfflineDetection() {
-    updateAzoraOnlineStatus();
+    try { _azoraWasOnline = isAzoraOnline(); } catch (e) { _azoraWasOnline = true; }
+    // Initial: if already offline at open, show full Wi‑Fi screen immediately
+    if (!isAzoraOnline()) {
+        showAzoraOfflineScreen(true);
+        _azoraWasOnline = false;
+    } else {
+        showAzoraOfflineScreen(false);
+        showConnectionLostReminder(false);
+    }
     window.addEventListener("online", function () {
-        updateAzoraOnlineStatus();
+        _azoraWasOnline = true;
+        handleAzoraWentOnline();
     });
     window.addEventListener("offline", function () {
-        updateAzoraOnlineStatus();
+        handleAzoraWentOffline();
+        _azoraWasOnline = false;
     });
-    // Re-check when tab becomes visible
     document.addEventListener("visibilitychange", function () {
-        if (!document.hidden) updateAzoraOnlineStatus();
+        if (!document.hidden) {
+            if (isAzoraOnline()) handleAzoraWentOnline();
+            else if (!_azoraLostTimer) {
+                // Still offline and no reminder running → full screen
+                showAzoraOfflineScreen(true);
+            }
+        }
     });
 }
 
@@ -5346,6 +5450,9 @@ window.showAzoraOfflineScreen = showAzoraOfflineScreen;
 window.updateAzoraOnlineStatus = updateAzoraOnlineStatus;
 window.retryAzoraConnection = retryAzoraConnection;
 window.initAzoraOfflineDetection = initAzoraOfflineDetection;
+window.showConnectionLostReminder = showConnectionLostReminder;
+window.handleAzoraWentOffline = handleAzoraWentOffline;
+window.handleAzoraWentOnline = handleAzoraWentOnline;
 
 (function bootOffline() {
     function run() { initAzoraOfflineDetection(); }

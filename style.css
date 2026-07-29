@@ -2644,3 +2644,68 @@ button.azora-temp-disabled:hover{transform:none!important;box-shadow:none!import
 .popup[style] {
     max-width: min(380px, calc(100vw - 20px)) !important;
 }
+
+
+
+/* Connection lost 10s reminder */
+.azora-connection-lost-toast {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2147483630;
+    width: min(420px, calc(100vw - 24px));
+    background: linear-gradient(180deg, #0f172a, #1e2937);
+    color: #f8fafc;
+    border: 2px solid #60a5fa;
+    border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+    padding: 14px 16px 10px;
+    box-sizing: border-box;
+    display: none;
+    animation: azoraClIn 0.35s ease;
+}
+.azora-connection-lost-toast.show {
+    display: block !important;
+}
+.azora-cl-inner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+.azora-cl-icon {
+    font-size: 1.4rem;
+    line-height: 1.2;
+    flex-shrink: 0;
+}
+.azora-cl-text {
+    font-size: 14px;
+    font-weight: bold;
+    line-height: 1.4;
+    color: #e2e8f0;
+}
+.azora-cl-bar {
+    margin-top: 12px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.35);
+    overflow: hidden;
+}
+.azora-cl-bar-fill {
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg, #60a5fa, #1e60ff);
+    transform-origin: left center;
+    animation: none;
+}
+.azora-connection-lost-toast.show .azora-cl-bar-fill {
+    animation: azoraClShrink 10s linear forwards;
+}
+@keyframes azoraClIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@keyframes azoraClShrink {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+}
