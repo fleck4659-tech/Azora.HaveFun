@@ -6098,11 +6098,14 @@ function startNormGameWorld(def) {
         var orbitSp = 0.035;
         if (_normKeys["arrowleft"]) _normSession.camYaw += orbitSp;
         if (_normKeys["arrowright"]) _normSession.camYaw -= orbitSp;
-        if (_normKeys["arrowup"]) _normSession.camPitch = Math.min(1.1, _normSession.camPitch + orbitSp);
-        if (_normKeys["arrowdown"]) _normSession.camPitch = Math.max(0.08, _normSession.camPitch - orbitSp);
+        // Pitch: lower min so camera can orbit down and look UP more at the avatar
+        var PITCH_MIN = -0.55;  // below horizontal — see upward
+        var PITCH_MAX = 1.35;   // high above — look down
+        if (_normKeys["arrowup"]) _normSession.camPitch = Math.min(PITCH_MAX, _normSession.camPitch + orbitSp);
+        if (_normKeys["arrowdown"]) _normSession.camPitch = Math.max(PITCH_MIN, _normSession.camPitch - orbitSp);
         // Right joystick analog (smooth)
         _normSession.camYaw -= (_normSession.orbitX || 0) * 0.05;
-        _normSession.camPitch = Math.max(0.08, Math.min(1.1, _normSession.camPitch + (_normSession.orbitY || 0) * 0.04));
+        _normSession.camPitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, _normSession.camPitch + (_normSession.orbitY || 0) * 0.04));
 
         var target = _normLocalMesh.position;
         var dist = _normSession.camDist;
@@ -6117,7 +6120,11 @@ function startNormGameWorld(def) {
         _normCamera.position.x += (idealX - _normCamera.position.x) * lerp;
         _normCamera.position.y += (idealY - _normCamera.position.y) * lerp;
         _normCamera.position.z += (idealZ - _normCamera.position.z) * lerp;
-        _normCamera.lookAt(target.x, target.y + 1.05, target.z);
+        // Aim a bit higher when camera is low so "looking up" frames the face
+        var lookY = target.y + 1.05;
+        if (pitch < 0.15) lookY = target.y + 1.25;
+        if (pitch < -0.2) lookY = target.y + 1.45;
+        _normCamera.lookAt(target.x, lookY, target.z);
 
         _normRenderer.render(_normScene, _normCamera);
     }
