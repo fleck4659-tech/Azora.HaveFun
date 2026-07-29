@@ -6450,7 +6450,7 @@ function startAIImageGenerate() {
 
     // Safe path → ~30 seconds, then generate
     runAIImageProgress(30000, "Generating your image… this takes about 30 seconds");
-    showAIImageStatus("info", "Creating a family-friendly image from your description…");
+    showAIImageStatus("info", "Creating your image from your description…");
 
     _aiImgTimer = setTimeout(function () {
         finishAIImageGenerate(prompt);
@@ -6472,8 +6472,9 @@ function finishAIImageGenerate(prompt) {
         return;
     }
 
-    // Build a safe image request — boost family-friendly style; never send blocked text
-    var safePrompt = prompt + ", cute friendly cartoon style, family friendly, colorful, clean art, no violence, no gore";
+    // Build a safe image request — safety tags only (no extra subjects like "family")
+    // Safety tags only — do NOT add "family" or other subjects the model might draw into every scene
+    var safePrompt = prompt + ", high quality, detailed, clean art, appropriate for all ages, no violence, no gore, no blood, no nsfw";
     var url = "https://image.pollinations.ai/prompt/" + encodeURIComponent(safePrompt) +
         "?width=768&height=768&nologo=true&safe=true&seed=" + Math.floor(Math.random() * 1e9);
 
