@@ -6303,30 +6303,25 @@ var _aiImgTimer = null;
 var _aiImgProgressTimer = null;
 
 /** Returns { blocked: true, reason } or { blocked: false } */
+/** Returns { blocked: true, reason, message } or { blocked: false } */
 function moderateAIImagePrompt(raw) {
     var text = String(raw || "").toLowerCase().replace(/\s+/g, " ").trim();
-    if (!text || text.length < 3) {
+    if (!text || text.length < 2) {
         return { blocked: true, reason: "empty", message: "Please describe an image (at least a few words)." };
     }
 
-    // Phrases / words that violate Azora TOS (explicit, violence, gore, weapons harm, hate, etc.)
+    // TOS / safety blocklist (violence, gore, blood, explicit, etc.)
     var banned = [
-        // explicit / sexual
         "nude", "naked", "nsfw", "porn", "sex", "sexy", "sexual", "erotic", "hentai", "xxx",
-        "onlyfans", "boobs", "breast", "penis", "vagina", "genital", "underwear only",
-        // violence / gore / blood
+        "onlyfans", "boobs", "breast", "penis", "vagina", "genital",
         "gore", "gory", "blood", "bloody", "bleeding", "dismember", "decapitat", "corpse",
         "murder", "kill", "killing", "stab", "shoot", "gunshot", "torture", "massacre",
         "war crime", "execution", "behead", "guts", "intestines", "body horror",
-        // weapons used for harm framing
+        "anatomical heart", "real heart", "human organ", "human heart organ",
         "shoot someone", "kill someone", "hurt someone", "attack people",
-        // self-harm
         "suicide", "self-harm", "self harm", "cut myself",
-        // hate / extreme
         "racial slur", "nazi", "terrorist attack", "bomb the",
-        // drugs (illegal framing)
         "meth lab", "cocaine", "heroin inject",
-        // exploitation
         "child exploit", "underage nude", "loli", "shota"
     ];
 
@@ -6341,6 +6336,36 @@ function moderateAIImagePrompt(raw) {
     }
     return { blocked: false };
 }
+
+/**
+ * Rewrite the user's prompt so the image model draws what people usually mean,
+ * and never drifts into gory / medical / anatomical versions of everyday words.
+ */
+function steerAIImagePrompt(raw) {
+    var original = String(raw || "").trim();
+    var lower = original.toLowerCase().replace(/\s+/g, " ").trim();
+
+    // "heart" / "a heart" / "heart!" → cute love symbol, NOT a real organ
+    var heartOnly = /^(a\s+)?hearts?[!.?]*$/i.test(lower) ||
+        /^(draw|make|generate|create)\s+(me\s+)?(a\s+)?hearts?[!.?]*$/i.test(lower);
+    if (heartOnly) {
+        return "a cute simple cartoon love heart symbol, bright red heart emoji style, clean white background, not anatomical, not a real organ, no veins, no blood, no medical illustration";
+    }
+    // heart mentioned as symbol / love
+    if (/\bheart\b/.test(lower) && !/\b(organ|anatomical|medical|surgery|cardiology|real human)\b/.test(lower)) {
+        original = original.replace(/\bhearts?\b/gi, "cute cartoon love-heart symbol");
+        original += ", love heart emoji style, not anatomical, not a real organ, no blood, no veins";
+    }
+
+    // Common safe rewrites
+    if (/^(a\s+)?skull[!.?]*$/i.test(lower)) {
+        return "a friendly cartoon skull icon, simple cute style, not scary, no gore";
+    }
+
+    return original;
+}
+
+
 
 function openAIImageGenerator() {
     var ov = document.getElementById("aiImageOverlay");
@@ -6473,8 +6498,9 @@ function finishAIImageGenerate(prompt) {
     }
 
     // Build a safe image request — safety tags only (no extra subjects like "family")
-    // Safety tags only — do NOT add "family" or other subjects the model might draw into every scene
-    var safePrompt = prompt + ", high quality, detailed, clean art, appropriate for all ages, no violence, no gore, no blood, no nsfw";
+    // Steer ambiguous words (e.g. "heart" → cute symbol, not organ) + safety tags (no extra subjects)
+    var steered = (typeof steerAIImagePrompt === "function") ? steerAIImagePrompt(prompt) : prompt;
+    var safePrompt = steered + ", high quality, clean art, appropriate for all ages, no violence, no gore, no blood, no medical organ illustration, no nsfw";
     var url = "https://image.pollinations.ai/prompt/" + encodeURIComponent(safePrompt) +
         "?width=768&height=768&nologo=true&safe=true&seed=" + Math.floor(Math.random() * 1e9);
 
@@ -6533,3 +6559,4 @@ window.openAIImageGenerator = openAIImageGenerator;
 window.closeAIImageGenerator = closeAIImageGenerator;
 window.startAIImageGenerate = startAIImageGenerate;
 window.moderateAIImagePrompt = moderateAIImagePrompt;
+window.steerAIImagePrompt = steerAIImagePrompt;
