@@ -200,16 +200,27 @@ footer {
     align-items: center;
     z-index: 10000;
     backdrop-filter: blur(8px);
+    padding: 10px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    align-content: center;
 }
 
 .popup {
-    width: 430px;
+    width: min(360px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    max-height: min(88vh, 640px);
     background: rgba(255, 255, 255, 0.95);
     border: 3px solid #1e60ff;
-    border-radius: 20px;
-    padding: 30px;
+    border-radius: 16px;
+    padding: 16px 14px;
     text-align: center;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
 }
 
 .popup h2, .popup p, .popup label {
@@ -217,29 +228,33 @@ footer {
 }
 
 .popupLogo {
-    width: 90px;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
-    margin-bottom: 15px;
+    margin-bottom: 8px;
+    object-fit: cover;
 }
 
 .popup input {
     width: 100%;
-    padding: 13px;
-    margin-top: 12px;
+    padding: 10px 12px;
+    margin-top: 8px;
     border: 2px solid #1e60ff;
     background-color: #ffffff;
     color: #1e60ff;
     border-radius: 10px;
     box-sizing: border-box;
-    font-size: 15px;
+    font-size: 14px;
 }
 
 .popup button {
     width: 100%;
-    margin-top: 20px;
+    margin-top: 10px;
+    padding: 10px 14px;
     background: linear-gradient(180deg, #ffffff 0%, #e6e6e6 100%);
     color: #1e60ff;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+    box-sizing: border-box;
 }
 
 .checkbox {
@@ -334,7 +349,7 @@ input:checked + .slider:before {
 }
 
 .tos-content {
-    max-height: 260px;
+    max-height: min(32vh, 180px);
     overflow-y: auto;
     text-align: left;
     background: rgba(30, 96, 255, 0.05);
@@ -2416,4 +2431,216 @@ button.azora-temp-disabled:hover{transform:none!important;box-shadow:none!import
     border-radius: 12px;
     border: 3px solid #1e60ff;
     box-shadow: 0 8px 24px rgba(30,96,255,0.25);
+}
+
+
+
+/* ============================================================
+   RESPONSIVE POPUPS — fit mobile + desktop, no cut-off
+   ============================================================ */
+.overlay {
+    padding: max(8px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.popup,
+.popup.settings-popup,
+.popup.profile-popup,
+.popup.search-popup,
+.popup.tos-popup,
+.popup.ai-image-popup,
+#accountOverlay .popup,
+#settingsOverlay .popup,
+#searchOverlay .popup,
+#tosOverlay .popup,
+#profileOverlay .popup,
+#notifOverlay .popup,
+#aiCompanionOverlay .popup,
+#aiImageOverlay .popup,
+#chatArchivesOverlay .popup,
+#normLeaveConfirm .popup {
+    width: min(340px, calc(100vw - 20px)) !important;
+    max-width: calc(100vw - 20px) !important;
+    max-height: min(86vh, 620px) !important;
+    margin: auto !important;
+    padding: 14px 12px !important;
+    border-radius: 14px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box !important;
+}
+
+/* Slightly wider only when room exists (tablet/desktop) */
+@media (min-width: 520px) {
+    .popup,
+    .popup.settings-popup,
+    .popup.profile-popup,
+    .popup.search-popup,
+    .popup.tos-popup,
+    .popup.ai-image-popup,
+    #accountOverlay .popup,
+    #settingsOverlay .popup,
+    #searchOverlay .popup,
+    #tosOverlay .popup,
+    #profileOverlay .popup,
+    #notifOverlay .popup,
+    #aiCompanionOverlay .popup,
+    #aiImageOverlay .popup,
+    #chatArchivesOverlay .popup,
+    #normLeaveConfirm .popup {
+        width: min(380px, calc(100vw - 32px)) !important;
+        max-width: min(380px, calc(100vw - 32px)) !important;
+        padding: 16px 14px !important;
+    }
+}
+
+.popup h1 {
+    font-size: clamp(1.1rem, 4vw, 1.45rem) !important;
+    margin: 6px 0 8px !important;
+    line-height: 1.25 !important;
+}
+.popup h2 {
+    font-size: clamp(1.05rem, 3.6vw, 1.3rem) !important;
+    margin: 4px 0 8px !important;
+    line-height: 1.25 !important;
+}
+.popup p,
+.popup label,
+.popup .checkbox {
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+}
+.popupLogo {
+    width: 56px !important;
+    height: 56px !important;
+    margin-bottom: 6px !important;
+}
+.popup input,
+.popup select,
+.popup textarea {
+    font-size: 14px !important;
+    padding: 9px 11px !important;
+    margin-top: 6px !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+.popup button {
+    margin-top: 8px !important;
+    padding: 10px 12px !important;
+    font-size: 13px !important;
+}
+.popup .checkbox {
+    margin-top: 8px !important;
+}
+.popup hr {
+    margin: 10px 0 !important;
+}
+
+/* Settings / security panels scroll inside popup */
+.settings-panel {
+    max-height: min(52vh, 380px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 2px;
+}
+.settings-section {
+    margin-bottom: 12px !important;
+}
+.settings-tabs {
+    flex-wrap: wrap;
+    gap: 6px !important;
+}
+.settings-tab {
+    padding: 8px 10px !important;
+    font-size: 12px !important;
+}
+
+/* Search results don't blow past viewport */
+.search-results {
+    max-height: min(28vh, 160px) !important;
+}
+.tos-content {
+    max-height: min(28vh, 160px) !important;
+}
+.notif-list {
+    max-height: min(40vh, 280px) !important;
+    overflow-y: auto;
+}
+
+/* Profile games list */
+.profile-games-section {
+    max-height: min(24vh, 160px);
+    overflow-y: auto;
+}
+
+/* AI image result stays inside */
+.ai-img-result img {
+    max-height: min(36vh, 280px) !important;
+    width: auto !important;
+    object-fit: contain;
+}
+.ai-image-prompt {
+    min-height: 64px !important;
+    max-height: 120px !important;
+}
+
+/* Guest divider tighter */
+.guest-divider {
+    margin: 8px 0 !important;
+}
+.guest-hint {
+    font-size: 11px !important;
+    margin: 4px 0 8px !important;
+}
+
+/* Very small phones */
+@media (max-width: 380px) {
+    .popup,
+    .popup.settings-popup,
+    .popup.profile-popup,
+    .popup.search-popup,
+    .popup.tos-popup,
+    .popup.ai-image-popup,
+    #accountOverlay .popup,
+    #settingsOverlay .popup {
+        width: calc(100vw - 12px) !important;
+        max-width: calc(100vw - 12px) !important;
+        max-height: 90vh !important;
+        padding: 12px 10px !important;
+        border-radius: 12px !important;
+    }
+    .popupLogo {
+        width: 48px !important;
+        height: 48px !important;
+    }
+}
+
+/* Short screens (landscape phones) */
+@media (max-height: 520px) {
+    .popup,
+    .popup.settings-popup,
+    .popup.profile-popup,
+    .popup.search-popup,
+    .popup.tos-popup,
+    .popup.ai-image-popup {
+        max-height: 92vh !important;
+        padding: 10px !important;
+    }
+    .popupLogo {
+        width: 40px !important;
+        height: 40px !important;
+        margin-bottom: 4px !important;
+    }
+    .settings-panel {
+        max-height: 42vh !important;
+    }
+}
+
+/* Inline max-width styles on popups should not fight us */
+.popup[style] {
+    max-width: min(380px, calc(100vw - 20px)) !important;
 }

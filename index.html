@@ -127,7 +127,7 @@
 </div>
 
 <div id="settingsOverlay" class="overlay" style="display:none;">
-    <div class="popup settings-popup" style="max-width:460px;text-align:left;">
+    <div class="popup settings-popup" style="max-width:min(380px,calc(100vw - 20px));text-align:left;">
         <h2 style="text-align:center;">⚙️ Settings</h2>
 
         <div class="settings-tabs">
@@ -383,7 +383,7 @@
 
 <!-- User Profile -->
 <div id="profileOverlay" class="overlay" style="display:none;">
-    <div class="popup profile-popup" style="max-width:420px;">
+    <div class="popup profile-popup" style="max-width:min(360px,calc(100vw - 20px));">
         <img src="logo.jpg" class="popupLogo" alt="Avatar" id="profileAvatarImg">
         <h2 id="profileUsername">Username</h2>
         <div id="profileUserId" class="profile-user-id"></div>
@@ -444,7 +444,7 @@
 
 <!-- Player message archives -->
 <div id="chatArchivesOverlay" class="overlay" style="display:none;">
-    <div class="popup" style="max-width:520px;max-height:85vh;display:flex;flex-direction:column;">
+    <div class="popup" style="max-width:min(380px,calc(100vw - 20px));max-height:min(86vh,620px);display:flex;flex-direction:column;">
         <h1 style="font-size:1.25rem;">Message Archives</h1>
         <p style="color:#666;font-size:12px;margin-top:-6px;">Every friend message is saved here, even if removed from the live chat.</p>
         <div id="chatArchivesBody" style="text-align:left;overflow-y:auto;flex:1;max-height:50vh;font-size:13px;"></div>
@@ -454,7 +454,7 @@
 
 <!-- AI Companion customize -->
 <div id="aiCompanionOverlay" class="overlay" style="display:none;">
-    <div class="popup" style="max-width:420px;">
+    <div class="popup" style="max-width:min(360px,calc(100vw - 20px));">
         <h1 style="font-size:1.3rem;">Your AI Companion</h1>
         <p style="color:#666;font-size:13px;margin-top:-6px;">Customize the AI you chat with by default.</p>
         <label style="display:block;text-align:left;font-size:13px;font-weight:bold;margin:8px 0 4px;">AI name (what shows in Chats)</label>
@@ -487,7 +487,7 @@
 
 <!-- Notifications Panel -->
 <div id="notifOverlay" class="overlay" style="display:none;">
-    <div class="popup" style="max-width:420px;text-align:left;">
+    <div class="popup" style="max-width:min(360px,calc(100vw - 20px));text-align:left;">
         <h2 style="text-align:center;">🔔 Notifications</h2>
         <div id="notifList" class="notif-list"></div>
         <div style="display:flex;gap:8px;margin-top:15px;">
@@ -596,7 +596,7 @@
     </div>
 </div>
 <div id="normLeaveConfirm" class="overlay" style="display:none;z-index:2147483000;">
-    <div class="popup" style="max-width:360px;">
+    <div class="popup" style="max-width:min(340px,calc(100vw - 20px));">
         <h2 style="color:#1e60ff !important;">Are you sure?</h2>
         <p style="color:#333 !important;">Leave this Norm Game and return to Azora?</p>
         <div style="display:flex;gap:10px;margin-top:8px;">
@@ -608,7 +608,7 @@
 
 <!-- Azora AI Image Generator (heavily moderated) -->
 <div id="aiImageOverlay" class="overlay" style="display:none;">
-    <div class="popup ai-image-popup" style="max-width:480px;text-align:left;">
+    <div class="popup ai-image-popup" style="max-width:min(360px,calc(100vw - 20px));text-align:left;">
         <h2 style="text-align:center;margin-top:0;">🎨 AI Image Generator</h2>
         <p class="ai-img-policy">Azora is a family-friendly platform. Prompts with violence, gore, blood, explicit content, or other TOS violations are blocked.</p>
         <label class="settings-label" for="aiImagePrompt">Describe your image</label>
