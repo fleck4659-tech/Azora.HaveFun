@@ -5480,6 +5480,7 @@ var _normPlayers = []; // filled only from live presence / local you
 var _normRemoteMeshes = {};
 var _normKeys = {};
 var _normWallColliders = []; // AABB walls for hollow buildings
+var _normFloorColliders = []; // floors + ramp surfaces
 var _normLocalMesh = null;
 var _normPresenceTimer = null;
 var _normMyPresenceId = null;
@@ -5896,17 +5897,48 @@ function joinNormGame(gameId) {
 }
 
 
+
+/** Highest floor/ramp surface under the player (or ground) */
+function getNormSupportY(px, pz, currentY) {
+    var groundY = (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02);
+    var best = groundY;
+    if (!_normFloorColliders || !_normFloorColliders.length) return best;
+    for (var i = 0; i < _normFloorColliders.length; i++) {
+        var c = _normFloorColliders[i];
+        if (px < c.minX || px > c.maxX || pz < c.minZ || pz > c.maxZ) continue;
+        var sy;
+        if (c.type === "ramp") {
+            var t = (c.maxZ - c.minZ) > 0.001 ? (pz - c.minZ) / (c.maxZ - c.minZ) : 0;
+            if (t < 0) t = 0;
+            if (t > 1) t = 1;
+            sy = c.yAtMinZ + t * (c.yAtMaxZ - c.yAtMinZ);
+        } else {
+            sy = c.y;
+        }
+        // Only snap onto surfaces at or below us (or slightly above while climbing)
+        if (sy <= currentY + 0.55 && sy > best) best = sy;
+    }
+    return best;
+}
+
 /** Keep player outside wall AABBs (hollow buildings — walls only, not solid cubes) */
 function resolveNormWallCollisions(mesh) {
     if (!mesh || !_normWallColliders || !_normWallColliders.length) return;
     var r = 0.45; // player radius
     var px = mesh.position.x;
     var pz = mesh.position.z;
+    // Approximate player body height range while standing/jumping (feet y ≈ ground)
+    var footY = mesh.position.y || 0;
+    var headY = footY + 2.4;
     for (var i = 0; i < _normWallColliders.length; i++) {
         var c = _normWallColliders[i];
+        // Door cap walls only collide if player body overlaps their Y range
+        if (typeof c.minY === "number") {
+            var cMaxY = (typeof c.maxY === "number") ? c.maxY : 999;
+            if (headY < c.minY || footY > cMaxY) continue; // under the door lintel — allowed through
+        }
         var minX = c.minX - r, maxX = c.maxX + r, minZ = c.minZ - r, maxZ = c.maxZ + r;
         if (px > minX && px < maxX && pz > minZ && pz < maxZ) {
-            // Push out along smallest overlap axis
             var pushL = px - minX;
             var pushR = maxX - px;
             var pushB = pz - minZ;
@@ -5924,6 +5956,7 @@ function resolveNormWallCollisions(mesh) {
 
 function buildNormCity(scene) {
     _normWallColliders = [];
+    _normFloorColliders = [];
     // Large ground
     var ground = new THREE.Mesh(
         new THREE.BoxGeometry(400, 1.2, 400),
@@ -5962,7 +5995,10 @@ function buildNormCity(scene) {
         var wallT = 0.55; // wall thickness
         var mat = new THREE.MeshLambertMaterial({ color: color });
         var winMat = new THREE.MeshLambertMaterial({ color: 0x93c5fd });
+        var floorMat = new THREE.MeshLambertMaterial({ color: 0x78716c });
+        var stairMat = new THREE.MeshLambertMaterial({ color: 0x57534e });
         var doorW = Math.min(3.2, w * 0.35); // front door opening
+        var floorStep = 3.2; // height between floors
 
         function wallBox(ww, hh, dd, px, py, pz) {
             var m = new THREE.Mesh(new THREE.BoxGeometry(ww, hh, dd), mat);
@@ -5972,40 +6008,144 @@ function buildNormCity(scene) {
         }
 
         // --- 4 walls (hollow interior) ---
-        // Left wall (full)
         wallBox(wallT, h, d, x - w / 2 + wallT / 2, h / 2, z);
         addWallCollider(x - w / 2, x - w / 2 + wallT, z - d / 2, z + d / 2);
 
-        // Right wall (full)
         wallBox(wallT, h, d, x + w / 2 - wallT / 2, h / 2, z);
         addWallCollider(x + w / 2 - wallT, x + w / 2, z - d / 2, z + d / 2);
 
-        // Back wall (full)
         wallBox(w, h, wallT, x, h / 2, z - d / 2 + wallT / 2);
         addWallCollider(x - w / 2, x + w / 2, z - d / 2, z - d / 2 + wallT);
 
-        // Front wall = two segments with a door gap in the middle (not completely solid)
+        var doorH = Math.min(3.2, Math.max(2.4, h * 0.22));
         var sideSpan = (w - doorW) / 2;
+        var frontZ = z + d / 2 - wallT / 2;
+        var colZ0 = z + d / 2 - wallT;
+        var colZ1 = z + d / 2;
+
         if (sideSpan > 0.4) {
-            // front-left segment
-            wallBox(sideSpan, h, wallT, x - w / 2 + sideSpan / 2, h / 2, z + d / 2 - wallT / 2);
-            addWallCollider(x - w / 2, x - w / 2 + sideSpan, z + d / 2 - wallT, z + d / 2);
-            // front-right segment
-            wallBox(sideSpan, h, wallT, x + w / 2 - sideSpan / 2, h / 2, z + d / 2 - wallT / 2);
-            addWallCollider(x + w / 2 - sideSpan, x + w / 2, z + d / 2 - wallT, z + d / 2);
+            wallBox(sideSpan, h, wallT, x - w / 2 + sideSpan / 2, h / 2, frontZ);
+            addWallCollider(x - w / 2, x - w / 2 + sideSpan, colZ0, colZ1);
+            wallBox(sideSpan, h, wallT, x + w / 2 - sideSpan / 2, h / 2, frontZ);
+            addWallCollider(x + w / 2 - sideSpan, x + w / 2, colZ0, colZ1);
         } else {
-            // tiny building — solid front (still a separate wall piece)
-            wallBox(w, h, wallT, x, h / 2, z + d / 2 - wallT / 2);
-            addWallCollider(x - w / 2, x + w / 2, z + d / 2 - wallT, z + d / 2);
+            wallBox(w, h, wallT, x, h / 2, frontZ);
+            addWallCollider(x - w / 2, x + w / 2, colZ0, colZ1);
         }
 
-        // Roof (covers top; not a collision for walking at ground level)
+        var aboveH = h - doorH;
+        if (aboveH > 0.3) {
+            wallBox(doorW, aboveH, wallT, x, doorH + aboveH / 2, frontZ);
+            addWallCollider(x - doorW / 2, x + doorW / 2, colZ0, colZ1);
+            _normWallColliders[_normWallColliders.length - 1].minY = doorH;
+            _normWallColliders[_normWallColliders.length - 1].maxY = h;
+            var lintel = new THREE.Mesh(
+                new THREE.BoxGeometry(doorW + 0.15, 0.25, wallT + 0.08),
+                new THREE.MeshLambertMaterial({ color: 0x1f2937 })
+            );
+            lintel.position.set(x, doorH + 0.1, frontZ);
+            scene.add(lintel);
+        }
+
+        // Interior bounds (inside the walls)
+        var ix0 = x - w / 2 + wallT;
+        var ix1 = x + w / 2 - wallT;
+        var iz0 = z - d / 2 + wallT;
+        var iz1 = z + d / 2 - wallT;
+        var iW = ix1 - ix0;
+        var iD = iz1 - iz0;
+
+        // Stair strip along left interior (simple ramp cubes)
+        var stairW = Math.min(2.6, iW * 0.32);
+        var stairX0 = ix0 + 0.05;
+        var stairX1 = stairX0 + stairW;
+
+        // --- FLOORS + RAMPS ---
+        var floorCount = Math.max(1, Math.floor((h - 1.2) / floorStep));
+        for (var fi = 1; fi <= floorCount; fi++) {
+            var floorY = fi * floorStep;
+            if (floorY >= h - 0.5) break;
+
+            // Floor slab (leaves a cutout where the stair ramp comes through)
+            // Main floor = everything except the stair column rectangle
+            var slabH = 0.28;
+            // Floor piece to the RIGHT of stairs (main walkable floor)
+            var mainW = ix1 - stairX1 - 0.05;
+            if (mainW > 0.5) {
+                var floorMesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(mainW, slabH, iD - 0.1),
+                    floorMat
+                );
+                floorMesh.position.set((stairX1 + 0.05 + ix1) / 2, floorY - slabH / 2, (iz0 + iz1) / 2);
+                scene.add(floorMesh);
+                _normFloorColliders.push({
+                    type: "flat",
+                    y: floorY,
+                    minX: stairX1 + 0.05,
+                    maxX: ix1,
+                    minZ: iz0 + 0.05,
+                    maxZ: iz1 - 0.05
+                });
+            }
+            // Thin strip in front/behind stairs area still walkable at edges if space
+            // (skip for simplicity — main floor is enough)
+
+            // Ramp from previous level up to this floor (stretched rotated cube)
+            var yBottom = (fi - 1) * floorStep;
+            var yTop = floorY;
+            var rise = yTop - yBottom;
+            var run = Math.max(3.5, Math.min(iD - 0.4, rise * 1.35)); // ramp length on Z
+            var rampLen = Math.sqrt(run * run + rise * rise);
+            var rampAngle = Math.atan2(rise, run);
+            var rampZ0 = iz0 + 0.15;
+            var rampZ1 = rampZ0 + run;
+            if (rampZ1 > iz1 - 0.15) {
+                rampZ1 = iz1 - 0.15;
+                run = rampZ1 - rampZ0;
+                rampLen = Math.sqrt(run * run + rise * rise);
+                rampAngle = Math.atan2(rise, run);
+            }
+
+            var ramp = new THREE.Mesh(
+                new THREE.BoxGeometry(stairW - 0.1, 0.22, rampLen),
+                stairMat
+            );
+            // Center of ramp sits midway along the slope
+            ramp.position.set(
+                (stairX0 + stairX1) / 2,
+                (yBottom + yTop) / 2,
+                (rampZ0 + rampZ1) / 2
+            );
+            // Rotate so the box becomes a ramp (pitch around X)
+            ramp.rotation.x = -rampAngle;
+            scene.add(ramp);
+
+            _normFloorColliders.push({
+                type: "ramp",
+                minX: stairX0,
+                maxX: stairX1,
+                minZ: rampZ0,
+                maxZ: rampZ1,
+                yAtMinZ: yBottom,
+                yAtMaxZ: yTop
+            });
+        }
+
+        // Roof (walkable top surface too)
         var roof = new THREE.Mesh(
             new THREE.BoxGeometry(w + 0.4, 0.35, d + 0.4),
             new THREE.MeshLambertMaterial({ color: 0x1f2937 })
         );
         roof.position.set(x, h + 0.12, z);
         scene.add(roof);
+        _normFloorColliders.push({
+            type: "flat",
+            y: h + 0.3,
+            minX: x - w / 2 + 0.2,
+            maxX: x + w / 2 - 0.2,
+            minZ: z - d / 2 + 0.2,
+            maxZ: z + d / 2 - 0.2
+        });
 
         // Windows on left/right outer faces
         var floors = Math.max(2, Math.floor(h / 3.2));
@@ -6226,10 +6366,9 @@ function startNormGameWorld(def) {
         _normLocalMesh.position.x = Math.max(-180, Math.min(180, _normLocalMesh.position.x));
         _normLocalMesh.position.z = Math.max(-180, Math.min(180, _normLocalMesh.position.z));
 
-        // --- Jump (Space / mobile button) ---
-        var groundY = (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02);
+        // --- Jump + floors/ramps ---
         var gravity = 0.018;
-        var jumpPower = 0.28;
+        var jumpPower = 0.32;
         if (_normSession.jumpQueued) {
             _normSession.jumpQueued = false;
             if (_normSession.onGround) {
@@ -6239,10 +6378,23 @@ function startNormGameWorld(def) {
         }
         _normSession.velY = (_normSession.velY || 0) - gravity;
         _normLocalMesh.position.y += _normSession.velY;
-        if (_normLocalMesh.position.y <= groundY) {
-            _normLocalMesh.position.y = groundY;
+
+        var supportY = getNormSupportY(
+            _normLocalMesh.position.x,
+            _normLocalMesh.position.z,
+            _normLocalMesh.position.y
+        );
+        // Stick to ramp while walking (even if vel small)
+        if (_normLocalMesh.position.y <= supportY + 0.08 && _normSession.velY <= 0.02) {
+            _normLocalMesh.position.y = supportY;
             _normSession.velY = 0;
             _normSession.onGround = true;
+        } else if (_normLocalMesh.position.y < supportY - 0.01 && _normSession.velY <= 0) {
+            _normLocalMesh.position.y = supportY;
+            _normSession.velY = 0;
+            _normSession.onGround = true;
+        } else {
+            _normSession.onGround = false;
         }
 
         // --- Camera LOCKED behind character, slightly above (orbit off) ---
