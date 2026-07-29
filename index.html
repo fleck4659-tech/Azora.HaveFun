@@ -564,9 +564,19 @@
         <div id="normGamePlay" class="norm-game-play" style="display:none;">
             <div class="norm-game-stage">
                 <div id="normGameCanvas" class="norm-game-canvas"></div>
+                <div id="normJoystickLayer" class="norm-joystick-layer" aria-hidden="true">
+                    <div class="norm-stick-wrap norm-stick-left" id="normStickMove">
+                        <div class="norm-stick-base"><div class="norm-stick-knob" id="normStickMoveKnob"></div></div>
+                        <span class="norm-stick-label">Move</span>
+                    </div>
+                    <div class="norm-stick-wrap norm-stick-right" id="normStickCam">
+                        <div class="norm-stick-base"><div class="norm-stick-knob" id="normStickCamKnob"></div></div>
+                        <span class="norm-stick-label">Look</span>
+                    </div>
+                </div>
                 <div class="norm-game-hud">
                     <span id="normHudPlayers">Players: 1</span>
-                    <span id="normHudHint">WASD / arrows move</span>
+                    <span id="normHudHint">WASD move · Arrows orbit camera · Mobile: dual sticks</span>
                 </div>
             </div>
             <aside class="norm-game-side">

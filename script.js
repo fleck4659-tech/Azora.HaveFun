@@ -5485,6 +5485,115 @@ function confirmLeaveNormGame(yes) {
     }
 }
 
+
+function isNormTouchDevice() {
+    try {
+        return ("ontouchstart" in window) || (navigator.maxTouchPoints > 0) ||
+            (window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+    } catch (e) { return false; }
+}
+
+function setupNormJoysticks() {
+    var stage = document.querySelector(".norm-game-stage");
+    var layer = document.getElementById("normJoystickLayer");
+    if (!stage || !layer || !_normSession) return;
+
+    if (isNormTouchDevice()) {
+        stage.classList.add("show-joysticks");
+        layer.style.display = "block";
+    } else {
+        stage.classList.remove("show-joysticks");
+        // keep CSS media query for coarse pointers
+    }
+
+    function bindStick(wrapId, knobId, onMove, onEnd) {
+        var wrap = document.getElementById(wrapId);
+        var knob = document.getElementById(knobId);
+        if (!wrap || !knob) return;
+        var base = wrap.querySelector(".norm-stick-base") || wrap;
+        var active = false;
+        var maxR = 36;
+
+        function setKnob(dx, dy) {
+            knob.style.transform = "translate(calc(-50% + " + dx + "px), calc(-50% + " + dy + "px))";
+        }
+        function resetKnob() {
+            knob.style.transform = "translate(-50%, -50%)";
+            onEnd();
+        }
+        function handle(clientX, clientY) {
+            var rect = base.getBoundingClientRect();
+            var cx = rect.left + rect.width / 2;
+            var cy = rect.top + rect.height / 2;
+            var dx = clientX - cx;
+            var dy = clientY - cy;
+            var len = Math.sqrt(dx * dx + dy * dy) || 1;
+            if (len > maxR) {
+                dx = dx / len * maxR;
+                dy = dy / len * maxR;
+            }
+            setKnob(dx, dy);
+            onMove(dx / maxR, dy / maxR);
+        }
+
+        function start(e) {
+            active = true;
+            var t = e.changedTouches ? e.changedTouches[0] : e;
+            handle(t.clientX, t.clientY);
+            e.preventDefault();
+        }
+        function move(e) {
+            if (!active) return;
+            var t = e.changedTouches ? e.changedTouches[0] : e;
+            handle(t.clientX, t.clientY);
+            e.preventDefault();
+        }
+        function end(e) {
+            if (!active) return;
+            active = false;
+            resetKnob();
+            e.preventDefault();
+        }
+
+        wrap.addEventListener("touchstart", start, { passive: false });
+        wrap.addEventListener("touchmove", move, { passive: false });
+        wrap.addEventListener("touchend", end, { passive: false });
+        wrap.addEventListener("touchcancel", end, { passive: false });
+        // mouse for testing joysticks on desktop
+        wrap.addEventListener("mousedown", function (e) {
+            start(e);
+            function mm(ev) { move(ev); }
+            function mu(ev) {
+                end(ev);
+                window.removeEventListener("mousemove", mm);
+                window.removeEventListener("mouseup", mu);
+            }
+            window.addEventListener("mousemove", mm);
+            window.addEventListener("mouseup", mu);
+        });
+    }
+
+    // Left stick: move (x = strafe, y = forward/back; screen Y down = back)
+    bindStick("normStickMove", "normStickMoveKnob", function (x, y) {
+        _normSession.moveX = x;
+        _normSession.moveZ = -y; // up on stick = forward
+    }, function () {
+        _normSession.moveX = 0;
+        _normSession.moveZ = 0;
+    });
+
+    // Right stick: orbit camera (x = yaw, y = pitch)
+    bindStick("normStickCam", "normStickCamKnob", function (x, y) {
+        _normSession.orbitX = x;
+        _normSession.orbitY = -y; // up = look up
+    }, function () {
+        _normSession.orbitX = 0;
+        _normSession.orbitY = 0;
+    });
+}
+
+window.setupNormJoysticks = setupNormJoysticks;
+
 function joinNormGame(gameId) {
     var def = NORM_GAMES[gameId];
     if (!def) {
@@ -5705,14 +5814,31 @@ function startNormGameWorld(def) {
     _normScene.add(_normLocalMesh);
     _normRemoteMeshes = {};
 
+    // ---- Controls ----
+    // Desktop: W A S D (and P as extra forward alias) = move character
+    // Arrow keys = orbit camera around character
+    // Mobile: left stick = move, right stick = orbit camera (smooth)
     _normKeys = {};
+    _normSession.camYaw = 0;          // radians around character
+    _normSession.camPitch = 0.35;     // up/down angle
+    _normSession.camDist = 4.4;       // distance from character
+    _normSession.moveX = 0;           // analog move from joystick (-1..1)
+    _normSession.moveZ = 0;
+    _normSession.orbitX = 0;          // analog orbit from right stick
+    _normSession.orbitY = 0;
+
     function onKey(e, down) {
         var k = e.key.toLowerCase();
-        if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].indexOf(k) !== -1) {
+        // Movement: W A S D + P (user requested P as a move key)
+        if (["w", "a", "s", "d", "p"].indexOf(k) !== -1) {
             _normKeys[k] = down;
             if (e.preventDefault) e.preventDefault();
         }
-        // Esc opens leave confirm
+        // Camera orbit: arrow keys only
+        if (["arrowup", "arrowdown", "arrowleft", "arrowright"].indexOf(k) !== -1) {
+            _normKeys[k] = down;
+            if (e.preventDefault) e.preventDefault();
+        }
         if (down && e.key === "Escape") {
             requestLeaveNormGame();
         }
@@ -5722,28 +5848,72 @@ function startNormGameWorld(def) {
     window.addEventListener("keydown", _normSession._kd);
     window.addEventListener("keyup", _normSession._ku);
 
+    // Joysticks
+    setupNormJoysticks();
+
     function animate() {
         _normAnim = requestAnimationFrame(animate);
         if (!_normLocalMesh || !_normRenderer || !_normCamera) return;
 
         var sp = 0.16;
         var dx = 0, dz = 0;
-        if (_normKeys["w"] || _normKeys["arrowup"]) dz -= sp;
-        if (_normKeys["s"] || _normKeys["arrowdown"]) dz += sp;
-        if (_normKeys["a"] || _normKeys["arrowleft"]) dx -= sp;
-        if (_normKeys["d"] || _normKeys["arrowright"]) dx += sp;
-        _normLocalMesh.position.x += dx;
-        _normLocalMesh.position.z += dz;
-        // Soft map bounds
+
+        // Keyboard move relative to camera yaw so W is "forward" on screen
+        var yaw = _normSession.camYaw || 0;
+        var forward = 0, strafe = 0;
+        if (_normKeys["w"] || _normKeys["p"]) forward += 1;
+        if (_normKeys["s"]) forward -= 1;
+        if (_normKeys["a"]) strafe -= 1;
+        if (_normKeys["d"]) strafe += 1;
+        // Left joystick analog
+        forward += (_normSession.moveZ || 0);
+        strafe += (_normSession.moveX || 0);
+
+        // Clamp combined input
+        var mag = Math.sqrt(forward * forward + strafe * strafe);
+        if (mag > 1) { forward /= mag; strafe /= mag; }
+
+        if (forward !== 0 || strafe !== 0) {
+            // Move in camera-facing plane
+            var sin = Math.sin(yaw), cos = Math.cos(yaw);
+            // forward is -Z when yaw=0
+            dx = (strafe * cos + forward * sin) * sp;
+            dz = (-forward * cos + strafe * sin) * sp;
+            _normLocalMesh.position.x += dx;
+            _normLocalMesh.position.z += dz;
+            // Face movement direction
+            if (Math.abs(dx) + Math.abs(dz) > 0.001) {
+                _normLocalMesh.rotation.y = Math.atan2(dx, dz);
+            }
+        }
+
         _normLocalMesh.position.x = Math.max(-180, Math.min(180, _normLocalMesh.position.x));
         _normLocalMesh.position.z = Math.max(-180, Math.min(180, _normLocalMesh.position.z));
 
-        // Close third-person follow
+        // Camera orbit — arrow keys
+        var orbitSp = 0.035;
+        if (_normKeys["arrowleft"]) _normSession.camYaw += orbitSp;
+        if (_normKeys["arrowright"]) _normSession.camYaw -= orbitSp;
+        if (_normKeys["arrowup"]) _normSession.camPitch = Math.min(1.1, _normSession.camPitch + orbitSp);
+        if (_normKeys["arrowdown"]) _normSession.camPitch = Math.max(0.08, _normSession.camPitch - orbitSp);
+        // Right joystick analog (smooth)
+        _normSession.camYaw -= (_normSession.orbitX || 0) * 0.05;
+        _normSession.camPitch = Math.max(0.08, Math.min(1.1, _normSession.camPitch + (_normSession.orbitY || 0) * 0.04));
+
         var target = _normLocalMesh.position;
-        _normCamera.position.x += (target.x - _normCamera.position.x) * 0.12;
-        _normCamera.position.z += (target.z + 4.2 - _normCamera.position.z) * 0.12;
-        _normCamera.position.y += (target.y + 2.2 - _normCamera.position.y) * 0.12;
-        _normCamera.lookAt(target.x, target.y + 1.0, target.z);
+        var dist = _normSession.camDist;
+        var pitch = _normSession.camPitch;
+        var cy = _normSession.camYaw;
+        var idealX = target.x + Math.sin(cy) * Math.cos(pitch) * dist;
+        var idealZ = target.z + Math.cos(cy) * Math.cos(pitch) * dist;
+        var idealY = target.y + Math.sin(pitch) * dist + 0.6;
+
+        // Smooth camera follow
+        var lerp = 0.14;
+        _normCamera.position.x += (idealX - _normCamera.position.x) * lerp;
+        _normCamera.position.y += (idealY - _normCamera.position.y) * lerp;
+        _normCamera.position.z += (idealZ - _normCamera.position.z) * lerp;
+        _normCamera.lookAt(target.x, target.y + 1.05, target.z);
 
         _normRenderer.render(_normScene, _normCamera);
     }
@@ -5996,6 +6166,12 @@ function disposeNormWorld(keepSession) {
 }
 
 function leaveNormGame() {
+    try {
+        var st = document.querySelector(".norm-game-stage");
+        if (st) st.classList.remove("show-joysticks");
+        var layer = document.getElementById("normJoystickLayer");
+        if (layer) layer.style.display = "none";
+    } catch (e) {}
     disposeNormWorld(false);
     _normSession = null;
     _normPlayers = [];
