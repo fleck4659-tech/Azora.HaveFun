@@ -2709,3 +2709,33 @@ button.azora-temp-disabled:hover{transform:none!important;box-shadow:none!import
     from { transform: scaleX(1); }
     to { transform: scaleX(0); }
 }
+
+
+.norm-jump-btn {
+    display: none;
+    position: absolute;
+    right: 24px;
+    bottom: 150px;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.85) !important;
+    background: linear-gradient(180deg, #60a5fa, #1e40af) !important;
+    color: #fff !important;
+    font-weight: bold !important;
+    font-size: 13px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.4) !important;
+    pointer-events: auto;
+    touch-action: manipulation;
+    z-index: 6;
+    align-items: center;
+    justify-content: center;
+}
+.norm-game-stage.show-joysticks .norm-jump-btn {
+    display: flex !important;
+}
+@media (hover: none), (pointer: coarse) {
+    .norm-jump-btn { display: flex !important; }
+}

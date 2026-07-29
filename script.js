@@ -5715,6 +5715,29 @@ function isNormTouchDevice() {
     } catch (e) { return false; }
 }
 
+
+function setupNormJumpButton() {
+    var btn = document.getElementById("normJumpBtn");
+    if (!btn) return;
+    // Show on touch devices
+    try {
+        if (isNormTouchDevice()) btn.style.display = "flex";
+        else btn.style.display = "none";
+    } catch (e) { btn.style.display = "flex"; }
+
+    function doJump(e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        if (_normSession) _normSession.jumpQueued = true;
+        return false;
+    }
+    btn.onclick = doJump;
+    btn.ontouchstart = function (e) { doJump(e); };
+}
+window.setupNormJumpButton = setupNormJumpButton;
+window.normJump = function () {
+    if (_normSession) _normSession.jumpQueued = true;
+};
+
 function setupNormJoysticks() {
     var stage = document.querySelector(".norm-game-stage");
     var layer = document.getElementById("normJoystickLayer");
@@ -5847,6 +5870,8 @@ function joinNormGame(gameId) {
         ov.style.display = "flex";
         ov.style.zIndex = "20000";
     }
+    // Avoid Space re-clicking Join / other buttons
+    try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch (e) {}
 
     var fill = document.getElementById("normLoadFill");
     var hint = document.getElementById("normLoadHint");
@@ -5989,7 +6014,7 @@ function startNormGameWorld(def) {
         chat.innerHTML = "";
         appendNormChat("System", "Welcome to " + def.title + ". Only real players who join this room appear here.", true);
         if (typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()) {
-            appendNormChat("System", "Live multiplayer is on — other real players will show when they join.", true);
+            appendNormChat("System", "Live multiplayer is on — you should see other players move in near real-time when they join this room.", true);
         } else {
             appendNormChat("System", "Cloud not linked yet — you are the only live player here until Firebase is set up on the site.", true);
         }
@@ -6050,10 +6075,29 @@ function startNormGameWorld(def) {
     _normSession.orbitX = 0;
     _normSession.orbitY = 0;
     _normSession.orbitEnabled = false;
+    _normSession.velY = 0;
+    _normSession.onGround = true;
+    _normSession.jumpQueued = false;
+
+    // Prevent Space from activating focused buttons (was reloading/rejoining the game)
+    try {
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    } catch (e) {}
 
     function onKey(e, down) {
-        var k = e.key.toLowerCase();
-        // W A S D only (orbit keys ignored while disabled)
+        var k = (e.key || "").toLowerCase();
+        var code = e.code || "";
+
+        // Always eat Space while in Norm Game — stops page scroll + button "click" reload bug
+        if (k === " " || k === "spacebar" || code === "Space") {
+            if (e.preventDefault) e.preventDefault();
+            if (e.stopPropagation) e.stopPropagation();
+            if (down) {
+                _normSession.jumpQueued = true;
+            }
+            return;
+        }
+
         if (["w", "a", "s", "d", "p"].indexOf(k) !== -1) {
             _normKeys[k] = down;
             if (e.preventDefault) e.preventDefault();
@@ -6064,11 +6108,13 @@ function startNormGameWorld(def) {
     }
     _normSession._kd = function (e) { onKey(e, true); };
     _normSession._ku = function (e) { onKey(e, false); };
-    window.addEventListener("keydown", _normSession._kd);
-    window.addEventListener("keyup", _normSession._ku);
+    // capture:true so we beat buttons/links that would fire on Space
+    window.addEventListener("keydown", _normSession._kd, true);
+    window.addEventListener("keyup", _normSession._ku, true);
 
-    // Joysticks
+    // Joysticks + mobile jump
     setupNormJoysticks();
+    setupNormJumpButton();
 
     function animate() {
         _normAnim = requestAnimationFrame(animate);
@@ -6106,7 +6152,25 @@ function startNormGameWorld(def) {
 
         _normLocalMesh.position.x = Math.max(-180, Math.min(180, _normLocalMesh.position.x));
         _normLocalMesh.position.z = Math.max(-180, Math.min(180, _normLocalMesh.position.z));
-        _normLocalMesh.position.y = (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02);
+
+        // --- Jump (Space / mobile button) ---
+        var groundY = (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02);
+        var gravity = 0.018;
+        var jumpPower = 0.28;
+        if (_normSession.jumpQueued) {
+            _normSession.jumpQueued = false;
+            if (_normSession.onGround) {
+                _normSession.velY = jumpPower;
+                _normSession.onGround = false;
+            }
+        }
+        _normSession.velY = (_normSession.velY || 0) - gravity;
+        _normLocalMesh.position.y += _normSession.velY;
+        if (_normLocalMesh.position.y <= groundY) {
+            _normLocalMesh.position.y = groundY;
+            _normSession.velY = 0;
+            _normSession.onGround = true;
+        }
 
         // --- Camera LOCKED behind character, slightly above (orbit off) ---
         var target = _normLocalMesh.position;
@@ -6122,6 +6186,18 @@ function startNormGameWorld(def) {
         _normCamera.position.y += (idealY - _normCamera.position.y) * lerp;
         _normCamera.position.z += (idealZ - _normCamera.position.z) * lerp;
         _normCamera.lookAt(target.x, target.y + 1.5, target.z);
+
+        // Live multiplayer: ease other players toward their latest positions
+        if (_normSession && typeof _normSession._smoothRemotes === "function") {
+            _normSession._smoothRemotes();
+        }
+        // Keep publishing while we move so others see us in near real-time
+        if (typeof publishSelf !== "function") { /* local */ }
+        try {
+            if (_normSession && Math.abs((_normKeys && (_normKeys.w || _normKeys.s || _normKeys.a || _normKeys.d)) ? 1 : 0)) {
+                /* interval handles publish */
+            }
+        } catch (e) {}
 
         _normRenderer.render(_normScene, _normCamera);
     }
@@ -6232,10 +6308,17 @@ function sendNormChat() {
 function startNormPresence(def) {
     stopNormPresence();
     _normMyPresenceId = "p_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+    _normSession._lastPublishAt = 0;
+    _normSession._lastPullAt = 0;
 
-    function publishSelf() {
+    function publishSelf(force) {
         if (!_normSession) return;
         if (typeof AZORA_CLOUD === "undefined" || !AZORA_CLOUD.isReady || !AZORA_CLOUD.isReady()) return;
+        var now = Date.now();
+        // Live-ish: publish often while moving, still throttle a little
+        if (!force && now - (_normSession._lastPublishAt || 0) < 180) return;
+        _normSession._lastPublishAt = now;
+
         var base = (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "");
         var url = base + def.roomPath + "/" + _normMyPresenceId + ".json";
         var pos = _normLocalMesh ? {
@@ -6243,12 +6326,14 @@ function startNormPresence(def) {
             y: _normLocalMesh.position.y,
             z: _normLocalMesh.position.z
         } : { x: 0, y: (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02), z: 0 };
+        var yaw = (_normLocalMesh && _normLocalMesh.rotation) ? _normLocalMesh.rotation.y : (_normSession.charYaw || 0);
         var body = {
             name: getNormDisplayName(),
             isGuest: isNormGuest(),
             avatar: getNormAvatarColors(),
             pos: pos,
-            updatedAt: Date.now()
+            yaw: yaw,
+            updatedAt: now
         };
         fetch(url, {
             method: "PUT",
@@ -6260,61 +6345,61 @@ function startNormPresence(def) {
     function pullPlayers() {
         if (!_normSession) return;
         if (typeof AZORA_CLOUD === "undefined" || !AZORA_CLOUD.isReady || !AZORA_CLOUD.isReady()) {
-            // Local-only: just you
             _normPlayers = [{ id: "me", name: getNormDisplayName(), isMe: true, isGuest: isNormGuest() }];
             renderNormPlayerList();
             return;
         }
+        var now = Date.now();
+        if (now - (_normSession._lastPullAt || 0) < 250) return;
+        _normSession._lastPullAt = now;
+
         var base = (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "");
         var url = base + def.roomPath + ".json";
         fetch(url)
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 var list = [];
-                var now = Date.now();
+                var tnow = Date.now();
                 list.push({ id: "me", name: getNormDisplayName(), isMe: true, isGuest: isNormGuest() });
                 if (data && typeof data === "object") {
                     Object.keys(data).forEach(function (pid) {
                         if (pid === _normMyPresenceId) return;
                         var row = data[pid];
                         if (!row || !row.updatedAt) return;
-                        // Drop stale presence (>25s)
-                        if (now - row.updatedAt > 25000) return;
+                        // Drop stale presence (>8s — tighter live room)
+                        if (tnow - row.updatedAt > 8000) return;
                         list.push({
                             id: pid,
                             name: row.name || "___",
                             isMe: false,
                             isGuest: !!row.isGuest,
                             pos: row.pos,
+                            yaw: row.yaw,
                             avatar: row.avatar
                         });
-                        // Sync remote mesh
                         if (_normScene && typeof THREE !== "undefined") {
                             if (!_normRemoteMeshes[pid]) {
                                 var mesh = makeNormAvatar(row.avatar || getNormAvatarColors());
                                 placeNormAvatarOnGround(mesh, (row.pos && row.pos.x) || 0, (row.pos && row.pos.z) || 0, 0);
                                 _normScene.add(mesh);
                                 _normRemoteMeshes[pid] = mesh;
+                                mesh.userData.targetPos = mesh.position.clone();
+                                mesh.userData.targetYaw = row.yaw || 0;
                             }
-                            if (row.pos && _normRemoteMeshes[pid]) {
+                            var remote = _normRemoteMeshes[pid];
+                            if (row.pos && remote) {
                                 var footY = (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02);
                                 var ry = (row.pos.y != null) ? row.pos.y : footY;
-                                // Old clients sent ~0.7 or ~1.2 with previous models — snap to grounded height
                                 if (ry > 0.15 && ry < 1.5) ry = footY;
                                 if (ry < 0) ry = footY;
-                                _normRemoteMeshes[pid].position.set(
-                                    row.pos.x || 0,
-                                    ry,
-                                    row.pos.z || 0
-                                );
-                            } else if (_normRemoteMeshes[pid] && !_normRemoteMeshes[pid].userData._grounded) {
-                                placeNormAvatarOnGround(_normRemoteMeshes[pid], 0, 0, 0);
-                                _normRemoteMeshes[pid].userData._grounded = true;
+                                // Store target for smooth lerp each frame (looks live)
+                                if (!remote.userData.targetPos) remote.userData.targetPos = remote.position.clone();
+                                remote.userData.targetPos.set(row.pos.x || 0, ry, row.pos.z || 0);
+                                remote.userData.targetYaw = (typeof row.yaw === "number") ? row.yaw : remote.rotation.y;
                             }
                         }
                     });
                 }
-                // Remove meshes for players who left
                 if (_normRemoteMeshes) {
                     Object.keys(_normRemoteMeshes).forEach(function (pid) {
                         var still = list.some(function (p) { return p.id === pid; });
@@ -6330,12 +6415,35 @@ function startNormPresence(def) {
             .catch(function () {});
     }
 
-    publishSelf();
+    // Smooth remote avatars every frame toward latest live target
+    _normSession._smoothRemotes = function () {
+        if (!_normRemoteMeshes) return;
+        Object.keys(_normRemoteMeshes).forEach(function (pid) {
+            var mesh = _normRemoteMeshes[pid];
+            if (!mesh || !mesh.userData.targetPos) return;
+            var t = mesh.userData.targetPos;
+            mesh.position.x += (t.x - mesh.position.x) * 0.25;
+            mesh.position.y += (t.y - mesh.position.y) * 0.25;
+            mesh.position.z += (t.z - mesh.position.z) * 0.25;
+            if (typeof mesh.userData.targetYaw === "number") {
+                // shortest-angle lerp
+                var cur = mesh.rotation.y;
+                var goal = mesh.userData.targetYaw;
+                var diff = goal - cur;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                mesh.rotation.y = cur + diff * 0.25;
+            }
+        });
+    };
+
+    publishSelf(true);
     pullPlayers();
+    // Fast live loop (~4–5 updates/sec network, smooth motion in between)
     _normPresenceTimer = setInterval(function () {
-        publishSelf();
+        publishSelf(false);
         pullPlayers();
-    }, 2000);
+    }, 280);
 }
 
 function stopNormPresence() {
@@ -6361,8 +6469,14 @@ function disposeNormWorld(keepSession) {
         _normAnim = null;
     }
     if (_normSession) {
-        if (_normSession._kd) window.removeEventListener("keydown", _normSession._kd);
-        if (_normSession._ku) window.removeEventListener("keyup", _normSession._ku);
+        if (_normSession._kd) {
+            window.removeEventListener("keydown", _normSession._kd, true);
+            window.removeEventListener("keydown", _normSession._kd, false);
+        }
+        if (_normSession._ku) {
+            window.removeEventListener("keyup", _normSession._ku, true);
+            window.removeEventListener("keyup", _normSession._ku, false);
+        }
         if (_normSession._onResize) window.removeEventListener("resize", _normSession._onResize);
     }
     if (_normRenderer) {
