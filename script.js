@@ -2472,6 +2472,7 @@ function initPlay3D() {
 
     // Player
     _play.meshPlayer = new THREE.Mesh(new THREE.BoxGeometry(1, 1.4, 1), new THREE.MeshLambertMaterial({ color: cfg.colors.accent }));
+    // Box height 1.4 → center at 0.7 sits on y=0 ground
     _play.meshPlayer.position.set(0, 0.7, 0);
     _play.scene.add(_play.meshPlayer);
 
@@ -5572,6 +5573,19 @@ function makeNormAvatar(colors) {
     return g;
 }
 
+
+/** Bottom of feet in local space (leg center -0.7, height 1.0 → bottom -1.2) */
+var NORM_AVATAR_FOOT_OFFSET = 1.2;
+
+/** Stand avatar so soles sit on surfaceY (default ground top = 0) */
+function placeNormAvatarOnGround(mesh, x, z, surfaceY) {
+    if (!mesh) return;
+    if (typeof surfaceY !== "number") surfaceY = 0;
+    mesh.position.x = x || 0;
+    mesh.position.z = z || 0;
+    mesh.position.y = surfaceY + NORM_AVATAR_FOOT_OFFSET;
+}
+
 /** Flat Smile.png on front of head — hidden until texture loads (no white square) */
 function attachNormFaceDecal(avatarGroup, headMesh) {
     if (typeof THREE === "undefined" || !headMesh) return;
@@ -6014,7 +6028,7 @@ function startNormGameWorld(def) {
     buildNormCity(_normScene);
 
     _normLocalMesh = makeNormAvatar(getNormAvatarColors());
-    _normLocalMesh.position.set(0, 0.7, 0);
+    placeNormAvatarOnGround(_normLocalMesh, 0, 0, 0);
     _normScene.add(_normLocalMesh);
     _normRemoteMeshes = {};
 
@@ -6093,6 +6107,8 @@ function startNormGameWorld(def) {
 
         _normLocalMesh.position.x = Math.max(-180, Math.min(180, _normLocalMesh.position.x));
         _normLocalMesh.position.z = Math.max(-180, Math.min(180, _normLocalMesh.position.z));
+        // Keep feet on the ground (never sink)
+        _normLocalMesh.position.y = (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 1.2);
 
         // Camera orbit — arrow keys
         var orbitSp = 0.035;
@@ -6245,7 +6261,7 @@ function startNormPresence(def) {
             x: _normLocalMesh.position.x,
             y: _normLocalMesh.position.y,
             z: _normLocalMesh.position.z
-        } : { x: 0, y: 0.7, z: 0 };
+        } : { x: 0, y: (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 1.2), z: 0 };
         var body = {
             name: getNormDisplayName(),
             isGuest: isNormGuest(),
@@ -6295,15 +6311,22 @@ function startNormPresence(def) {
                         if (_normScene && typeof THREE !== "undefined") {
                             if (!_normRemoteMeshes[pid]) {
                                 var mesh = makeNormAvatar(row.avatar || getNormAvatarColors());
+                                placeNormAvatarOnGround(mesh, (row.pos && row.pos.x) || 0, (row.pos && row.pos.z) || 0, 0);
                                 _normScene.add(mesh);
                                 _normRemoteMeshes[pid] = mesh;
                             }
                             if (row.pos && _normRemoteMeshes[pid]) {
+                                var ry = (row.pos.y != null) ? row.pos.y : (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 1.2);
+                                // Old clients may still send 0.7 (legs in ground) — lift them
+                                if (ry < 1.0) ry = (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 1.2);
                                 _normRemoteMeshes[pid].position.set(
                                     row.pos.x || 0,
-                                    row.pos.y != null ? row.pos.y : 0.7,
+                                    ry,
                                     row.pos.z || 0
                                 );
+                            } else if (_normRemoteMeshes[pid] && !_normRemoteMeshes[pid].userData._grounded) {
+                                placeNormAvatarOnGround(_normRemoteMeshes[pid], 0, 0, 0);
+                                _normRemoteMeshes[pid].userData._grounded = true;
                             }
                         }
                     });
