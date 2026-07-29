@@ -5535,47 +5535,51 @@ function makeNormAvatar(colors) {
         );
     }
 
-    // Match customizer: head 0.65, torso 0.85x1.0x0.45, arms 0.35x1.0, legs 0.35x1.0
-    var head = box(0.65, 0.65, 0.65, colors.head);
-    head.position.y = 1.12;
-    head.name = "head";
+    // Build with FEET on local Y = 0 so standing on ground is just position.y = surfaceY
+    // Legs height 1.0 → centers at 0.5; torso above legs; head on top
+    var legH = 1.0, torsoH = 1.0, headS = 0.65, armH = 1.0;
 
-    var torso = box(0.85, 1.0, 0.45, colors.torso);
-    torso.position.y = 0.3;
-    torso.name = "torso";
-
-    var leftArm = box(0.35, 1.0, 0.35, colors.leftArm);
-    leftArm.position.set(-0.62, 0.3, 0);
-    leftArm.name = "leftArm";
-
-    var rightArm = box(0.35, 1.0, 0.35, colors.rightArm);
-    rightArm.position.set(0.62, 0.3, 0);
-    rightArm.name = "rightArm";
-
-    var leftLeg = box(0.35, 1.0, 0.35, colors.leftLeg);
-    leftLeg.position.set(-0.22, -0.7, 0);
+    var leftLeg = box(0.35, legH, 0.35, colors.leftLeg);
+    leftLeg.position.set(-0.22, legH / 2, 0);
     leftLeg.name = "leftLeg";
 
-    var rightLeg = box(0.35, 1.0, 0.35, colors.rightLeg);
-    rightLeg.position.set(0.22, -0.7, 0);
+    var rightLeg = box(0.35, legH, 0.35, colors.rightLeg);
+    rightLeg.position.set(0.22, legH / 2, 0);
     rightLeg.name = "rightLeg";
 
-    g.add(head);
+    var torso = box(0.85, torsoH, 0.45, colors.torso);
+    torso.position.y = legH + torsoH / 2;
+    torso.name = "torso";
+
+    var leftArm = box(0.35, armH, 0.35, colors.leftArm);
+    leftArm.position.set(-0.62, legH + torsoH / 2, 0);
+    leftArm.name = "leftArm";
+
+    var rightArm = box(0.35, armH, 0.35, colors.rightArm);
+    rightArm.position.set(0.62, legH + torsoH / 2, 0);
+    rightArm.name = "rightArm";
+
+    var head = box(headS, headS, headS, colors.head);
+    head.position.y = legH + torsoH + headS / 2;
+    head.name = "head";
+
+    g.add(leftLeg);
+    g.add(rightLeg);
     g.add(torso);
     g.add(leftArm);
     g.add(rightArm);
-    g.add(leftLeg);
-    g.add(rightLeg);
+    g.add(head);
 
-    // Smile.png face decal on the FRONT of the head (same idea as customizer)
+    // Smile.png face on front of head
     attachNormFaceDecal(g, head);
 
+    // Mark foot height for placement helpers
+    g.userData.footOffset = 0; // feet already at y=0 in local space
     return g;
 }
 
-
 /** Bottom of feet in local space (leg center -0.7, height 1.0 → bottom -1.2) */
-var NORM_AVATAR_FOOT_OFFSET = 1.2;
+var NORM_AVATAR_FOOT_OFFSET = 0.02; // feet at local y=0; sit just above ground top
 
 /** Stand avatar so soles sit on surfaceY (default ground top = 0) */
 function placeNormAvatarOnGround(mesh, x, z, surfaceY) {
@@ -6107,8 +6111,8 @@ function startNormGameWorld(def) {
 
         _normLocalMesh.position.x = Math.max(-180, Math.min(180, _normLocalMesh.position.x));
         _normLocalMesh.position.z = Math.max(-180, Math.min(180, _normLocalMesh.position.z));
-        // Keep feet on the ground (never sink)
-        _normLocalMesh.position.y = (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 1.2);
+        // Keep feet on the ground (never sink) — model feet at local y=0
+        _normLocalMesh.position.y = (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02);
 
         // Camera orbit — arrow keys
         var orbitSp = 0.035;
@@ -6136,10 +6140,10 @@ function startNormGameWorld(def) {
         _normCamera.position.x += (idealX - _normCamera.position.x) * lerp;
         _normCamera.position.y += (idealY - _normCamera.position.y) * lerp;
         _normCamera.position.z += (idealZ - _normCamera.position.z) * lerp;
-        // Aim a bit higher when camera is low so "looking up" frames the face
-        var lookY = target.y + 1.05;
-        if (pitch < 0.15) lookY = target.y + 1.25;
-        if (pitch < -0.2) lookY = target.y + 1.45;
+        // Frame upper body / face (feet at y≈0, head ~2.3)
+        var lookY = target.y + 1.55;
+        if (pitch < 0.15) lookY = target.y + 1.75;
+        if (pitch < -0.2) lookY = target.y + 2.0;
         _normCamera.lookAt(target.x, lookY, target.z);
 
         _normRenderer.render(_normScene, _normCamera);
@@ -6261,7 +6265,7 @@ function startNormPresence(def) {
             x: _normLocalMesh.position.x,
             y: _normLocalMesh.position.y,
             z: _normLocalMesh.position.z
-        } : { x: 0, y: (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 1.2), z: 0 };
+        } : { x: 0, y: (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02), z: 0 };
         var body = {
             name: getNormDisplayName(),
             isGuest: isNormGuest(),
@@ -6316,9 +6320,11 @@ function startNormPresence(def) {
                                 _normRemoteMeshes[pid] = mesh;
                             }
                             if (row.pos && _normRemoteMeshes[pid]) {
-                                var ry = (row.pos.y != null) ? row.pos.y : (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 1.2);
-                                // Old clients may still send 0.7 (legs in ground) — lift them
-                                if (ry < 1.0) ry = (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 1.2);
+                                var footY = (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02);
+                                var ry = (row.pos.y != null) ? row.pos.y : footY;
+                                // Old clients sent ~0.7 or ~1.2 with previous models — snap to grounded height
+                                if (ry > 0.15 && ry < 1.5) ry = footY;
+                                if (ry < 0) ry = footY;
                                 _normRemoteMeshes[pid].position.set(
                                     row.pos.x || 0,
                                     ry,
