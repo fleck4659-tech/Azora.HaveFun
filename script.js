@@ -6036,28 +6036,25 @@ function startNormGameWorld(def) {
     _normScene.add(_normLocalMesh);
     _normRemoteMeshes = {};
 
-    // ---- Controls ----
-    // Desktop: W A S D (and P as extra forward alias) = move character
-    // Arrow keys = orbit camera around character
-    // Mobile: left stick = move, right stick = orbit camera (smooth)
+    // ---- Controls (orbit TEMPORARILY DISABLED) ----
+    // W = forward, S = reverse, A = turn left, D = turn right
+    // Camera locked behind character, slightly above
     _normKeys = {};
-    _normSession.camYaw = 0;          // radians around character
-    _normSession.camPitch = 0.35;     // up/down angle
-    _normSession.camDist = 4.4;       // distance from character
-    _normSession.moveX = 0;           // analog move from joystick (-1..1)
+    _normSession.charYaw = 0;
+    _normSession.camYaw = 0;
+    _normSession.camPitch = 0.42;
+    _normSession.camDist = 5.0;
+    _normSession.camHeight = 2.6;
+    _normSession.moveX = 0;
     _normSession.moveZ = 0;
-    _normSession.orbitX = 0;          // analog orbit from right stick
+    _normSession.orbitX = 0;
     _normSession.orbitY = 0;
+    _normSession.orbitEnabled = false;
 
     function onKey(e, down) {
         var k = e.key.toLowerCase();
-        // Movement: W A S D + P (user requested P as a move key)
+        // W A S D only (orbit keys ignored while disabled)
         if (["w", "a", "s", "d", "p"].indexOf(k) !== -1) {
-            _normKeys[k] = down;
-            if (e.preventDefault) e.preventDefault();
-        }
-        // Camera orbit: arrow keys only
-        if (["arrowup", "arrowdown", "arrowleft", "arrowright"].indexOf(k) !== -1) {
             _normKeys[k] = down;
             if (e.preventDefault) e.preventDefault();
         }
@@ -6077,83 +6074,54 @@ function startNormGameWorld(def) {
         _normAnim = requestAnimationFrame(animate);
         if (!_normLocalMesh || !_normRenderer || !_normCamera) return;
 
-        var sp = 0.16;
-        var dx = 0, dz = 0;
+        var sp = 0.18;
+        var turnSp = 0.045;
 
-        // Camera-relative move: W always walks INTO the screen (away from camera)
-        var yaw = _normSession.camYaw || 0;
-        var sin = Math.sin(yaw), cos = Math.cos(yaw);
-        // Horizontal vector from player → camera is (sin, cos); forward is opposite
-        var fwdX = -sin;
-        var fwdZ = -cos;
-        // Right vector (strafe) — perpendicular
-        var rightX = cos;
-        var rightZ = -sin;
+        // --- Turn: A left, D right (also left stick X) ---
+        if (_normKeys["a"]) _normSession.charYaw += turnSp;
+        if (_normKeys["d"]) _normSession.charYaw -= turnSp;
+        _normSession.charYaw -= (_normSession.moveX || 0) * 0.05;
 
-        var forward = 0, strafe = 0;
-        if (_normKeys["w"] || _normKeys["p"]) forward += 1;
-        if (_normKeys["s"]) forward -= 1;
-        if (_normKeys["a"]) strafe -= 1;
-        if (_normKeys["d"]) strafe += 1;
-        // Left joystick analog (moveZ = forward, moveX = strafe)
-        forward += (_normSession.moveZ || 0);
-        strafe += (_normSession.moveX || 0);
+        // Character faces charYaw (mesh forward matches movement)
+        _normLocalMesh.rotation.y = _normSession.charYaw;
 
-        var mag = Math.sqrt(forward * forward + strafe * strafe);
-        if (mag > 1) { forward /= mag; strafe /= mag; }
+        // Forward along facing: in our convention rotation.y with atan2(dx,dz)
+        // local forward on XZ = (sin(yaw), cos(yaw))
+        var yaw = _normSession.charYaw || 0;
+        var fwdX = Math.sin(yaw);
+        var fwdZ = Math.cos(yaw);
 
-        var moving = Math.abs(forward) > 0.001 || Math.abs(strafe) > 0.001;
-        if (moving) {
-            dx = (fwdX * forward + rightX * strafe) * sp;
-            dz = (fwdZ * forward + rightZ * strafe) * sp;
-            _normLocalMesh.position.x += dx;
-            _normLocalMesh.position.z += dz;
-            // Face the direction of travel (matches camera while strafing/forward)
-            if (Math.abs(dx) + Math.abs(dz) > 0.0001) {
-                _normLocalMesh.rotation.y = Math.atan2(dx, dz);
-            }
-        } else {
-            // Idle: always face the same way the camera is looking (into the screen)
-            // so when you start walking, you go that way
-            _normLocalMesh.rotation.y = Math.atan2(fwdX, fwdZ);
+        // --- Move: W forward, S reverse (also left stick Y) ---
+        var throttle = 0;
+        if (_normKeys["w"] || _normKeys["p"]) throttle += 1;
+        if (_normKeys["s"]) throttle -= 1;
+        throttle += (_normSession.moveZ || 0);
+        if (throttle > 1) throttle = 1;
+        if (throttle < -1) throttle = -1;
+
+        if (Math.abs(throttle) > 0.001) {
+            _normLocalMesh.position.x += fwdX * throttle * sp;
+            _normLocalMesh.position.z += fwdZ * throttle * sp;
         }
 
         _normLocalMesh.position.x = Math.max(-180, Math.min(180, _normLocalMesh.position.x));
         _normLocalMesh.position.z = Math.max(-180, Math.min(180, _normLocalMesh.position.z));
-        // Keep feet on the ground (never sink) — model feet at local y=0
         _normLocalMesh.position.y = (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02);
 
-        // Camera orbit — arrow keys
-        var orbitSp = 0.035;
-        if (_normKeys["arrowleft"]) _normSession.camYaw += orbitSp;
-        if (_normKeys["arrowright"]) _normSession.camYaw -= orbitSp;
-        // Pitch: lower min so camera can orbit down and look UP more at the avatar
-        var PITCH_MIN = -0.55;  // below horizontal — see upward
-        var PITCH_MAX = 1.35;   // high above — look down
-        if (_normKeys["arrowup"]) _normSession.camPitch = Math.min(PITCH_MAX, _normSession.camPitch + orbitSp);
-        if (_normKeys["arrowdown"]) _normSession.camPitch = Math.max(PITCH_MIN, _normSession.camPitch - orbitSp);
-        // Right joystick analog (smooth)
-        _normSession.camYaw -= (_normSession.orbitX || 0) * 0.05;
-        _normSession.camPitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, _normSession.camPitch + (_normSession.orbitY || 0) * 0.04));
-
+        // --- Camera LOCKED behind character, slightly above (orbit off) ---
         var target = _normLocalMesh.position;
-        var dist = _normSession.camDist;
-        var pitch = _normSession.camPitch;
-        var cy = _normSession.camYaw;
-        var idealX = target.x + Math.sin(cy) * Math.cos(pitch) * dist;
-        var idealZ = target.z + Math.cos(cy) * Math.cos(pitch) * dist;
-        var idealY = target.y + Math.sin(pitch) * dist + 0.6;
+        var dist = _normSession.camDist || 5.0;
+        var height = _normSession.camHeight || 2.6;
+        // Behind = opposite of facing
+        var idealX = target.x - fwdX * dist;
+        var idealZ = target.z - fwdZ * dist;
+        var idealY = target.y + height;
 
-        // Smooth camera follow
-        var lerp = 0.14;
+        var lerp = 0.18;
         _normCamera.position.x += (idealX - _normCamera.position.x) * lerp;
         _normCamera.position.y += (idealY - _normCamera.position.y) * lerp;
         _normCamera.position.z += (idealZ - _normCamera.position.z) * lerp;
-        // Frame upper body / face (feet at y≈0, head ~2.3)
-        var lookY = target.y + 1.55;
-        if (pitch < 0.15) lookY = target.y + 1.75;
-        if (pitch < -0.2) lookY = target.y + 2.0;
-        _normCamera.lookAt(target.x, lookY, target.z);
+        _normCamera.lookAt(target.x, target.y + 1.5, target.z);
 
         _normRenderer.render(_normScene, _normCamera);
     }

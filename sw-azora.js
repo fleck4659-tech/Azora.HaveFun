@@ -1,5 +1,5 @@
 /* Azora main app service worker */
-var CACHE = "azora-app-v20-move";
+var CACHE = "azora-app-v21-lockcam";
 var ASSETS = ["./", "./index.html", "./style.css", "./script.js", "./logo.jpg", "./manifest-azora.json", "./Smile.png"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ASSETS).catch(function () {}); }).then(function () { return self.skipWaiting(); }));
