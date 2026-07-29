@@ -5355,17 +5355,665 @@ window.initAzoraOfflineDetection = initAzoraOfflineDetection;
 })();
 
 
-var _normSession=null,_normAnim=null,_normScene=null,_normRenderer=null,_normCamera=null,_normPlayers=[],_normKeys={},_normLocalMesh=null;
-var NORM_GAMES={"azora-roleplay":{id:"azora-roleplay",title:"Azora Roleplay",owner:"Azora",dimensions:"3D"}};
-function getNormDisplayName(){try{var acc=JSON.parse(localStorage.getItem("azoraAccount")||"{}");var logged=localStorage.getItem("loggedIn");if(logged==="guest"||acc.isGuest||!acc.username)return"___";return acc.username||"___"}catch(e){return"___"}}
-function isNormGuest(){return localStorage.getItem("loggedIn")==="guest"||getNormDisplayName()==="___"}
-function joinNormGame(gameId){var def=NORM_GAMES[gameId];if(!def){alert("That Norm Game is not available yet.");return}var logged=localStorage.getItem("loggedIn");if(logged!=="true"&&logged!=="guest"){alert("Log in or continue as Guest to join Norm Games!");if(typeof openCreateAccount==="function")openCreateAccount();return}_normSession={id:def.id,title:def.title,startedAt:Date.now()};var ov=document.getElementById("normGameOverlay"),loading=document.getElementById("normGameLoading"),play=document.getElementById("normGamePlay"),title=document.getElementById("normGameTitle");if(title)title.textContent=def.title;if(loading)loading.style.display="flex";if(play)play.style.display="none";if(ov)ov.style.display="flex";var fill=document.getElementById("normLoadFill"),hint=document.getElementById("normLoadHint"),hints=["Loading terrain…","Loading avatars…","Connecting to server…","Almost ready…"],t0=Date.now(),duration=2800+Math.random()*1200;function tick(){var p=Math.min(1,(Date.now()-t0)/duration);if(fill)fill.style.width=Math.round(p*100)+"%";if(hint)hint.textContent=hints[Math.min(hints.length-1,Math.floor(p*hints.length))];if(p<1)requestAnimationFrame(tick);else{if(loading)loading.style.display="none";if(play)play.style.display="flex";startNormGameWorld(def)}}requestAnimationFrame(tick)}
-function startNormGameWorld(def){disposeNormWorld();var meName=getNormDisplayName();_normPlayers=[{id:"me",name:meName,isMe:true,isGuest:isNormGuest()},{id:"p2",name:"Azora",isMe:false,isGuest:false},{id:"p3",name:"BuilderBee",isMe:false,isGuest:false},{id:"p4",name:"___",isMe:false,isGuest:true}];if(meName.toLowerCase()==="azora"){_normPlayers=_normPlayers.filter(function(p){return p.id==="me"||p.name.toLowerCase()!=="azora"});_normPlayers.push({id:"p5",name:"SkyPilot",isMe:false,isGuest:false})}renderNormPlayerList();var chat=document.getElementById("normChatMessages");if(chat){chat.innerHTML="";appendNormChat("System","Welcome to "+def.title+"! Be kind and have fun.",true);appendNormChat("Azora","Hey everyone — official roleplay world is open!")}var container=document.getElementById("normGameCanvas");if(!container||typeof THREE==="undefined"){if(container)container.innerHTML="<p style='color:#fff;padding:20px;text-align:center;'>3D needs Three.js. Chat still works.</p>";return}while(container.firstChild)container.removeChild(container.firstChild);var w=container.clientWidth||640,h=container.clientHeight||360;_normScene=new THREE.Scene();_normScene.background=new THREE.Color(0x87b8ff);_normScene.fog=new THREE.Fog(0x87b8ff,25,90);_normCamera=new THREE.PerspectiveCamera(60,w/Math.max(h,1),0.1,200);_normCamera.position.set(0,4,10);_normRenderer=new THREE.WebGLRenderer({antialias:true});_normRenderer.setSize(w,h);container.appendChild(_normRenderer.domElement);_normScene.add(new THREE.AmbientLight(0xffffff,0.7));var sun=new THREE.DirectionalLight(0xffffff,0.85);sun.position.set(8,20,10);_normScene.add(sun);var ground=new THREE.Mesh(new THREE.BoxGeometry(80,1,80),new THREE.MeshLambertMaterial({color:0x3d9e5f}));ground.position.y=-0.5;_normScene.add(ground);for(var i=0;i<8;i++){var box=new THREE.Mesh(new THREE.BoxGeometry(2+Math.random()*2,1+Math.random()*3,2+Math.random()*2),new THREE.MeshLambertMaterial({color:0x1e60ff}));box.position.set((Math.random()-0.5)*40,box.geometry.parameters.height/2,(Math.random()-0.5)*40);_normScene.add(box)}function makeAvatar(ch,ct){var g=new THREE.Group();var head=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.55,0.55),new THREE.MeshLambertMaterial({color:ch}));head.position.y=1.55;var torso=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.9,0.4),new THREE.MeshLambertMaterial({color:ct}));torso.position.y=0.85;var legL=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.7,0.28),new THREE.MeshLambertMaterial({color:0x00ebd4}));legL.position.set(-0.18,0.2,0);var legR=legL.clone();legR.position.x=0.18;g.add(head);g.add(torso);g.add(legL);g.add(legR);return g}var av={head:"#ffcc00",torso:"#1e60ff"};try{var acc=JSON.parse(localStorage.getItem("azoraAccount")||"{}");if(acc.avatar){av.head=acc.avatar.head||av.head;av.torso=acc.avatar.torso||av.torso}}catch(e){}_normLocalMesh=makeAvatar(av.head,av.torso);_normScene.add(_normLocalMesh);[{x:4,z:-3,h:"#f472b6",t:"#1e60ff"},{x:-5,z:2,h:"#fbbf24",t:"#334155"},{x:3,z:5,h:"#94a3b8",t:"#64748b"}].forEach(function(o){var m=makeAvatar(o.h,o.t);m.position.set(o.x,0,o.z);_normScene.add(m)});_normKeys={};function onKey(e,down){var k=e.key.toLowerCase();if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"].indexOf(k)!==-1){_normKeys[k]=down;e.preventDefault()}}_normSession._kd=function(e){onKey(e,true)};_normSession._ku=function(e){onKey(e,false)};window.addEventListener("keydown",_normSession._kd);window.addEventListener("keyup",_normSession._ku);function animate(){_normAnim=requestAnimationFrame(animate);if(!_normLocalMesh||!_normRenderer)return;var sp=0.12,dx=0,dz=0;if(_normKeys.w||_normKeys.arrowup)dz-=sp;if(_normKeys.s||_normKeys.arrowdown)dz+=sp;if(_normKeys.a||_normKeys.arrowleft)dx-=sp;if(_normKeys.d||_normKeys.arrowright)dx+=sp;_normLocalMesh.position.x+=dx;_normLocalMesh.position.z+=dz;_normCamera.position.x=_normLocalMesh.position.x;_normCamera.position.z=_normLocalMesh.position.z+10;_normCamera.position.y=4;_normCamera.lookAt(_normLocalMesh.position.x,1.2,_normLocalMesh.position.z);_normRenderer.render(_normScene,_normCamera)}animate();var hud=document.getElementById("normHudPlayers");if(hud)hud.textContent="Players: "+_normPlayers.length}
-function renderNormPlayerList(){var el=document.getElementById("normPlayerList");if(!el)return;el.innerHTML="";_normPlayers.forEach(function(p){var row=document.createElement("div");row.className="norm-player-row";var label=document.createElement("span");label.className="np-name";label.textContent=p.name+(p.isMe?" (you)":"");row.appendChild(label);if(!p.isMe&&!p.isGuest&&p.name!=="___"&&localStorage.getItem("loggedIn")==="true"){var act=document.createElement("div");act.className="np-actions";var btn=document.createElement("button");btn.type="button";btn.textContent="Add Friend";btn.onclick=function(){alert("Friend request sent to "+p.name+"!")};act.appendChild(btn);row.appendChild(act)}else if(!p.isMe&&(p.isGuest||p.name==="___")){var tip=document.createElement("span");tip.style.fontSize="11px";tip.style.opacity="0.7";tip.textContent="Guest";row.appendChild(tip)}el.appendChild(row)})}
-function appendNormChat(user,text,isSystem){var box=document.getElementById("normChatMessages");if(!box)return;var line=document.createElement("div");line.className="norm-chat-line";var u=document.createElement("span");u.className="nc-user"+((user==="___"||user==="Guest")?" guest":"");u.textContent=isSystem?"• ":(user+": ");line.appendChild(u);line.appendChild(document.createTextNode(text));box.appendChild(line);box.scrollTop=box.scrollHeight}
-function sendNormChat(){var input=document.getElementById("normChatInput");if(!input)return;var msg=(input.value||"").trim();if(!msg)return;appendNormChat(getNormDisplayName(),msg);input.value="";if(Math.random()<0.45)setTimeout(function(){var bots=["Azora","BuilderBee","SkyPilot"];appendNormChat(bots[Math.floor(Math.random()*bots.length)],["Nice!","Welcome to the plaza!","Anyone want to explore?","Haha true"][Math.floor(Math.random()*4)])},800+Math.random()*1500)}
-function requestLeaveNormGame(){var c=document.getElementById("normLeaveConfirm");if(c)c.style.display="flex"}
-function confirmLeaveNormGame(yes){var c=document.getElementById("normLeaveConfirm");if(c)c.style.display="none";if(yes)leaveNormGame()}
-function disposeNormWorld(){if(_normAnim){cancelAnimationFrame(_normAnim);_normAnim=null}if(_normSession&&_normSession._kd){window.removeEventListener("keydown",_normSession._kd);window.removeEventListener("keyup",_normSession._ku)}if(_normRenderer){try{_normRenderer.dispose()}catch(e){}_normRenderer=null}_normScene=null;_normCamera=null;_normLocalMesh=null;var container=document.getElementById("normGameCanvas");if(container)while(container.firstChild)container.removeChild(container.firstChild)}
-function leaveNormGame(){disposeNormWorld();_normSession=null;var ov=document.getElementById("normGameOverlay");if(ov)ov.style.display="none";var fill=document.getElementById("normLoadFill");if(fill)fill.style.width="0%"}
-window.joinNormGame=joinNormGame;window.sendNormChat=sendNormChat;window.requestLeaveNormGame=requestLeaveNormGame;window.confirmLeaveNormGame=confirmLeaveNormGame;window.leaveNormGame=leaveNormGame;
+
+
+
+
+// ============================================================
+// NORM GAMES — real-time presence (Firebase when configured)
+// No fake player lists. Only real sessions that join the room.
+// ============================================================
+var _normSession = null;
+var _normAnim = null;
+var _normScene = null;
+var _normRenderer = null;
+var _normCamera = null;
+var _normPlayers = []; // filled only from live presence / local you
+var _normRemoteMeshes = {};
+var _normKeys = {};
+var _normLocalMesh = null;
+var _normPresenceTimer = null;
+var _normMyPresenceId = null;
+
+var NORM_GAMES = {
+    "azora-roleplay": {
+        id: "azora-roleplay",
+        title: "Azora Roleplay",
+        owner: "Azora",
+        dimensions: "3D",
+        roomPath: "/azoraNormRooms/azora-roleplay/players"
+    }
+};
+
+function getNormDisplayName() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+        var logged = localStorage.getItem("loggedIn");
+        if (logged === "guest" || acc.isGuest || !acc.username) return "___";
+        return String(acc.username);
+    } catch (e) { return "___"; }
+}
+
+function isNormGuest() {
+    return localStorage.getItem("loggedIn") === "guest" || getNormDisplayName() === "___";
+}
+
+function getNormAvatarColors() {
+    var av = { head: "#ffcc00", torso: "#1e60ff", leftArm: "#ffcc00", rightArm: "#ffcc00", leftLeg: "#00ebd4", rightLeg: "#00ebd4" };
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+        if (acc && acc.avatar) {
+            av.head = acc.avatar.head || av.head;
+            av.torso = acc.avatar.torso || av.torso;
+            av.leftArm = acc.avatar.leftArm || av.leftArm;
+            av.rightArm = acc.avatar.rightArm || av.rightArm;
+            av.leftLeg = acc.avatar.leftLeg || av.leftLeg;
+            av.rightLeg = acc.avatar.rightLeg || av.rightLeg;
+        }
+    } catch (e) {}
+    return av;
+}
+
+/** Same proportions as the main avatar customizer */
+function makeNormAvatar(colors) {
+    colors = colors || getNormAvatarColors();
+    var g = new THREE.Group();
+    g.name = "normAvatar";
+
+    function box(w, h, d, color) {
+        return new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, d),
+            new THREE.MeshLambertMaterial({ color: color })
+        );
+    }
+
+    // Match customizer: head 0.65, torso 0.85x1.0x0.45, arms 0.35x1.0, legs 0.35x1.0
+    var head = box(0.65, 0.65, 0.65, colors.head);
+    head.position.y = 1.12;
+    head.name = "head";
+
+    var torso = box(0.85, 1.0, 0.45, colors.torso);
+    torso.position.y = 0.3;
+    torso.name = "torso";
+
+    var leftArm = box(0.35, 1.0, 0.35, colors.leftArm);
+    leftArm.position.set(-0.62, 0.3, 0);
+    leftArm.name = "leftArm";
+
+    var rightArm = box(0.35, 1.0, 0.35, colors.rightArm);
+    rightArm.position.set(0.62, 0.3, 0);
+    rightArm.name = "rightArm";
+
+    var leftLeg = box(0.35, 1.0, 0.35, colors.leftLeg);
+    leftLeg.position.set(-0.22, -0.7, 0);
+    leftLeg.name = "leftLeg";
+
+    var rightLeg = box(0.35, 1.0, 0.35, colors.rightLeg);
+    rightLeg.position.set(0.22, -0.7, 0);
+    rightLeg.name = "rightLeg";
+
+    g.add(head);
+    g.add(torso);
+    g.add(leftArm);
+    g.add(rightArm);
+    g.add(leftLeg);
+    g.add(rightLeg);
+    return g;
+}
+
+function requestLeaveNormGame() {
+    var c = document.getElementById("normLeaveConfirm");
+    if (!c) {
+        // Fallback if confirm UI missing
+        if (window.confirm("Are you sure?\n\nLeave this Norm Game?")) {
+            leaveNormGame();
+        }
+        return;
+    }
+    // Must sit above the game overlay (azafn z-index ~20000)
+    c.style.zIndex = "2147483000";
+    c.style.display = "flex";
+}
+
+function confirmLeaveNormGame(yes) {
+    var c = document.getElementById("normLeaveConfirm");
+    if (c) {
+        c.style.display = "none";
+    }
+    if (yes) {
+        leaveNormGame();
+    }
+}
+
+function joinNormGame(gameId) {
+    var def = NORM_GAMES[gameId];
+    if (!def) {
+        alert("That Norm Game is not available yet.");
+        return;
+    }
+    var logged = localStorage.getItem("loggedIn");
+    if (logged !== "true" && logged !== "guest") {
+        alert("Log in or continue as Guest to join Norm Games!");
+        if (typeof openCreateAccount === "function") openCreateAccount();
+        return;
+    }
+
+    _normSession = {
+        id: def.id,
+        title: def.title,
+        roomPath: def.roomPath,
+        startedAt: Date.now()
+    };
+
+    var ov = document.getElementById("normGameOverlay");
+    var loading = document.getElementById("normGameLoading");
+    var play = document.getElementById("normGamePlay");
+    var title = document.getElementById("normGameTitle");
+    if (title) title.textContent = def.title;
+    if (loading) loading.style.display = "flex";
+    if (play) play.style.display = "none";
+    if (ov) {
+        ov.style.display = "flex";
+        ov.style.zIndex = "20000";
+    }
+
+    var fill = document.getElementById("normLoadFill");
+    var hint = document.getElementById("normLoadHint");
+    var hints = ["Loading terrain…", "Building the city…", "Loading your avatar…", "Connecting to live players…", "Almost ready…"];
+    var t0 = Date.now();
+    var duration = 3200 + Math.random() * 1000;
+
+    function tick() {
+        var p = Math.min(1, (Date.now() - t0) / duration);
+        if (fill) fill.style.width = Math.round(p * 100) + "%";
+        if (hint) hint.textContent = hints[Math.min(hints.length - 1, Math.floor(p * hints.length))];
+        if (p < 1) {
+            requestAnimationFrame(tick);
+        } else {
+            if (loading) loading.style.display = "none";
+            if (play) play.style.display = "flex";
+            startNormGameWorld(def);
+        }
+    }
+    requestAnimationFrame(tick);
+}
+
+function buildNormCity(scene) {
+    // Large ground
+    var ground = new THREE.Mesh(
+        new THREE.BoxGeometry(400, 1.2, 400),
+        new THREE.MeshLambertMaterial({ color: 0x2f6b3c })
+    );
+    ground.position.y = -0.6;
+    scene.add(ground);
+
+    // Road cross
+    var roadMat = new THREE.MeshLambertMaterial({ color: 0x374151 });
+    var roadX = new THREE.Mesh(new THREE.BoxGeometry(400, 0.15, 18), roadMat);
+    roadX.position.y = 0.02;
+    scene.add(roadX);
+    var roadZ = new THREE.Mesh(new THREE.BoxGeometry(18, 0.15, 400), roadMat);
+    roadZ.position.y = 0.025;
+    scene.add(roadZ);
+
+    // Sidewalks
+    var walkMat = new THREE.MeshLambertMaterial({ color: 0x9ca3af });
+    [[0, 12], [0, -12], [12, 0], [-12, 0]].forEach(function (off) {
+        var w = new THREE.Mesh(
+            new THREE.BoxGeometry(off[0] === 0 ? 400 : 6, 0.12, off[1] === 0 ? 400 : 6),
+            walkMat
+        );
+        w.position.set(off[0], 0.04, off[1]);
+        scene.add(w);
+    });
+
+    function building(x, z, w, h, d, color) {
+        var mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, d),
+            new THREE.MeshLambertMaterial({ color: color })
+        );
+        mesh.position.set(x, h / 2, z);
+        scene.add(mesh);
+        // Window rows
+        var winMat = new THREE.MeshLambertMaterial({ color: 0x93c5fd });
+        var floors = Math.max(2, Math.floor(h / 3.2));
+        for (var f = 0; f < floors; f++) {
+            for (var side = 0; side < 2; side++) {
+                var wx = side === 0 ? x - w / 2 - 0.05 : x + w / 2 + 0.05;
+                for (var col = -1; col <= 1; col++) {
+                    var win = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 1.1), winMat);
+                    win.position.set(wx, 1.4 + f * 3.0, z + col * Math.min(2.2, d * 0.28));
+                    if (side === 1) win.rotation.y = Math.PI;
+                    scene.add(win);
+                }
+            }
+        }
+        // Flat roof lip
+        var roof = new THREE.Mesh(
+            new THREE.BoxGeometry(w + 0.6, 0.4, d + 0.6),
+            new THREE.MeshLambertMaterial({ color: 0x1f2937 })
+        );
+        roof.position.set(x, h + 0.15, z);
+        scene.add(roof);
+    }
+
+    // Realistic-scale city blocks (much larger than before)
+    var palette = [0x64748b, 0x475569, 0x94a3b8, 0x334155, 0x1e3a5f, 0x4b5563, 0x6b7280];
+    var plots = [
+        [28, 28, 18, 22, 16], [50, 30, 14, 36, 14], [70, 45, 20, 18, 18],
+        [35, 55, 16, 28, 14], [55, 70, 22, 40, 18], [80, 25, 12, 50, 12],
+        [-30, 28, 16, 24, 14], [-55, 40, 18, 32, 16], [-75, 55, 14, 20, 14],
+        [-40, 70, 20, 26, 18], [-60, 20, 12, 44, 12],
+        [30, -30, 18, 20, 16], [55, -45, 16, 34, 14], [75, -25, 20, 28, 18],
+        [40, -65, 14, 22, 14], [65, -70, 18, 38, 16],
+        [-28, -32, 16, 24, 14], [-50, -50, 20, 30, 18], [-72, -30, 14, 42, 12],
+        [-45, -70, 18, 18, 16], [-65, -65, 12, 26, 12],
+        [100, 40, 24, 48, 20], [-100, 35, 22, 36, 18], [95, -40, 20, 30, 16],
+        [-95, -45, 18, 34, 18], [20, 100, 16, 22, 16], [-25, 105, 18, 28, 14],
+        [30, -100, 20, 26, 18], [-35, -105, 16, 32, 14]
+    ];
+    plots.forEach(function (p, i) {
+        building(p[0], p[1], p[2], p[3], p[4], palette[i % palette.length]);
+    });
+
+    // Plaza center low walls
+    var plaza = new THREE.Mesh(
+        new THREE.BoxGeometry(24, 0.3, 24),
+        new THREE.MeshLambertMaterial({ color: 0xd1d5db })
+    );
+    plaza.position.y = 0.1;
+    scene.add(plaza);
+
+    // Street lights
+    for (var s = -120; s <= 120; s += 40) {
+        [1, -1].forEach(function (side) {
+            var pole = new THREE.Mesh(
+                new THREE.BoxGeometry(0.35, 8, 0.35),
+                new THREE.MeshLambertMaterial({ color: 0x111827 })
+            );
+            pole.position.set(s, 4, side * 14);
+            scene.add(pole);
+            var lamp = new THREE.PointLight(0xfff3c4, 0.55, 35);
+            lamp.position.set(s, 7.5, side * 14);
+            scene.add(lamp);
+        });
+    }
+}
+
+function startNormGameWorld(def) {
+    disposeNormWorld(false);
+
+    // Only YOU at start — other rows come from live presence
+    var meName = getNormDisplayName();
+    _normPlayers = [{
+        id: "me",
+        name: meName,
+        isMe: true,
+        isGuest: isNormGuest()
+    }];
+    renderNormPlayerList();
+
+    var chat = document.getElementById("normChatMessages");
+    if (chat) {
+        chat.innerHTML = "";
+        appendNormChat("System", "Welcome to " + def.title + ". Only real players who join this room appear here.", true);
+        if (typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()) {
+            appendNormChat("System", "Live multiplayer is on — other real players will show when they join.", true);
+        } else {
+            appendNormChat("System", "Cloud not linked yet — you are the only live player here until Firebase is set up on the site.", true);
+        }
+    }
+
+    var container = document.getElementById("normGameCanvas");
+    if (!container || typeof THREE === "undefined") {
+        if (container) {
+            container.innerHTML = "<p style='color:#fff;padding:20px;text-align:center;'>3D needs Three.js. Chat and the player list still work.</p>";
+        }
+        startNormPresence(def);
+        return;
+    }
+    while (container.firstChild) container.removeChild(container.firstChild);
+
+    // Size after layout
+    var w = Math.max(container.clientWidth, 320);
+    var h = Math.max(container.clientHeight, 240);
+
+    _normScene = new THREE.Scene();
+    _normScene.background = new THREE.Color(0x7eb6e8);
+    _normScene.fog = new THREE.Fog(0x7eb6e8, 80, 220);
+
+    // Closer camera → avatar feels larger
+    _normCamera = new THREE.PerspectiveCamera(55, w / h, 0.1, 500);
+    _normCamera.position.set(0, 2.4, 4.2);
+
+    _normRenderer = new THREE.WebGLRenderer({ antialias: true });
+    _normRenderer.setSize(w, h);
+    _normRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    container.appendChild(_normRenderer.domElement);
+
+    _normScene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    var sun = new THREE.DirectionalLight(0xffffff, 0.95);
+    sun.position.set(40, 80, 30);
+    _normScene.add(sun);
+    var hemi = new THREE.HemisphereLight(0xbfd9ff, 0x3d5c40, 0.35);
+    _normScene.add(hemi);
+
+    buildNormCity(_normScene);
+
+    _normLocalMesh = makeNormAvatar(getNormAvatarColors());
+    _normLocalMesh.position.set(0, 0.7, 0);
+    _normScene.add(_normLocalMesh);
+    _normRemoteMeshes = {};
+
+    _normKeys = {};
+    function onKey(e, down) {
+        var k = e.key.toLowerCase();
+        if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].indexOf(k) !== -1) {
+            _normKeys[k] = down;
+            if (e.preventDefault) e.preventDefault();
+        }
+        // Esc opens leave confirm
+        if (down && e.key === "Escape") {
+            requestLeaveNormGame();
+        }
+    }
+    _normSession._kd = function (e) { onKey(e, true); };
+    _normSession._ku = function (e) { onKey(e, false); };
+    window.addEventListener("keydown", _normSession._kd);
+    window.addEventListener("keyup", _normSession._ku);
+
+    function animate() {
+        _normAnim = requestAnimationFrame(animate);
+        if (!_normLocalMesh || !_normRenderer || !_normCamera) return;
+
+        var sp = 0.16;
+        var dx = 0, dz = 0;
+        if (_normKeys["w"] || _normKeys["arrowup"]) dz -= sp;
+        if (_normKeys["s"] || _normKeys["arrowdown"]) dz += sp;
+        if (_normKeys["a"] || _normKeys["arrowleft"]) dx -= sp;
+        if (_normKeys["d"] || _normKeys["arrowright"]) dx += sp;
+        _normLocalMesh.position.x += dx;
+        _normLocalMesh.position.z += dz;
+        // Soft map bounds
+        _normLocalMesh.position.x = Math.max(-180, Math.min(180, _normLocalMesh.position.x));
+        _normLocalMesh.position.z = Math.max(-180, Math.min(180, _normLocalMesh.position.z));
+
+        // Close third-person follow
+        var target = _normLocalMesh.position;
+        _normCamera.position.x += (target.x - _normCamera.position.x) * 0.12;
+        _normCamera.position.z += (target.z + 4.2 - _normCamera.position.z) * 0.12;
+        _normCamera.position.y += (target.y + 2.2 - _normCamera.position.y) * 0.12;
+        _normCamera.lookAt(target.x, target.y + 1.0, target.z);
+
+        _normRenderer.render(_normScene, _normCamera);
+    }
+    animate();
+
+    // Resize observer
+    try {
+        _normSession._onResize = function () {
+            if (!_normRenderer || !_normCamera || !container) return;
+            var ww = Math.max(container.clientWidth, 1);
+            var hh = Math.max(container.clientHeight, 1);
+            _normCamera.aspect = ww / hh;
+            _normCamera.updateProjectionMatrix();
+            _normRenderer.setSize(ww, hh);
+        };
+        window.addEventListener("resize", _normSession._onResize);
+        setTimeout(_normSession._onResize, 100);
+    } catch (e) {}
+
+    updateNormHudCount();
+    startNormPresence(def);
+}
+
+function updateNormHudCount() {
+    var hud = document.getElementById("normHudPlayers");
+    if (hud) hud.textContent = "Players: " + _normPlayers.length;
+}
+
+function renderNormPlayerList() {
+    var el = document.getElementById("normPlayerList");
+    if (!el) return;
+    el.innerHTML = "";
+    if (!_normPlayers.length) {
+        el.innerHTML = '<div class="norm-player-row"><span class="np-name">No players yet</span></div>';
+        return;
+    }
+    _normPlayers.forEach(function (p) {
+        var row = document.createElement("div");
+        row.className = "norm-player-row";
+        var label = document.createElement("span");
+        label.className = "np-name";
+        label.textContent = p.name + (p.isMe ? " (you)" : "");
+        row.appendChild(label);
+        if (!p.isMe && !p.isGuest && p.name && p.name !== "___" && localStorage.getItem("loggedIn") === "true") {
+            var act = document.createElement("div");
+            act.className = "np-actions";
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.textContent = "Add Friend";
+            btn.onclick = function () {
+                if (typeof sendFriendRequest === "function") {
+                    try { sendFriendRequest(p.name); } catch (e) { alert("Friend request sent to " + p.name + "!"); }
+                } else {
+                    alert("Friend request sent to " + p.name + "!");
+                }
+            };
+            act.appendChild(btn);
+            row.appendChild(act);
+        } else if (!p.isMe && (p.isGuest || p.name === "___")) {
+            var tip = document.createElement("span");
+            tip.style.fontSize = "11px";
+            tip.style.opacity = "0.7";
+            tip.textContent = "Guest";
+            row.appendChild(tip);
+        }
+        el.appendChild(row);
+    });
+    updateNormHudCount();
+}
+
+function appendNormChat(user, text, isSystem) {
+    var box = document.getElementById("normChatMessages");
+    if (!box) return;
+    var line = document.createElement("div");
+    line.className = "norm-chat-line";
+    var u = document.createElement("span");
+    u.className = "nc-user" + ((user === "___" || user === "Guest") ? " guest" : "");
+    u.textContent = isSystem ? "• " : (user + ": ");
+    line.appendChild(u);
+    line.appendChild(document.createTextNode(text));
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
+}
+
+function sendNormChat() {
+    var input = document.getElementById("normChatInput");
+    if (!input) return;
+    var msg = (input.value || "").trim();
+    if (!msg) return;
+    var name = getNormDisplayName();
+    appendNormChat(name, msg);
+    input.value = "";
+    // Broadcast chat when cloud ready
+    try {
+        if (_normSession && typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()) {
+            var base = (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "");
+            var chatUrl = base + "/azoraNormRooms/" + _normSession.id + "/chat.json";
+            fetch(chatUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user: name, text: msg, at: Date.now() })
+            }).catch(function () {});
+        }
+    } catch (e) {}
+}
+
+/** Real-time presence via Firebase (when configured). No fake players. */
+function startNormPresence(def) {
+    stopNormPresence();
+    _normMyPresenceId = "p_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+
+    function publishSelf() {
+        if (!_normSession) return;
+        if (typeof AZORA_CLOUD === "undefined" || !AZORA_CLOUD.isReady || !AZORA_CLOUD.isReady()) return;
+        var base = (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "");
+        var url = base + def.roomPath + "/" + _normMyPresenceId + ".json";
+        var pos = _normLocalMesh ? {
+            x: _normLocalMesh.position.x,
+            y: _normLocalMesh.position.y,
+            z: _normLocalMesh.position.z
+        } : { x: 0, y: 0.7, z: 0 };
+        var body = {
+            name: getNormDisplayName(),
+            isGuest: isNormGuest(),
+            avatar: getNormAvatarColors(),
+            pos: pos,
+            updatedAt: Date.now()
+        };
+        fetch(url, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        }).catch(function () {});
+    }
+
+    function pullPlayers() {
+        if (!_normSession) return;
+        if (typeof AZORA_CLOUD === "undefined" || !AZORA_CLOUD.isReady || !AZORA_CLOUD.isReady()) {
+            // Local-only: just you
+            _normPlayers = [{ id: "me", name: getNormDisplayName(), isMe: true, isGuest: isNormGuest() }];
+            renderNormPlayerList();
+            return;
+        }
+        var base = (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "");
+        var url = base + def.roomPath + ".json";
+        fetch(url)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                var list = [];
+                var now = Date.now();
+                list.push({ id: "me", name: getNormDisplayName(), isMe: true, isGuest: isNormGuest() });
+                if (data && typeof data === "object") {
+                    Object.keys(data).forEach(function (pid) {
+                        if (pid === _normMyPresenceId) return;
+                        var row = data[pid];
+                        if (!row || !row.updatedAt) return;
+                        // Drop stale presence (>25s)
+                        if (now - row.updatedAt > 25000) return;
+                        list.push({
+                            id: pid,
+                            name: row.name || "___",
+                            isMe: false,
+                            isGuest: !!row.isGuest,
+                            pos: row.pos,
+                            avatar: row.avatar
+                        });
+                        // Sync remote mesh
+                        if (_normScene && typeof THREE !== "undefined") {
+                            if (!_normRemoteMeshes[pid]) {
+                                var mesh = makeNormAvatar(row.avatar || getNormAvatarColors());
+                                _normScene.add(mesh);
+                                _normRemoteMeshes[pid] = mesh;
+                            }
+                            if (row.pos && _normRemoteMeshes[pid]) {
+                                _normRemoteMeshes[pid].position.set(
+                                    row.pos.x || 0,
+                                    row.pos.y != null ? row.pos.y : 0.7,
+                                    row.pos.z || 0
+                                );
+                            }
+                        }
+                    });
+                }
+                // Remove meshes for players who left
+                if (_normRemoteMeshes) {
+                    Object.keys(_normRemoteMeshes).forEach(function (pid) {
+                        var still = list.some(function (p) { return p.id === pid; });
+                        if (!still) {
+                            try { _normScene.remove(_normRemoteMeshes[pid]); } catch (e) {}
+                            delete _normRemoteMeshes[pid];
+                        }
+                    });
+                }
+                _normPlayers = list;
+                renderNormPlayerList();
+            })
+            .catch(function () {});
+    }
+
+    publishSelf();
+    pullPlayers();
+    _normPresenceTimer = setInterval(function () {
+        publishSelf();
+        pullPlayers();
+    }, 2000);
+}
+
+function stopNormPresence() {
+    if (_normPresenceTimer) {
+        clearInterval(_normPresenceTimer);
+        _normPresenceTimer = null;
+    }
+    // Remove our presence node
+    try {
+        if (_normMyPresenceId && _normSession && typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()) {
+            var base = (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "");
+            var url = base + (_normSession.roomPath || "") + "/" + _normMyPresenceId + ".json";
+            fetch(url, { method: "DELETE" }).catch(function () {});
+        }
+    } catch (e) {}
+    _normMyPresenceId = null;
+}
+
+function disposeNormWorld(keepSession) {
+    stopNormPresence();
+    if (_normAnim) {
+        cancelAnimationFrame(_normAnim);
+        _normAnim = null;
+    }
+    if (_normSession) {
+        if (_normSession._kd) window.removeEventListener("keydown", _normSession._kd);
+        if (_normSession._ku) window.removeEventListener("keyup", _normSession._ku);
+        if (_normSession._onResize) window.removeEventListener("resize", _normSession._onResize);
+    }
+    if (_normRenderer) {
+        try { _normRenderer.dispose(); } catch (e) {}
+        _normRenderer = null;
+    }
+    _normScene = null;
+    _normCamera = null;
+    _normLocalMesh = null;
+    _normRemoteMeshes = {};
+    var container = document.getElementById("normGameCanvas");
+    if (container) {
+        while (container.firstChild) container.removeChild(container.firstChild);
+    }
+    if (!keepSession) {
+        // session cleared by leaveNormGame
+    }
+}
+
+function leaveNormGame() {
+    disposeNormWorld(false);
+    _normSession = null;
+    _normPlayers = [];
+    var ov = document.getElementById("normGameOverlay");
+    if (ov) ov.style.display = "none";
+    var play = document.getElementById("normGamePlay");
+    if (play) play.style.display = "none";
+    var loading = document.getElementById("normGameLoading");
+    if (loading) loading.style.display = "flex";
+    var fill = document.getElementById("normLoadFill");
+    if (fill) fill.style.width = "0%";
+    var conf = document.getElementById("normLeaveConfirm");
+    if (conf) conf.style.display = "none";
+}
+
+window.joinNormGame = joinNormGame;
+window.sendNormChat = sendNormChat;
+window.requestLeaveNormGame = requestLeaveNormGame;
+window.confirmLeaveNormGame = confirmLeaveNormGame;
+window.leaveNormGame = leaveNormGame;
+

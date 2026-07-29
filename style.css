@@ -2269,3 +2269,5 @@ button.azora-temp-disabled:hover{transform:none!important;box-shadow:none!import
 .norm-chat-input-row button{margin:0!important;width:auto!important;padding:10px 14px!important}
 .norm-chat-note{font-size:11px;color:#94a3b8;margin:8px 0 0}
 @media(max-width:800px){.norm-game-play{flex-direction:column}.norm-game-side{width:100%;border-left:none;border-top:2px solid rgba(255,255,255,.15);max-height:45vh}}
+
+#normLeaveConfirm { z-index: 2147483000 !important; }
