@@ -6080,33 +6080,42 @@ function startNormGameWorld(def) {
         var sp = 0.16;
         var dx = 0, dz = 0;
 
-        // Keyboard move relative to camera yaw so W is "forward" on screen
+        // Camera-relative move: W always walks INTO the screen (away from camera)
         var yaw = _normSession.camYaw || 0;
+        var sin = Math.sin(yaw), cos = Math.cos(yaw);
+        // Horizontal vector from player → camera is (sin, cos); forward is opposite
+        var fwdX = -sin;
+        var fwdZ = -cos;
+        // Right vector (strafe) — perpendicular
+        var rightX = cos;
+        var rightZ = -sin;
+
         var forward = 0, strafe = 0;
         if (_normKeys["w"] || _normKeys["p"]) forward += 1;
         if (_normKeys["s"]) forward -= 1;
         if (_normKeys["a"]) strafe -= 1;
         if (_normKeys["d"]) strafe += 1;
-        // Left joystick analog
+        // Left joystick analog (moveZ = forward, moveX = strafe)
         forward += (_normSession.moveZ || 0);
         strafe += (_normSession.moveX || 0);
 
-        // Clamp combined input
         var mag = Math.sqrt(forward * forward + strafe * strafe);
         if (mag > 1) { forward /= mag; strafe /= mag; }
 
-        if (forward !== 0 || strafe !== 0) {
-            // Move in camera-facing plane
-            var sin = Math.sin(yaw), cos = Math.cos(yaw);
-            // forward is -Z when yaw=0
-            dx = (strafe * cos + forward * sin) * sp;
-            dz = (-forward * cos + strafe * sin) * sp;
+        var moving = Math.abs(forward) > 0.001 || Math.abs(strafe) > 0.001;
+        if (moving) {
+            dx = (fwdX * forward + rightX * strafe) * sp;
+            dz = (fwdZ * forward + rightZ * strafe) * sp;
             _normLocalMesh.position.x += dx;
             _normLocalMesh.position.z += dz;
-            // Face movement direction
-            if (Math.abs(dx) + Math.abs(dz) > 0.001) {
+            // Face the direction of travel (matches camera while strafing/forward)
+            if (Math.abs(dx) + Math.abs(dz) > 0.0001) {
                 _normLocalMesh.rotation.y = Math.atan2(dx, dz);
             }
+        } else {
+            // Idle: always face the same way the camera is looking (into the screen)
+            // so when you start walking, you go that way
+            _normLocalMesh.rotation.y = Math.atan2(fwdX, fwdZ);
         }
 
         _normLocalMesh.position.x = Math.max(-180, Math.min(180, _normLocalMesh.position.x));
