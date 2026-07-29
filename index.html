@@ -610,6 +610,11 @@
 <div id="aiImageOverlay" class="overlay" style="display:none;">
     <div class="popup ai-image-popup" style="max-width:min(360px,calc(100vw - 20px));text-align:left;">
         <h2 style="text-align:center;margin-top:0;">🎨 AI Image Generator</h2>
+        
+        <p style="font-size: 10px; opacity: 0.7; margin-top: -8px; margin-bottom: 12px; text-align: center;">
+            This image generator uses Gemini's image gen tool.
+        </p>
+
         <p class="ai-img-policy">Azora is a family-friendly platform. Prompts with violence, gore, blood, explicit content, or other TOS violations are blocked.</p>
         <label class="settings-label" for="aiImagePrompt">Describe your image</label>
         <textarea id="aiImagePrompt" class="ai-image-prompt" maxlength="400" placeholder="Example: a sunny park with cartoon trees and a blue sky"></textarea>
@@ -627,7 +632,6 @@
         </div>
     </div>
 </div>
-
 <script src="script.js"></script>
 <script>
 // Register Azora as installable app (not the staff website)

@@ -6556,6 +6556,27 @@ function finishAIImageGenerate(prompt) {
 }
 
 window.openAIImageGenerator = openAIImageGenerator;
+// Inside script.js (AI Image Generator Section)
+function handleAIImageGenerate(promptText) {
+    showAIImageStatus("info", "Generating image with Gemini...");
+
+    // Send request to your server / backend function handling the Gemini Image API:
+    fetch('/api/gemini-image-generator', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: promptText })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.imageUrl) {
+            document.getElementById("aiImageResultImg").src = data.imageUrl;
+            showAIImageStatus("ok", "Done! Here's your image.");
+        } else {
+            showAIImageStatus("error", "Unable to generate image.");
+        }
+    })
+    .catch(() => showAIImageStatus("error", "Something went wrong."));
+}
 window.closeAIImageGenerator = closeAIImageGenerator;
 window.startAIImageGenerate = startAIImageGenerate;
 window.moderateAIImagePrompt = moderateAIImagePrompt;
