@@ -238,6 +238,7 @@
     <div id="userPanel" style="display:none;">
         <button id="searchButton" onclick="openSearch()">🔍 Search</button>
         <button id="azafnButton" class="azora-temp-disabled" type="button" aria-disabled="true" onclick="handleDisabledFeatureClick(event, this)">🤖 AzaFn</button>
+        <button id="aiImageButton" type="button" onclick="openAIImageGenerator()" style="margin:0;">🎨 AI Images</button>
         <button id="chatButton" onclick="openChatPanel()">💬 Chat</button>
         <button id="notifButton" class="notif-bell-btn" onclick="toggleNotifPanel()">
             🔔<span id="notifBadge" class="notif-badge" style="display:none;">0</span>
@@ -604,6 +605,29 @@
         </div>
     </div>
 </div>
+
+<!-- Azora AI Image Generator (heavily moderated) -->
+<div id="aiImageOverlay" class="overlay" style="display:none;">
+    <div class="popup ai-image-popup" style="max-width:480px;text-align:left;">
+        <h2 style="text-align:center;margin-top:0;">🎨 AI Image Generator</h2>
+        <p class="ai-img-policy">Azora is a family-friendly platform. Prompts with violence, gore, blood, explicit content, or other TOS violations are blocked.</p>
+        <label class="settings-label" for="aiImagePrompt">Describe your image</label>
+        <textarea id="aiImagePrompt" class="ai-image-prompt" maxlength="400" placeholder="Example: a sunny park with cartoon trees and a blue sky"></textarea>
+        <div class="ai-img-status" id="aiImageStatus" style="display:none;"></div>
+        <div class="ai-img-progress-wrap" id="aiImageProgressWrap" style="display:none;">
+            <div class="ai-img-progress"><div class="ai-img-progress-fill" id="aiImageProgressFill"></div></div>
+            <span id="aiImageProgressText">Working…</span>
+        </div>
+        <div class="ai-img-result" id="aiImageResult" style="display:none;">
+            <img id="aiImageResultImg" alt="Generated image" />
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
+            <button type="button" id="aiImageGenerateBtn" onclick="startAIImageGenerate()" style="flex:1;background:linear-gradient(180deg,#60a5fa,#1e60ff);color:#fff;">Generate</button>
+            <button type="button" onclick="closeAIImageGenerator()" style="flex:1;">Close</button>
+        </div>
+    </div>
+</div>
+
 <script src="script.js"></script>
 <script>
 // Register Azora as installable app (not the staff website)

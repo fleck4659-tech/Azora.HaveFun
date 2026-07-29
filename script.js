@@ -5458,8 +5458,105 @@ function makeNormAvatar(colors) {
     g.add(rightArm);
     g.add(leftLeg);
     g.add(rightLeg);
+
+    // Smile.png face decal on the FRONT of the head (same idea as customizer)
+    attachNormFaceDecal(g, head);
+
     return g;
 }
+
+/** Flat Smile.png on front of head — hidden until texture loads (no white square) */
+function attachNormFaceDecal(avatarGroup, headMesh) {
+    if (typeof THREE === "undefined" || !headMesh) return;
+    try {
+        var mat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0,
+            depthWrite: false,
+            side: THREE.FrontSide,
+            alphaTest: 0.15
+        });
+        var plane = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.52), mat);
+        plane.name = "faceDecal";
+        // Sit just in front of the head cube
+        plane.position.set(0, headMesh.position.y + 0.02, 0.34);
+        plane.visible = false;
+        avatarGroup.add(plane);
+
+        function showTex(tex) {
+            if (!tex) return;
+            tex.minFilter = THREE.LinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            tex.generateMipmaps = false;
+            tex.needsUpdate = true;
+            mat.map = tex;
+            mat.transparent = true;
+            mat.opacity = 1;
+            mat.needsUpdate = true;
+            plane.visible = true;
+        }
+
+        function loadThree(url, onFail) {
+            try {
+                var loader = new THREE.TextureLoader();
+                if (typeof location !== "undefined" && location.protocol !== "file:") {
+                    loader.setCrossOrigin("anonymous");
+                }
+                loader.load(url, function (tex) { showTex(tex); }, undefined, function () { if (onFail) onFail(); });
+            } catch (e) { if (onFail) onFail(); }
+        }
+
+        function loadImage(url, onFail) {
+            try {
+                var img = new Image();
+                if (typeof location !== "undefined" && location.protocol !== "file:") {
+                    img.crossOrigin = "anonymous";
+                }
+                img.onload = function () {
+                    try {
+                        var c = document.createElement("canvas");
+                        c.width = img.naturalWidth || img.width || 64;
+                        c.height = img.naturalHeight || img.height || 64;
+                        var ctx = c.getContext("2d");
+                        ctx.clearRect(0, 0, c.width, c.height);
+                        ctx.drawImage(img, 0, 0);
+                        var data = ctx.getImageData(0, 0, c.width, c.height);
+                        var px = data.data;
+                        for (var i = 0; i < px.length; i += 4) {
+                            var lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+                            if (px[i + 3] < 15 || lum > 95) {
+                                px[i] = px[i + 1] = px[i + 2] = px[i + 3] = 0;
+                            } else {
+                                px[i] = px[i + 1] = px[i + 2] = 12;
+                                px[i + 3] = 255;
+                            }
+                        }
+                        ctx.putImageData(data, 0, 0);
+                        showTex(new THREE.CanvasTexture(c));
+                    } catch (e) {
+                        try {
+                            var t = new THREE.Texture(img);
+                            t.needsUpdate = true;
+                            showTex(t);
+                        } catch (e2) { if (onFail) onFail(); }
+                    }
+                };
+                img.onerror = function () { if (onFail) onFail(); };
+                img.src = url;
+            } catch (e) { if (onFail) onFail(); }
+        }
+
+        loadThree("Smile.png", function () {
+            loadThree("./Smile.png", function () {
+                loadImage("Smile.png", function () {
+                    loadImage("./Smile.png", function () {});
+                });
+            });
+        });
+    } catch (e) {}
+}
+
 
 function requestLeaveNormGame() {
     var c = document.getElementById("normLeaveConfirm");
@@ -6193,3 +6290,245 @@ window.requestLeaveNormGame = requestLeaveNormGame;
 window.confirmLeaveNormGame = confirmLeaveNormGame;
 window.leaveNormGame = leaveNormGame;
 
+
+
+
+// ============================================================
+// AI IMAGE GENERATOR — heavily moderated (family / kids safe)
+// Violations & errors: ~10s processing then message
+// Safe prompts: ~30s processing then image
+// ============================================================
+var _aiImgBusy = false;
+var _aiImgTimer = null;
+var _aiImgProgressTimer = null;
+
+/** Returns { blocked: true, reason } or { blocked: false } */
+function moderateAIImagePrompt(raw) {
+    var text = String(raw || "").toLowerCase().replace(/\s+/g, " ").trim();
+    if (!text || text.length < 3) {
+        return { blocked: true, reason: "empty", message: "Please describe an image (at least a few words)." };
+    }
+
+    // Phrases / words that violate Azora TOS (explicit, violence, gore, weapons harm, hate, etc.)
+    var banned = [
+        // explicit / sexual
+        "nude", "naked", "nsfw", "porn", "sex", "sexy", "sexual", "erotic", "hentai", "xxx",
+        "onlyfans", "boobs", "breast", "penis", "vagina", "genital", "underwear only",
+        // violence / gore / blood
+        "gore", "gory", "blood", "bloody", "bleeding", "dismember", "decapitat", "corpse",
+        "murder", "kill", "killing", "stab", "shoot", "gunshot", "torture", "massacre",
+        "war crime", "execution", "behead", "guts", "intestines", "body horror",
+        // weapons used for harm framing
+        "shoot someone", "kill someone", "hurt someone", "attack people",
+        // self-harm
+        "suicide", "self-harm", "self harm", "cut myself",
+        // hate / extreme
+        "racial slur", "nazi", "terrorist attack", "bomb the",
+        // drugs (illegal framing)
+        "meth lab", "cocaine", "heroin inject",
+        // exploitation
+        "child exploit", "underage nude", "loli", "shota"
+    ];
+
+    for (var i = 0; i < banned.length; i++) {
+        if (text.indexOf(banned[i]) !== -1) {
+            return {
+                blocked: true,
+                reason: "tos",
+                message: "This prompt was rejected. It looks like it breaks Azora's rules (no violence, gore/blood, explicit content, or other harmful requests). Please try a friendly, creative idea instead."
+            };
+        }
+    }
+    return { blocked: false };
+}
+
+function openAIImageGenerator() {
+    var ov = document.getElementById("aiImageOverlay");
+    if (!ov) return;
+    ov.style.display = "flex";
+    resetAIImageUI(false);
+    var ta = document.getElementById("aiImagePrompt");
+    if (ta) setTimeout(function () { ta.focus(); }, 50);
+}
+
+function closeAIImageGenerator() {
+    if (_aiImgBusy) {
+        // Allow close but cancel timers
+        clearAIImageTimers();
+        _aiImgBusy = false;
+    }
+    var ov = document.getElementById("aiImageOverlay");
+    if (ov) ov.style.display = "none";
+    var btn = document.getElementById("aiImageGenerateBtn");
+    if (btn) btn.disabled = false;
+}
+
+function clearAIImageTimers() {
+    if (_aiImgTimer) { clearTimeout(_aiImgTimer); _aiImgTimer = null; }
+    if (_aiImgProgressTimer) { clearInterval(_aiImgProgressTimer); _aiImgProgressTimer = null; }
+}
+
+function resetAIImageUI(keepPrompt) {
+    clearAIImageTimers();
+    var st = document.getElementById("aiImageStatus");
+    var pw = document.getElementById("aiImageProgressWrap");
+    var fill = document.getElementById("aiImageProgressFill");
+    var res = document.getElementById("aiImageResult");
+    var img = document.getElementById("aiImageResultImg");
+    if (st) { st.style.display = "none"; st.className = "ai-img-status"; st.textContent = ""; }
+    if (pw) pw.style.display = "none";
+    if (fill) fill.style.width = "0%";
+    if (res) res.style.display = "none";
+    if (img) { img.removeAttribute("src"); img.alt = "Generated image"; }
+    if (!keepPrompt) {
+        var ta = document.getElementById("aiImagePrompt");
+        // keep text so user can edit after reject
+    }
+    var btn = document.getElementById("aiImageGenerateBtn");
+    if (btn) btn.disabled = false;
+}
+
+function runAIImageProgress(durationMs, label) {
+    var pw = document.getElementById("aiImageProgressWrap");
+    var fill = document.getElementById("aiImageProgressFill");
+    var txt = document.getElementById("aiImageProgressText");
+    if (pw) pw.style.display = "block";
+    if (txt) txt.textContent = label || "Processing…";
+    if (fill) fill.style.width = "0%";
+    var t0 = Date.now();
+    if (_aiImgProgressTimer) clearInterval(_aiImgProgressTimer);
+    _aiImgProgressTimer = setInterval(function () {
+        var p = Math.min(1, (Date.now() - t0) / durationMs);
+        if (fill) fill.style.width = Math.round(p * 100) + "%";
+        if (p >= 1 && _aiImgProgressTimer) {
+            clearInterval(_aiImgProgressTimer);
+            _aiImgProgressTimer = null;
+        }
+    }, 100);
+}
+
+function showAIImageStatus(kind, message) {
+    var st = document.getElementById("aiImageStatus");
+    if (!st) return;
+    st.style.display = "block";
+    st.className = "ai-img-status " + (kind || "info");
+    st.textContent = message;
+}
+
+function startAIImageGenerate() {
+    if (_aiImgBusy) return;
+    var ta = document.getElementById("aiImagePrompt");
+    var prompt = ta ? ta.value.trim() : "";
+    var mod = moderateAIImagePrompt(prompt);
+
+    // Immediate empty check (still show brief process for consistency on tos/error only)
+    if (mod.blocked && mod.reason === "empty") {
+        showAIImageStatus("error", mod.message);
+        return;
+    }
+
+    _aiImgBusy = true;
+    var btn = document.getElementById("aiImageGenerateBtn");
+    if (btn) btn.disabled = true;
+    var res = document.getElementById("aiImageResult");
+    if (res) res.style.display = "none";
+    showAIImageStatus("info", "Checking your prompt and preparing…");
+
+    // TOS violation → 10 seconds processing, then reject
+    if (mod.blocked && mod.reason === "tos") {
+        runAIImageProgress(10000, "Reviewing prompt against Azora rules…");
+        _aiImgTimer = setTimeout(function () {
+            clearAIImageTimers();
+            _aiImgBusy = false;
+            if (btn) btn.disabled = false;
+            var pw = document.getElementById("aiImageProgressWrap");
+            if (pw) pw.style.display = "none";
+            showAIImageStatus("rejected", mod.message);
+        }, 10000);
+        return;
+    }
+
+    // Safe path → ~30 seconds, then generate
+    runAIImageProgress(30000, "Generating your image… this takes about 30 seconds");
+    showAIImageStatus("info", "Creating a family-friendly image from your description…");
+
+    _aiImgTimer = setTimeout(function () {
+        finishAIImageGenerate(prompt);
+    }, 30000);
+}
+
+function finishAIImageGenerate(prompt) {
+    clearAIImageTimers();
+    var btn = document.getElementById("aiImageGenerateBtn");
+    var pw = document.getElementById("aiImageProgressWrap");
+
+    // Final safety re-check
+    var mod = moderateAIImagePrompt(prompt);
+    if (mod.blocked) {
+        _aiImgBusy = false;
+        if (btn) btn.disabled = false;
+        if (pw) pw.style.display = "none";
+        showAIImageStatus("rejected", mod.message || "This prompt was rejected.");
+        return;
+    }
+
+    // Build a safe image request — boost family-friendly style; never send blocked text
+    var safePrompt = prompt + ", cute friendly cartoon style, family friendly, colorful, clean art, no violence, no gore";
+    var url = "https://image.pollinations.ai/prompt/" + encodeURIComponent(safePrompt) +
+        "?width=768&height=768&nologo=true&safe=true&seed=" + Math.floor(Math.random() * 1e9);
+
+    var img = document.getElementById("aiImageResultImg");
+    var res = document.getElementById("aiImageResult");
+    if (!img || !res) {
+        _aiImgBusy = false;
+        if (btn) btn.disabled = false;
+        showAIImageStatus("error", "Something went wrong");
+        return;
+    }
+
+    // Load with timeout → error path ~ already used 30s; if fail show error after short wait to match "10s on error" feel from start of load
+    var loadStart = Date.now();
+    var settled = false;
+
+    function fail() {
+        if (settled) return;
+        settled = true;
+        var waitLeft = Math.max(0, 10000 - (Date.now() - loadStart));
+        // Error presentation: about 10 seconds of "error processing" if load fails fast
+        runAIImageProgress(Math.max(waitLeft, 800), "Something went wrong — finishing…");
+        showAIImageStatus("info", "Having trouble finishing the image…");
+        setTimeout(function () {
+            clearAIImageTimers();
+            _aiImgBusy = false;
+            if (btn) btn.disabled = false;
+            if (pw) pw.style.display = "none";
+            res.style.display = "none";
+            showAIImageStatus("error", "Something went wrong");
+        }, Math.max(waitLeft, 800));
+    }
+
+    function ok() {
+        if (settled) return;
+        settled = true;
+        clearAIImageTimers();
+        _aiImgBusy = false;
+        if (btn) btn.disabled = false;
+        if (pw) pw.style.display = "none";
+        res.style.display = "block";
+        showAIImageStatus("ok", "Done! Here's your image.");
+    }
+
+    img.onload = ok;
+    img.onerror = fail;
+    img.src = url;
+
+    // Hard timeout 45s on network hang
+    setTimeout(function () {
+        if (!settled) fail();
+    }, 45000);
+}
+
+window.openAIImageGenerator = openAIImageGenerator;
+window.closeAIImageGenerator = closeAIImageGenerator;
+window.startAIImageGenerate = startAIImageGenerate;
+window.moderateAIImagePrompt = moderateAIImagePrompt;
