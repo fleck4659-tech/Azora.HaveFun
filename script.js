@@ -1,4 +1,3 @@
-console.log("%c[Azora] script.js v37 loaded","color:#1e60ff;font-weight:bold");
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
 const rotationSpeed = 0.5; // Higher number = faster rotation
@@ -2397,7 +2396,7 @@ function initPlay3D() {
         // street lines
         for (var ln = -2; ln <= 2; ln++) {
             for (var seg = 0; seg < 8; seg++) {
-                var line = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.13, 2), new THREE.MeshBasicMaterial({ color: 0xfbbf24 }));
+                var line = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.13, 2), new THREE.MeshLambertMaterial({ color: 0xfbbf24 }));
                 line.position.set(ln * 12, 0.08, -24 + seg * 7 + (rand() * 1.5));
                 _play.scene.add(line);
             }
@@ -5251,14 +5250,21 @@ function isAzoraOnline() {
 }
 
 function showAzoraOfflineScreen(show) {
-    // Official Wi‑Fi full-screen error is RETIRED.
-    // Always keep it hidden so Azora keeps running offline.
     var el = document.getElementById("azoraOfflineScreen");
     if (!el) return;
-    el.classList.remove("show");
-    el.style.display = "none";
-    el.setAttribute("aria-hidden", "true");
-    document.documentElement.removeAttribute("data-azora-offline");
+    if (show) {
+        el.classList.add("show");
+        el.style.display = "flex";
+        el.setAttribute("aria-hidden", "false");
+        document.documentElement.setAttribute("data-azora-offline", "1");
+    } else {
+        el.classList.remove("show");
+        el.style.display = "none";
+        el.setAttribute("aria-hidden", "true");
+        document.documentElement.removeAttribute("data-azora-offline");
+        var st = document.getElementById("azoraOfflineStatus");
+        if (st) st.textContent = "";
+    }
 }
 
 var _azoraLostTimer = null;
@@ -5270,6 +5276,7 @@ function showConnectionLostReminder(show) {
     if (show) {
         el.classList.add("show");
         el.style.display = "block";
+        // restart progress bar animation
         var bar = document.getElementById("azoraConnectionLostBar");
         if (bar) {
             bar.style.animation = "none";
@@ -5289,21 +5296,43 @@ function clearConnectionLostTimer() {
     }
 }
 
-/** After 10s: only hide the popup. Do NOT kick from games. Azora keeps running. */
+/** After 10s offline: leave any Norm Game, then show full Wi‑Fi screen */
 function finishConnectionLostSequence() {
     _azoraLostTimer = null;
     showConnectionLostReminder(false);
-    // Full Wi‑Fi screen is gone — stay in whatever you were doing
+
+    // Leave Norm Game if currently in one
+    try {
+        if (typeof _normSession !== "undefined" && _normSession) {
+            if (typeof leaveNormGame === "function") leaveNormGame();
+        }
+        // Also leave playable Quick Game runtime if open
+        if (typeof closeGamePlay === "function") {
+            var gp = document.getElementById("gamePlayOverlay");
+            if (gp && gp.style.display !== "none" && gp.style.display !== "") {
+                try { closeGamePlay(); } catch (e) {}
+            }
+        }
+    } catch (e) {}
+
+    // Full offline / Wi‑Fi error screen
+    showAzoraOfflineScreen(true);
 }
 
 function handleAzoraWentOffline() {
-    // Show 10s popup anywhere (main app or in a game). App keeps running.
-    clearConnectionLostTimer();
-    showAzoraOfflineScreen(false); // ensure old screen never blocks
-    showConnectionLostReminder(true);
-    _azoraLostTimer = setTimeout(function () {
-        finishConnectionLostSequence();
-    }, 10000);
+    if (!isAzoraOnline()) {
+        // Already showing full screen? still ok
+        clearConnectionLostTimer();
+        showConnectionLostReminder(true);
+        _azoraLostTimer = setTimeout(function () {
+            // Only finish if still offline
+            if (!isAzoraOnline()) {
+                finishConnectionLostSequence();
+            } else {
+                showConnectionLostReminder(false);
+            }
+        }, 10000);
+    }
 }
 
 function handleAzoraWentOnline() {
@@ -5315,13 +5344,18 @@ function handleAzoraWentOnline() {
 function updateAzoraOnlineStatus() {
     var online = isAzoraOnline();
     if (online) {
-        if (!_azoraWasOnline) handleAzoraWentOnline();
+        handleAzoraWentOnline();
     } else {
-        // Went offline (or already offline): soft popup only, never full screen
+        // On first load already offline → go straight to full Wi‑Fi screen
+        // (no 10s wait). Mid-session drop uses handleAzoraWentOffline.
+        var el = document.getElementById("azoraOfflineScreen");
         var toast = document.getElementById("azoraConnectionLostToast");
         var toastShowing = toast && toast.classList.contains("show");
-        if (!toastShowing) {
+        var fullShowing = el && (el.classList.contains("show") || el.style.display === "flex");
+        if (!toastShowing && !fullShowing && _azoraWasOnline) {
             handleAzoraWentOffline();
+        } else if (!online && !toastShowing && !fullShowing) {
+            showAzoraOfflineScreen(true);
         }
     }
     _azoraWasOnline = online;
@@ -5329,37 +5363,378 @@ function updateAzoraOnlineStatus() {
 }
 
 function retryAzoraConnection() {
-    // Kept for any old buttons — just hides legacy screen and rechecks
-    showAzoraOfflineScreen(false);
-    if (isAzoraOnline()) {
-        handleAzoraWentOnline();
-    } else {
-        handleAzoraWentOffline();
-    }
-}
-window.retryAzoraConnection = retryAzoraConnection;
+    var st = document.getElementById("azoraOfflineStatus");
+    if (st) st.textContent = "Checking connection…";
 
-function initAzoraOfflineDetection() {
-    // Never block the app with the old full Wi‑Fi screen
-    showAzoraOfflineScreen(false);
+    // navigator.onLine is fast; also try a tiny network check when possible
+    function finish(ok) {
+        if (ok) {
+            if (st) st.textContent = "Connected! Loading Azora…";
+            showAzoraOfflineScreen(false);
+        } else {
+            if (st) st.textContent = "Still offline. Check Wi‑Fi or data and try again.";
+            showAzoraOfflineScreen(true);
+        }
+    }
 
     if (!isAzoraOnline()) {
-        _azoraWasOnline = false;
-        handleAzoraWentOffline();
-    } else {
-        _azoraWasOnline = true;
+        finish(false);
+        return;
     }
 
-    window.addEventListener("offline", function () {
+    // Probe the network (may fail on pure offline / blocked fetch)
+    var ctrl = null;
+    var timer = null;
+    try {
+        if (typeof AbortController !== "undefined") ctrl = new AbortController();
+        timer = setTimeout(function () {
+            try { if (ctrl) ctrl.abort(); } catch (e) {}
+        }, 4000);
+        // Prefer same-origin so SW / CORS don't false-fail when online
+        var url = (typeof location !== "undefined" ? location.href.split("#")[0] : "./") + (location.search ? "" : "") ;
+        // cache-bust
+        var probe = "./manifest-azora.json?azora_ping=" + Date.now();
+        fetch(probe, {
+            method: "GET",
+            cache: "no-store",
+            signal: ctrl ? ctrl.signal : undefined
+        }).then(function (r) {
+            if (timer) clearTimeout(timer);
+            // Even a 404 means the network reached something
+            finish(true);
+        }).catch(function () {
+            if (timer) clearTimeout(timer);
+            // If browser says online but fetch fails, still trust onLine for file:// / local
+            if (typeof location !== "undefined" && location.protocol === "file:") {
+                finish(isAzoraOnline());
+            } else {
+                finish(isAzoraOnline());
+            }
+        });
+    } catch (e) {
+        if (timer) clearTimeout(timer);
+        finish(isAzoraOnline());
+    }
+}
+
+function initAzoraOfflineDetection() {
+    try { _azoraWasOnline = isAzoraOnline(); } catch (e) { _azoraWasOnline = true; }
+    // Initial: if already offline at open, show full Wi‑Fi screen immediately
+    if (!isAzoraOnline()) {
+        showAzoraOfflineScreen(true);
         _azoraWasOnline = false;
-        handleAzoraWentOffline();
-    });
+    } else {
+        showAzoraOfflineScreen(false);
+        showConnectionLostReminder(false);
+    }
     window.addEventListener("online", function () {
         _azoraWasOnline = true;
         handleAzoraWentOnline();
     });
+    window.addEventListener("offline", function () {
+        handleAzoraWentOffline();
+        _azoraWasOnline = false;
+    });
+    document.addEventListener("visibilitychange", function () {
+        if (!document.hidden) {
+            if (isAzoraOnline()) handleAzoraWentOnline();
+            else if (!_azoraLostTimer) {
+                // Still offline and no reminder running → full screen
+                showAzoraOfflineScreen(true);
+            }
+        }
+    });
 }
 
+window.isAzoraOnline = isAzoraOnline;
+window.showAzoraOfflineScreen = showAzoraOfflineScreen;
+window.updateAzoraOnlineStatus = updateAzoraOnlineStatus;
+window.retryAzoraConnection = retryAzoraConnection;
+window.initAzoraOfflineDetection = initAzoraOfflineDetection;
+window.showConnectionLostReminder = showConnectionLostReminder;
+window.handleAzoraWentOffline = handleAzoraWentOffline;
+window.handleAzoraWentOnline = handleAzoraWentOnline;
+
+(function bootOffline() {
+    function run() { initAzoraOfflineDetection(); }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
+    else run();
+    window.addEventListener("load", function () { updateAzoraOnlineStatus(); });
+})();
+
+
+
+
+
+
+// ============================================================
+// NORM GAMES — real-time presence (Firebase when configured)
+// No fake player lists. Only real sessions that join the room.
+// ============================================================
+var _normSession = null;
+var _normAnim = null;
+var _normScene = null;
+var _normRenderer = null;
+var _normCamera = null;
+var _normPlayers = []; // filled only from live presence / local you
+var _normRemoteMeshes = {};
+var _normKeys = {};
+var _normWallColliders = []; // AABB walls for hollow buildings
+var _normFloorColliders = []; // floors + ramp surfaces
+var _normLocalMesh = null;
+var _normPresenceTimer = null;
+var _normMyPresenceId = null;
+
+var NORM_GAMES = {
+    "azora-roleplay": {
+        id: "azora-roleplay",
+        title: "Azora Roleplay",
+        owner: "Azora",
+        dimensions: "3D",
+        roomPath: "/azoraNormRooms/azora-roleplay/players"
+    }
+};
+
+function getNormDisplayName() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+        var logged = localStorage.getItem("loggedIn");
+        if (logged === "guest" || acc.isGuest || !acc.username) return "___";
+        return String(acc.username);
+    } catch (e) { return "___"; }
+}
+
+function isNormGuest() {
+    return localStorage.getItem("loggedIn") === "guest" || getNormDisplayName() === "___";
+}
+
+function getNormAvatarColors() {
+    var av = { head: "#ffcc00", torso: "#1e60ff", leftArm: "#ffcc00", rightArm: "#ffcc00", leftLeg: "#00ebd4", rightLeg: "#00ebd4" };
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+        if (acc && acc.avatar) {
+            av.head = acc.avatar.head || av.head;
+            av.torso = acc.avatar.torso || av.torso;
+            av.leftArm = acc.avatar.leftArm || av.leftArm;
+            av.rightArm = acc.avatar.rightArm || av.rightArm;
+            av.leftLeg = acc.avatar.leftLeg || av.leftLeg;
+            av.rightLeg = acc.avatar.rightLeg || av.rightLeg;
+        }
+    } catch (e) {}
+    return av;
+}
+
+/** Same proportions as the main avatar customizer */
+function makeNormAvatar(colors) {
+    colors = colors || getNormAvatarColors();
+    var g = new THREE.Group();
+    g.name = "normAvatar";
+
+    function box(w, h, d, color) {
+        return new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, d),
+            new THREE.MeshLambertMaterial({ color: color })
+        );
+    }
+
+    // Build with FEET on local Y = 0 so standing on ground is just position.y = surfaceY
+    // Legs height 1.0 → centers at 0.5; torso above legs; head on top
+    var legH = 1.0, torsoH = 1.0, headS = 0.65, armH = 1.0;
+
+    var leftLeg = box(0.35, legH, 0.35, colors.leftLeg);
+    leftLeg.position.set(-0.22, legH / 2, 0);
+    leftLeg.name = "leftLeg";
+
+    var rightLeg = box(0.35, legH, 0.35, colors.rightLeg);
+    rightLeg.position.set(0.22, legH / 2, 0);
+    rightLeg.name = "rightLeg";
+
+    var torso = box(0.85, torsoH, 0.45, colors.torso);
+    torso.position.y = legH + torsoH / 2;
+    torso.name = "torso";
+
+    var leftArm = box(0.35, armH, 0.35, colors.leftArm);
+    leftArm.position.set(-0.62, legH + torsoH / 2, 0);
+    leftArm.name = "leftArm";
+
+    var rightArm = box(0.35, armH, 0.35, colors.rightArm);
+    rightArm.position.set(0.62, legH + torsoH / 2, 0);
+    rightArm.name = "rightArm";
+
+    var head = box(headS, headS, headS, colors.head);
+    head.position.y = legH + torsoH + headS / 2;
+    head.name = "head";
+
+    g.add(leftLeg);
+    g.add(rightLeg);
+    g.add(torso);
+    g.add(leftArm);
+    g.add(rightArm);
+    g.add(head);
+
+    // Smile.png face on front of head
+    attachNormFaceDecal(g, head);
+
+    // Mark foot height for placement helpers
+    g.userData.footOffset = 0; // feet already at y=0 in local space
+    return g;
+}
+
+/** Bottom of feet in local space (leg center -0.7, height 1.0 → bottom -1.2) */
+var NORM_AVATAR_FOOT_OFFSET = 0.02; // feet at local y=0; sit just above ground top
+
+/** Stand avatar so soles sit on surfaceY (default ground top = 0) */
+function placeNormAvatarOnGround(mesh, x, z, surfaceY) {
+    if (!mesh) return;
+    if (typeof surfaceY !== "number") surfaceY = 0;
+    mesh.position.x = x || 0;
+    mesh.position.z = z || 0;
+    mesh.position.y = surfaceY + NORM_AVATAR_FOOT_OFFSET;
+}
+
+/** Flat Smile.png on front of head — hidden until texture loads (no white square) */
+function attachNormFaceDecal(avatarGroup, headMesh) {
+    if (typeof THREE === "undefined" || !headMesh) return;
+    try {
+        var mat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0,
+            depthWrite: false,
+            side: THREE.FrontSide,
+            alphaTest: 0.15
+        });
+        var plane = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.52), mat);
+        plane.name = "faceDecal";
+        // Sit just in front of the head cube
+        plane.position.set(0, headMesh.position.y + 0.02, 0.34);
+        plane.visible = false;
+        avatarGroup.add(plane);
+
+        function showTex(tex) {
+            if (!tex) return;
+            tex.minFilter = THREE.LinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            tex.generateMipmaps = false;
+            tex.needsUpdate = true;
+            mat.map = tex;
+            mat.transparent = true;
+            mat.opacity = 1;
+            mat.needsUpdate = true;
+            plane.visible = true;
+        }
+
+        function loadThree(url, onFail) {
+            try {
+                var loader = new THREE.TextureLoader();
+                if (typeof location !== "undefined" && location.protocol !== "file:") {
+                    loader.setCrossOrigin("anonymous");
+                }
+                loader.load(url, function (tex) { showTex(tex); }, undefined, function () { if (onFail) onFail(); });
+            } catch (e) { if (onFail) onFail(); }
+        }
+
+        function loadImage(url, onFail) {
+            try {
+                var img = new Image();
+                if (typeof location !== "undefined" && location.protocol !== "file:") {
+                    img.crossOrigin = "anonymous";
+                }
+                img.onload = function () {
+                    try {
+                        var c = document.createElement("canvas");
+                        c.width = img.naturalWidth || img.width || 64;
+                        c.height = img.naturalHeight || img.height || 64;
+                        var ctx = c.getContext("2d");
+                        ctx.clearRect(0, 0, c.width, c.height);
+                        ctx.drawImage(img, 0, 0);
+                        var data = ctx.getImageData(0, 0, c.width, c.height);
+                        var px = data.data;
+                        for (var i = 0; i < px.length; i += 4) {
+                            var lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+                            if (px[i + 3] < 15 || lum > 95) {
+                                px[i] = px[i + 1] = px[i + 2] = px[i + 3] = 0;
+                            } else {
+                                px[i] = px[i + 1] = px[i + 2] = 12;
+                                px[i + 3] = 255;
+                            }
+                        }
+                        ctx.putImageData(data, 0, 0);
+                        showTex(new THREE.CanvasTexture(c));
+                    } catch (e) {
+                        try {
+                            var t = new THREE.Texture(img);
+                            t.needsUpdate = true;
+                            showTex(t);
+                        } catch (e2) { if (onFail) onFail(); }
+                    }
+                };
+                img.onerror = function () { if (onFail) onFail(); };
+                img.src = url;
+            } catch (e) { if (onFail) onFail(); }
+        }
+
+        loadThree("Smile.png", function () {
+            loadThree("./Smile.png", function () {
+                loadImage("Smile.png", function () {
+                    loadImage("./Smile.png", function () {});
+                });
+            });
+        });
+    } catch (e) {}
+}
+
+
+function requestLeaveNormGame() {
+    var c = document.getElementById("normLeaveConfirm");
+    if (!c) {
+        // Fallback if confirm UI missing
+        if (window.confirm("Are you sure?\n\nLeave this Norm Game?")) {
+            leaveNormGame();
+        }
+        return;
+    }
+    // Must sit above the game overlay (azafn z-index ~20000)
+    c.style.zIndex = "2147483000";
+    c.style.display = "flex";
+}
+
+function confirmLeaveNormGame(yes) {
+    var c = document.getElementById("normLeaveConfirm");
+    if (c) {
+        c.style.display = "none";
+    }
+    if (yes) {
+        leaveNormGame();
+    }
+}
+
+
+function isNormTouchDevice() {
+    try {
+        return ("ontouchstart" in window) || (navigator.maxTouchPoints > 0) ||
+            (window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+    } catch (e) { return false; }
+}
+
+
+function setupNormJumpButton() {
+    var btn = document.getElementById("normJumpBtn");
+    if (!btn) return;
+    // Show on touch devices
+    try {
+        if (isNormTouchDevice()) btn.style.display = "flex";
+        else btn.style.display = "none";
+    } catch (e) { btn.style.display = "flex"; }
+
+    function doJump(e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        if (_normSession) _normSession.jumpQueued = true;
+        return false;
+    }
+    btn.onclick = doJump;
+    btn.ontouchstart = function (e) { doJump(e); };
+}
 window.setupNormJumpButton = setupNormJumpButton;
 window.normJump = function () {
     if (_normSession) _normSession.jumpQueued = true;
@@ -5466,250 +5841,6 @@ function setupNormJoysticks() {
 
 window.setupNormJoysticks = setupNormJoysticks;
 
-
-/* ===== Norm Games core helpers (restored) ===== */
-var NORM_GAMES = {
-    "azora-roleplay": {
-        id: "azora-roleplay",
-        title: "Azora Roleplay",
-        owner: "Azora",
-        dimensions: "3D",
-        roomPath: "/azoraNormRooms/azora-roleplay/players"
-    }
-};
-
-if (typeof NORM_AVATAR_FOOT_OFFSET === "undefined") {
-    var NORM_AVATAR_FOOT_OFFSET = 0.02;
-}
-
-function getNormDisplayName() {
-    try {
-        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
-        var logged = localStorage.getItem("loggedIn");
-        if (logged === "guest" || acc.isGuest || !acc.username) return "___";
-        return String(acc.username);
-    } catch (e) { return "___"; }
-}
-
-function isNormGuest() {
-    return localStorage.getItem("loggedIn") === "guest" || getNormDisplayName() === "___";
-}
-
-function getNormAvatarColors() {
-    var av = { head: "#ffcc00", torso: "#1e60ff", leftArm: "#ffcc00", rightArm: "#ffcc00", leftLeg: "#00ebd4", rightLeg: "#00ebd4" };
-    try {
-        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
-        if (acc && acc.avatar) {
-            av.head = acc.avatar.head || av.head;
-            av.torso = acc.avatar.torso || av.torso;
-            av.leftArm = acc.avatar.leftArm || av.leftArm;
-            av.rightArm = acc.avatar.rightArm || av.rightArm;
-            av.leftLeg = acc.avatar.leftLeg || av.leftLeg;
-            av.rightLeg = acc.avatar.rightLeg || av.rightLeg;
-        }
-    } catch (e) {}
-    return av;
-}
-
-function makeNormAvatar(colors) {
-    colors = colors || getNormAvatarColors();
-    var g = new THREE.Group();
-    g.name = "normAvatar";
-
-    function box(w, h, d, color) {
-        return new THREE.Mesh(
-            new THREE.BoxGeometry(w, h, d),
-            new THREE.MeshBasicMaterial({ color: color })
-        );
-    }
-
-    // Feet at local Y = 0 so standing on ground is position.y ≈ 0.02
-    var legH = 1.0, torsoH = 1.0, headS = 0.65, armH = 1.0;
-
-    var leftLeg = box(0.35, legH, 0.35, colors.leftLeg);
-    leftLeg.position.set(-0.22, legH / 2, 0);
-    leftLeg.name = "leftLeg";
-
-    var rightLeg = box(0.35, legH, 0.35, colors.rightLeg);
-    rightLeg.position.set(0.22, legH / 2, 0);
-    rightLeg.name = "rightLeg";
-
-    var torso = box(0.85, torsoH, 0.45, colors.torso);
-    torso.position.y = legH + torsoH / 2;
-    torso.name = "torso";
-
-    var leftArm = box(0.35, armH, 0.35, colors.leftArm);
-    leftArm.position.set(-0.62, legH + torsoH / 2, 0);
-    leftArm.name = "leftArm";
-
-    var rightArm = box(0.35, armH, 0.35, colors.rightArm);
-    rightArm.position.set(0.62, legH + torsoH / 2, 0);
-    rightArm.name = "rightArm";
-
-    var head = box(headS, headS, headS, colors.head);
-    head.position.y = legH + torsoH + headS / 2;
-    head.name = "head";
-
-    g.add(leftLeg);
-    g.add(rightLeg);
-    g.add(torso);
-    g.add(leftArm);
-    g.add(rightArm);
-    g.add(head);
-
-    attachNormFaceDecal(g, head);
-    g.userData.footOffset = 0;
-    return g;
-}
-
-function placeNormAvatarOnGround(mesh, x, z, surfaceY) {
-    if (!mesh) return;
-    if (typeof surfaceY !== "number") surfaceY = 0;
-    mesh.position.x = x || 0;
-    mesh.position.z = z || 0;
-    mesh.position.y = surfaceY + (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02);
-}
-
-function attachNormFaceDecal(avatarGroup, headMesh) {
-    if (typeof THREE === "undefined" || !headMesh) return;
-    try {
-        var mat = new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0,
-            depthWrite: false,
-            side: THREE.FrontSide,
-            alphaTest: 0.15
-        });
-        var plane = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.52), mat);
-        plane.name = "faceDecal";
-        plane.position.set(0, headMesh.position.y + 0.02, 0.34);
-        plane.visible = false;
-        avatarGroup.add(plane);
-
-        function showTex(tex) {
-            if (!tex) return;
-            tex.minFilter = THREE.LinearFilter;
-            tex.magFilter = THREE.LinearFilter;
-            tex.generateMipmaps = false;
-            tex.needsUpdate = true;
-            mat.map = tex;
-            mat.transparent = true;
-            mat.opacity = 1;
-            mat.needsUpdate = true;
-            plane.visible = true;
-        }
-
-        function loadThree(url, onFail) {
-            try {
-                var loader = new THREE.TextureLoader();
-                if (typeof location !== "undefined" && location.protocol !== "file:") {
-                    loader.setCrossOrigin("anonymous");
-                }
-                loader.load(url, function (tex) { showTex(tex); }, undefined, function () { if (onFail) onFail(); });
-            } catch (e) { if (onFail) onFail(); }
-        }
-
-        function loadImage(url, onFail) {
-            try {
-                var img = new Image();
-                if (typeof location !== "undefined" && location.protocol !== "file:") {
-                    img.crossOrigin = "anonymous";
-                }
-                img.onload = function () {
-                    try {
-                        var c = document.createElement("canvas");
-                        c.width = img.naturalWidth || img.width || 64;
-                        c.height = img.naturalHeight || img.height || 64;
-                        var ctx = c.getContext("2d");
-                        ctx.clearRect(0, 0, c.width, c.height);
-                        ctx.drawImage(img, 0, 0);
-                        var data = ctx.getImageData(0, 0, c.width, c.height);
-                        var px = data.data;
-                        for (var i = 0; i < px.length; i += 4) {
-                            var lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-                            if (px[i + 3] < 15 || lum > 95) {
-                                px[i] = px[i + 1] = px[i + 2] = px[i + 3] = 0;
-                            } else {
-                                px[i] = px[i + 1] = px[i + 2] = 12;
-                                px[i + 3] = 255;
-                            }
-                        }
-                        ctx.putImageData(data, 0, 0);
-                        showTex(new THREE.CanvasTexture(c));
-                    } catch (e) {
-                        try {
-                            var t = new THREE.Texture(img);
-                            t.needsUpdate = true;
-                            showTex(t);
-                        } catch (e2) { if (onFail) onFail(); }
-                    }
-                };
-                img.onerror = function () { if (onFail) onFail(); };
-                img.src = url;
-            } catch (e) { if (onFail) onFail(); }
-        }
-
-        loadThree("Smile.png", function () {
-            loadImage("Smile.png", function () {});
-        });
-    } catch (e) {}
-}
-
-function requestLeaveNormGame() {
-    try {
-        var conf = document.getElementById("normLeaveConfirm");
-        if (conf) {
-            conf.style.display = "flex";
-            conf.style.zIndex = "2147483646";
-            conf.style.pointerEvents = "auto";
-            conf.style.visibility = "visible";
-            conf.style.opacity = "1";
-            try { document.body.appendChild(conf); } catch (e) {}
-            return;
-        }
-    } catch (e) {}
-    if (typeof leaveNormGame === "function") leaveNormGame();
-}
-
-function confirmLeaveNormGame(yes) {
-    try {
-        var c = document.getElementById("normLeaveConfirm");
-        if (c) c.style.display = "none";
-    } catch (e) {}
-    if (yes && typeof leaveNormGame === "function") leaveNormGame();
-}
-
-function isNormTouchDevice() {
-    try {
-        return ("ontouchstart" in window) || (navigator.maxTouchPoints > 0) ||
-            (window.matchMedia && window.matchMedia("(hover: none), (pointer: coarse)").matches);
-    } catch (e) {
-        return false;
-    }
-}
-
-function setupNormJumpButton() {
-    var btn = document.getElementById("normJumpBtn");
-    if (!btn) return;
-    try {
-        if (isNormTouchDevice()) btn.style.display = "flex";
-        else btn.style.display = "none";
-    } catch (e) { btn.style.display = "flex"; }
-
-    function doJump(e) {
-        if (e) { e.preventDefault(); e.stopPropagation(); }
-        if (_normSession) _normSession.jumpQueued = true;
-        return false;
-    }
-    btn.onclick = doJump;
-    btn.ontouchstart = function (e) { doJump(e); };
-}
-window.setupNormJumpButton = setupNormJumpButton;
-window.normJump = function () {
-    if (_normSession) _normSession.jumpQueued = true;
-};
-
 function joinNormGame(gameId) {
     var def = NORM_GAMES[gameId];
     if (!def) {
@@ -5759,12 +5890,7 @@ function joinNormGame(gameId) {
         } else {
             if (loading) loading.style.display = "none";
             if (play) play.style.display = "flex";
-            // Wait 2 frames so the canvas has real width/height (avoids black screen)
-            requestAnimationFrame(function () {
-                requestAnimationFrame(function () {
-                    startNormGameWorld(def);
-                });
-            });
+            startNormGameWorld(def);
         }
     }
     requestAnimationFrame(tick);
@@ -5831,17 +5957,16 @@ function resolveNormWallCollisions(mesh) {
 function buildNormCity(scene) {
     _normWallColliders = [];
     _normFloorColliders = [];
-    // Use Basic materials so the world always shows (no light dependency)
     // Large ground
     var ground = new THREE.Mesh(
         new THREE.BoxGeometry(400, 1.2, 400),
-        new THREE.MeshBasicMaterial({ color: 0x2f6b3c })
+        new THREE.MeshLambertMaterial({ color: 0x2f6b3c })
     );
     ground.position.y = -0.6;
     scene.add(ground);
 
     // Road cross
-    var roadMat = new THREE.MeshBasicMaterial({ color: 0x374151 });
+    var roadMat = new THREE.MeshLambertMaterial({ color: 0x374151 });
     var roadX = new THREE.Mesh(new THREE.BoxGeometry(400, 0.15, 18), roadMat);
     roadX.position.y = 0.02;
     scene.add(roadX);
@@ -5850,7 +5975,7 @@ function buildNormCity(scene) {
     scene.add(roadZ);
 
     // Sidewalks
-    var walkMat = new THREE.MeshBasicMaterial({ color: 0x9ca3af });
+    var walkMat = new THREE.MeshLambertMaterial({ color: 0x9ca3af });
     [[0, 12], [0, -12], [12, 0], [-12, 0]].forEach(function (off) {
         var w = new THREE.Mesh(
             new THREE.BoxGeometry(off[0] === 0 ? 400 : 6, 0.12, off[1] === 0 ? 400 : 6),
@@ -5868,10 +5993,10 @@ function buildNormCity(scene) {
 
     function building(x, z, w, h, d, color) {
         var wallT = 0.55; // wall thickness
-        var mat = new THREE.MeshBasicMaterial({ color: color });
-        var winMat = new THREE.MeshBasicMaterial({ color: 0x93c5fd });
-        var floorMat = new THREE.MeshBasicMaterial({ color: 0x78716c });
-        var stairMat = new THREE.MeshBasicMaterial({ color: 0x57534e });
+        var mat = new THREE.MeshLambertMaterial({ color: color });
+        var winMat = new THREE.MeshLambertMaterial({ color: 0x93c5fd });
+        var floorMat = new THREE.MeshLambertMaterial({ color: 0x78716c });
+        var stairMat = new THREE.MeshLambertMaterial({ color: 0x57534e });
         var doorW = Math.min(3.2, w * 0.35); // front door opening
         var floorStep = 3.2; // height between floors
 
@@ -5916,7 +6041,7 @@ function buildNormCity(scene) {
             _normWallColliders[_normWallColliders.length - 1].maxY = h;
             var lintel = new THREE.Mesh(
                 new THREE.BoxGeometry(doorW + 0.15, 0.25, wallT + 0.08),
-                new THREE.MeshBasicMaterial({ color: 0x1f2937 })
+                new THREE.MeshLambertMaterial({ color: 0x1f2937 })
             );
             lintel.position.set(x, doorH + 0.1, frontZ);
             scene.add(lintel);
@@ -6001,7 +6126,7 @@ function buildNormCity(scene) {
         // Roof (walkable top surface too)
         var roof = new THREE.Mesh(
             new THREE.BoxGeometry(w + 0.4, 0.35, d + 0.4),
-            new THREE.MeshBasicMaterial({ color: 0x1f2937 })
+            new THREE.MeshLambertMaterial({ color: 0x1f2937 })
         );
         roof.position.set(x, h + 0.12, z);
         scene.add(roof);
@@ -6050,7 +6175,7 @@ function buildNormCity(scene) {
     // Plaza center low walls
     var plaza = new THREE.Mesh(
         new THREE.BoxGeometry(24, 0.3, 24),
-        new THREE.MeshBasicMaterial({ color: 0xd1d5db })
+        new THREE.MeshLambertMaterial({ color: 0xd1d5db })
     );
     plaza.position.y = 0.1;
     scene.add(plaza);
@@ -6060,7 +6185,7 @@ function buildNormCity(scene) {
         [1, -1].forEach(function (side) {
             var pole = new THREE.Mesh(
                 new THREE.BoxGeometry(0.35, 8, 0.35),
-                new THREE.MeshBasicMaterial({ color: 0x111827 })
+                new THREE.MeshLambertMaterial({ color: 0x111827 })
             );
             pole.position.set(s, 4, side * 14);
             scene.add(pole);
@@ -6073,17 +6198,6 @@ function buildNormCity(scene) {
 
 
 /* ===== Roleplay music (Mossy.mp3) ===== */
-var _normWallColliders = [];
-var _normFloorColliders = [];
-var _normScene = null;
-var _normCamera = null;
-var _normRenderer = null;
-var _normLocalMesh = null;
-var _normRemoteMeshes = {};
-var _normAnim = null;
-var _normSession = null;
-var _normPlayers = [];
-var _normKeys = {};
 var _normMusic = null;
 
 function getNormMusic() {
@@ -6165,282 +6279,247 @@ window.toggleNormMusicPause = toggleNormMusicPause;
 
 
 function startNormGameWorld(def) {
-    console.log("[Azora] Norm Game engine v37");
-    try { disposeNormWorld(false); } catch (e) {}
-    try { startNormMusic(); } catch (e) {}
+    disposeNormWorld(false);
+    startNormMusic();
 
-    var meName = (typeof getNormDisplayName === "function") ? getNormDisplayName() : "You";
-    _normPlayers = [{ id: "me", name: meName, isMe: true, isGuest: (typeof isNormGuest === "function" && isNormGuest()) }];
-    try { renderNormPlayerList(); } catch (e) {}
+    // Only YOU at start — other rows come from live presence
+    var meName = getNormDisplayName();
+    _normPlayers = [{
+        id: "me",
+        name: meName,
+        isMe: true,
+        isGuest: isNormGuest()
+    }];
+    renderNormPlayerList();
 
     var chat = document.getElementById("normChatMessages");
     if (chat) {
         chat.innerHTML = "";
-        try {
-            appendNormChat("System", "Welcome! WASD move · Space jump · Leave or Esc to exit.", true);
-        } catch (e) {}
-    }
-
-    if (!_normSession) {
-        _normSession = {
-            id: (def && def.id) || "azora-roleplay",
-            title: (def && def.title) || "Azora Roleplay",
-            roomPath: (def && def.roomPath) || "",
-            startedAt: Date.now()
-        };
+        appendNormChat("System", "Welcome to " + def.title + ". Only real players who join this room appear here.", true);
+        if (typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()) {
+            appendNormChat("System", "Live multiplayer is on — you should see other players move in near real-time when they join this room.", true);
+        } else {
+            appendNormChat("System", "Cloud not linked yet — you are the only live player here until Firebase is set up on the site.", true);
+        }
     }
 
     var container = document.getElementById("normGameCanvas");
-    if (!container) {
-        try { startNormPresence(def); } catch (e) {}
+    if (!container || typeof THREE === "undefined") {
+        if (container) {
+            container.innerHTML = "<p style='color:#fff;padding:20px;text-align:center;'>3D needs Three.js. Chat and the player list still work.</p>";
+        }
+        startNormPresence(def);
         return;
     }
-    if (typeof THREE === "undefined") {
-        container.innerHTML = "<p style='color:#fff;padding:24px;text-align:center;font-weight:bold;'>Three.js failed to load. Refresh with internet, then Join again.</p>";
-        try { startNormPresence(def); } catch (e) {}
-        return;
-    }
-
     while (container.firstChild) container.removeChild(container.firstChild);
 
-    // Fixed pixel box — never trust flex 0-height
-    container.style.cssText = "position:relative;display:block;width:100%;height:420px;min-height:420px;background:#5dade2;border-radius:12px;overflow:hidden;border:3px solid #1e60ff;";
-    var playEl = document.getElementById("normGamePlay");
-    if (playEl) {
-        playEl.style.display = "flex";
-        playEl.style.minHeight = "480px";
-    }
+    // Size after layout
+    var w = Math.max(container.clientWidth, 320);
+    var h = Math.max(container.clientHeight, 240);
 
-    var w = Math.max(container.clientWidth || 0, 640);
-    var h = Math.max(container.clientHeight || 0, 420);
+    _normScene = new THREE.Scene();
+    _normScene.background = new THREE.Color(0x7eb6e8);
+    _normScene.fog = new THREE.Fog(0x7eb6e8, 80, 220);
 
-    try {
-        _normScene = new THREE.Scene();
-        _normScene.background = new THREE.Color(0x5dade2);
+    // Closer camera → avatar feels larger
+    _normCamera = new THREE.PerspectiveCamera(55, w / h, 0.1, 500);
+    _normCamera.position.set(0, 2.4, 4.2);
 
-        _normCamera = new THREE.PerspectiveCamera(60, w / h, 0.1, 1000);
-        _normCamera.position.set(0, 6, 14);
-        _normCamera.lookAt(0, 1, 0);
+    _normRenderer = new THREE.WebGLRenderer({ antialias: true });
+    _normRenderer.setSize(w, h);
+    _normRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    container.appendChild(_normRenderer.domElement);
 
-        _normRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-        _normRenderer.setClearColor(0x5dade2, 1);
-        _normRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-        _normRenderer.setSize(w, h, false);
-        var canvasEl = _normRenderer.domElement;
-        canvasEl.style.cssText = "display:block!important;width:100%!important;height:100%!important;position:absolute;left:0;top:0;";
-        container.appendChild(canvasEl);
+    _normScene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    var sun = new THREE.DirectionalLight(0xffffff, 0.95);
+    sun.position.set(40, 80, 30);
+    _normScene.add(sun);
+    var hemi = new THREE.HemisphereLight(0xbfd9ff, 0x3d5c40, 0.35);
+    _normScene.add(hemi);
 
-        // Ground
-        var ground = new THREE.Mesh(
-            new THREE.BoxGeometry(200, 1, 200),
-            new THREE.MeshBasicMaterial({ color: 0x2ecc71 })
-        );
-        ground.position.y = -0.5;
-        _normScene.add(ground);
+    buildNormCity(_normScene);
 
-        // Road
-        var road = new THREE.Mesh(
-            new THREE.BoxGeometry(200, 0.25, 12),
-            new THREE.MeshBasicMaterial({ color: 0x566573 })
-        );
-        road.position.y = 0.05;
-        _normScene.add(road);
+    _normLocalMesh = makeNormAvatar(getNormAvatarColors());
+    placeNormAvatarOnGround(_normLocalMesh, 0, 0, 0);
+    _normScene.add(_normLocalMesh);
+    _normRemoteMeshes = {};
 
-        // Buildings
-        var bcols = [0x5d6d7e, 0x85929e, 0x1a5276, 0x6c3483, 0xb9770e];
-        var spots = [
-            [12, 8, 10, 10, 8], [-14, 10, 12, 12, 9], [0, 18, 14, 8, 10],
-            [22, 16, 9, 14, 9], [-20, 18, 11, 10, 11], [18, -18, 12, 11, 8],
-            [-16, -16, 10, 9, 10], [8, -22, 8, 13, 8]
-        ];
-        for (var bi = 0; bi < spots.length; bi++) {
-            var s = spots[bi];
-            var bm = new THREE.Mesh(
-                new THREE.BoxGeometry(s[2], s[3], s[4]),
-                new THREE.MeshBasicMaterial({ color: bcols[bi % bcols.length] })
-            );
-            bm.position.set(s[0], s[3] / 2, s[1]);
-            _normScene.add(bm);
-        }
-
-        // Yellow pad + red beacon (always visible markers)
-        var pad = new THREE.Mesh(new THREE.BoxGeometry(4, 0.15, 4), new THREE.MeshBasicMaterial({ color: 0xf1c40f }));
-        pad.position.set(0, 0.1, 0);
-        _normScene.add(pad);
-        var beacon = new THREE.Mesh(new THREE.BoxGeometry(1.5, 4, 1.5), new THREE.MeshBasicMaterial({ color: 0xe74c3c }));
-        beacon.position.set(5, 2, 0);
-        _normScene.add(beacon);
-
-        // Avatar
-        try {
-            _normLocalMesh = makeNormAvatar(typeof getNormAvatarColors === "function" ? getNormAvatarColors() : null);
-        } catch (e) { _normLocalMesh = null; }
-        if (!_normLocalMesh) {
-            _normLocalMesh = new THREE.Group();
-            var body = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.6), new THREE.MeshBasicMaterial({ color: 0x1e60ff }));
-            body.position.y = 1;
-            _normLocalMesh.add(body);
-            var head = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), new THREE.MeshBasicMaterial({ color: 0xffcc00 }));
-            head.position.y = 2.35;
-            _normLocalMesh.add(head);
-        }
-        _normLocalMesh.position.set(0, 0.05, 0);
-        _normScene.add(_normLocalMesh);
-        _normRemoteMeshes = {};
-
-        // Optional full city (won't break if it fails)
-        try {
-            if (typeof buildNormCity === "function") buildNormCity(_normScene);
-        } catch (cityErr) {
-            console.warn("[Azora] buildNormCity skipped", cityErr);
-        }
-
-        console.log("[Azora] scene children:", _normScene.children.length);
-        _normRenderer.render(_normScene, _normCamera);
-    } catch (err) {
-        console.error("[Azora] 3D start failed:", err);
-        container.innerHTML = "<p style='color:#fff;padding:20px;text-align:center;'>3D failed: " +
-            String((err && err.message) || err) + "<br>You can still Leave.</p>";
-        try { startNormPresence(def); } catch (e) {}
-        return;
-    }
-
-    // Controls
+    // ---- Controls (orbit TEMPORARILY DISABLED) ----
+    // W = forward, S = reverse, A = turn left, D = turn right
+    // Camera locked behind character, slightly above
     _normKeys = {};
     _normSession.charYaw = 0;
-    _normSession.camDist = 10;
-    _normSession.camHeight = 4;
+    _normSession.camYaw = 0;
+    _normSession.camPitch = 0.42;
+    _normSession.camDist = 5.0;
+    _normSession.camHeight = 2.6;
     _normSession.moveX = 0;
     _normSession.moveZ = 0;
+    _normSession.orbitX = 0;
+    _normSession.orbitY = 0;
+    _normSession.orbitEnabled = false;
     _normSession.velY = 0;
     _normSession.onGround = true;
     _normSession.jumpQueued = false;
 
-    function onKeyDown(e) {
-        if (!_normSession) return;
-        var k = (e.key || "").toLowerCase();
-        if (k === "escape") {
-            e.preventDefault();
-            requestLeaveNormGame();
-            return;
-        }
-        if (k === " " || e.code === "Space") {
-            e.preventDefault();
-            _normSession.jumpQueued = true;
-            return;
-        }
-        if (k === "w" || k === "a" || k === "s" || k === "d" || k === "p") {
-            _normKeys[k] = true;
-            e.preventDefault();
-        }
-    }
-    function onKeyUp(e) {
-        var k = (e.key || "").toLowerCase();
-        if (k === "w" || k === "a" || k === "s" || k === "d" || k === "p") _normKeys[k] = false;
-    }
-    window.addEventListener("keydown", onKeyDown, true);
-    window.addEventListener("keyup", onKeyUp, true);
-    _normSession._kd = onKeyDown;
-    _normSession._ku = onKeyUp;
+    // Prevent Space from activating focused buttons (was reloading/rejoining the game)
+    try {
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    } catch (e) {}
 
-    try { setupNormJoysticks(); } catch (e) {}
-    try { setupNormJumpButton(); } catch (e) {}
+    function onKey(e, down) {
+        var k = (e.key || "").toLowerCase();
+        var code = e.code || "";
+
+        // Always eat Space while in Norm Game — stops page scroll + button "click" reload bug
+        if (k === " " || k === "spacebar" || code === "Space") {
+            if (e.preventDefault) e.preventDefault();
+            if (e.stopPropagation) e.stopPropagation();
+            if (down) {
+                _normSession.jumpQueued = true;
+            }
+            return;
+        }
+
+        if (["w", "a", "s", "d", "p"].indexOf(k) !== -1) {
+            _normKeys[k] = down;
+            if (e.preventDefault) e.preventDefault();
+        }
+        if (down && e.key === "Escape") {
+            requestLeaveNormGame();
+        }
+    }
+    _normSession._kd = function (e) { onKey(e, true); };
+    _normSession._ku = function (e) { onKey(e, false); };
+    // capture:true so we beat buttons/links that would fire on Space
+    window.addEventListener("keydown", _normSession._kd, true);
+    window.addEventListener("keyup", _normSession._ku, true);
+
+    // Joysticks + mobile jump
+    setupNormJoysticks();
+    setupNormJumpButton();
 
     function animate() {
         _normAnim = requestAnimationFrame(animate);
-        if (!_normLocalMesh || !_normRenderer || !_normCamera || !_normSession) return;
-        try {
-            if (!_normKeys) _normKeys = {};
-            var sp = 0.2, turnSp = 0.05;
-            if (_normKeys["a"]) _normSession.charYaw += turnSp;
-            if (_normKeys["d"]) _normSession.charYaw -= turnSp;
-            _normSession.charYaw -= (_normSession.moveX || 0) * 0.05;
-            _normLocalMesh.rotation.y = _normSession.charYaw;
+        if (!_normLocalMesh || !_normRenderer || !_normCamera) return;
 
-            var yaw = _normSession.charYaw || 0;
-            var fwdX = Math.sin(yaw), fwdZ = Math.cos(yaw);
-            var throttle = 0;
-            if (_normKeys["w"] || _normKeys["p"]) throttle += 1;
-            if (_normKeys["s"]) throttle -= 1;
-            throttle += (_normSession.moveZ || 0);
-            if (throttle > 1) throttle = 1;
-            if (throttle < -1) throttle = -1;
-            if (Math.abs(throttle) > 0.001) {
-                _normLocalMesh.position.x += fwdX * throttle * sp;
-                _normLocalMesh.position.z += fwdZ * throttle * sp;
-            }
-            if (typeof resolveNormWallCollisions === "function") {
-                try { resolveNormWallCollisions(_normLocalMesh); } catch (e) {}
-            }
-            _normLocalMesh.position.x = Math.max(-90, Math.min(90, _normLocalMesh.position.x));
-            _normLocalMesh.position.z = Math.max(-90, Math.min(90, _normLocalMesh.position.z));
+        var sp = 0.18;
+        var turnSp = 0.045;
 
-            if (_normSession.jumpQueued) {
-                _normSession.jumpQueued = false;
-                if (_normSession.onGround) {
-                    _normSession.velY = 0.34;
-                    _normSession.onGround = false;
-                }
-            }
-            _normSession.velY = (_normSession.velY || 0) - 0.018;
-            _normLocalMesh.position.y += _normSession.velY;
-            var supportY = 0.05;
-            if (typeof getNormSupportY === "function") {
-                try {
-                    supportY = getNormSupportY(_normLocalMesh.position.x, _normLocalMesh.position.z, _normLocalMesh.position.y);
-                } catch (e) {}
-            }
-            if (_normLocalMesh.position.y <= supportY) {
-                _normLocalMesh.position.y = supportY;
-                _normSession.velY = 0;
-                _normSession.onGround = true;
-            } else {
+        // --- Turn: A left, D right (also left stick X) ---
+        if (_normKeys["a"]) _normSession.charYaw += turnSp;
+        if (_normKeys["d"]) _normSession.charYaw -= turnSp;
+        _normSession.charYaw -= (_normSession.moveX || 0) * 0.05;
+
+        // Character faces charYaw (mesh forward matches movement)
+        _normLocalMesh.rotation.y = _normSession.charYaw;
+
+        // Forward along facing: in our convention rotation.y with atan2(dx,dz)
+        // local forward on XZ = (sin(yaw), cos(yaw))
+        var yaw = _normSession.charYaw || 0;
+        var fwdX = Math.sin(yaw);
+        var fwdZ = Math.cos(yaw);
+
+        // --- Move: W forward, S reverse (also left stick Y) ---
+        var throttle = 0;
+        if (_normKeys["w"] || _normKeys["p"]) throttle += 1;
+        if (_normKeys["s"]) throttle -= 1;
+        throttle += (_normSession.moveZ || 0);
+        if (throttle > 1) throttle = 1;
+        if (throttle < -1) throttle = -1;
+
+        if (Math.abs(throttle) > 0.001) {
+            _normLocalMesh.position.x += fwdX * throttle * sp;
+            _normLocalMesh.position.z += fwdZ * throttle * sp;
+        }
+
+        // Can't walk through building walls (hollow shells, solid walls)
+        if (typeof resolveNormWallCollisions === "function") {
+            resolveNormWallCollisions(_normLocalMesh);
+        }
+
+        _normLocalMesh.position.x = Math.max(-180, Math.min(180, _normLocalMesh.position.x));
+        _normLocalMesh.position.z = Math.max(-180, Math.min(180, _normLocalMesh.position.z));
+
+        // --- Jump + floors/ramps ---
+        var gravity = 0.018;
+        var jumpPower = 0.32;
+        if (_normSession.jumpQueued) {
+            _normSession.jumpQueued = false;
+            if (_normSession.onGround) {
+                _normSession.velY = jumpPower;
                 _normSession.onGround = false;
             }
-
-            var dist = _normSession.camDist || 10;
-            var height = _normSession.camHeight || 4;
-            var idealX = _normLocalMesh.position.x - Math.sin(yaw) * dist;
-            var idealZ = _normLocalMesh.position.z - Math.cos(yaw) * dist;
-            var idealY = _normLocalMesh.position.y + height;
-            _normCamera.position.x += (idealX - _normCamera.position.x) * 0.2;
-            _normCamera.position.y += (idealY - _normCamera.position.y) * 0.2;
-            _normCamera.position.z += (idealZ - _normCamera.position.z) * 0.2;
-            _normCamera.lookAt(_normLocalMesh.position.x, _normLocalMesh.position.y + 1.5, _normLocalMesh.position.z);
-
-            if (_normSession._smoothRemotes) try { _normSession._smoothRemotes(); } catch (e) {}
-            _normRenderer.render(_normScene, _normCamera);
-        } catch (animErr) {
-            console.error("[Azora] animate error", animErr);
         }
+        _normSession.velY = (_normSession.velY || 0) - gravity;
+        _normLocalMesh.position.y += _normSession.velY;
+
+        var supportY = getNormSupportY(
+            _normLocalMesh.position.x,
+            _normLocalMesh.position.z,
+            _normLocalMesh.position.y
+        );
+        // Stick to ramp while walking (even if vel small)
+        if (_normLocalMesh.position.y <= supportY + 0.08 && _normSession.velY <= 0.02) {
+            _normLocalMesh.position.y = supportY;
+            _normSession.velY = 0;
+            _normSession.onGround = true;
+        } else if (_normLocalMesh.position.y < supportY - 0.01 && _normSession.velY <= 0) {
+            _normLocalMesh.position.y = supportY;
+            _normSession.velY = 0;
+            _normSession.onGround = true;
+        } else {
+            _normSession.onGround = false;
+        }
+
+        // --- Camera LOCKED behind character, slightly above (orbit off) ---
+        var target = _normLocalMesh.position;
+        var dist = _normSession.camDist || 5.0;
+        var height = _normSession.camHeight || 2.6;
+        // Behind = opposite of facing
+        var idealX = target.x - fwdX * dist;
+        var idealZ = target.z - fwdZ * dist;
+        var idealY = target.y + height;
+
+        var lerp = 0.18;
+        _normCamera.position.x += (idealX - _normCamera.position.x) * lerp;
+        _normCamera.position.y += (idealY - _normCamera.position.y) * lerp;
+        _normCamera.position.z += (idealZ - _normCamera.position.z) * lerp;
+        _normCamera.lookAt(target.x, target.y + 1.5, target.z);
+
+        // Live multiplayer: ease other players toward their latest positions
+        if (_normSession && typeof _normSession._smoothRemotes === "function") {
+            _normSession._smoothRemotes();
+        }
+        // Keep publishing while we move so others see us in near real-time
+        if (typeof publishSelf !== "function") { /* local */ }
+        try {
+            if (_normSession && Math.abs((_normKeys && (_normKeys.w || _normKeys.s || _normKeys.a || _normKeys.d)) ? 1 : 0)) {
+                /* interval handles publish */
+            }
+        } catch (e) {}
+
+        _normRenderer.render(_normScene, _normCamera);
     }
     animate();
 
-    function fitNormCanvas() {
-        if (!_normRenderer || !_normCamera || !container) return;
-        var rw = Math.max(container.clientWidth || 0, 320);
-        var rh = Math.max(container.clientHeight || 0, 280);
-        if (rh < 200) {
-            rh = 420;
-            container.style.height = "420px";
-        }
-        _normCamera.aspect = rw / rh;
-        _normCamera.updateProjectionMatrix();
-        _normRenderer.setSize(rw, rh, false);
-        _normRenderer.domElement.style.width = "100%";
-        _normRenderer.domElement.style.height = "100%";
-        _normRenderer.render(_normScene, _normCamera);
-    }
-    setTimeout(fitNormCanvas, 50);
-    setTimeout(fitNormCanvas, 250);
-    window.addEventListener("resize", fitNormCanvas);
-    _normSession._onResize = fitNormCanvas;
+    // Resize observer
+    try {
+        _normSession._onResize = function () {
+            if (!_normRenderer || !_normCamera || !container) return;
+            var ww = Math.max(container.clientWidth, 1);
+            var hh = Math.max(container.clientHeight, 1);
+            _normCamera.aspect = ww / hh;
+            _normCamera.updateProjectionMatrix();
+            _normRenderer.setSize(ww, hh);
+        };
+        window.addEventListener("resize", _normSession._onResize);
+        setTimeout(_normSession._onResize, 100);
+    } catch (e) {}
 
-    try { updateNormHudCount(); } catch (e) {}
-    try { startNormPresence(def); } catch (e) {}
+    updateNormHudCount();
+    startNormPresence(def);
 }
-
-
 
 function updateNormHudCount() {
     var hud = document.getElementById("normHudPlayers");
@@ -6719,30 +6798,26 @@ function disposeNormWorld(keepSession) {
 }
 
 function leaveNormGame() {
-    try { stopNormMusic(); } catch (e) {}
+    stopNormMusic();
     try {
         var st = document.querySelector(".norm-game-stage");
         if (st) st.classList.remove("show-joysticks");
         var layer = document.getElementById("normJoystickLayer");
         if (layer) layer.style.display = "none";
     } catch (e) {}
-    try { disposeNormWorld(false); } catch (e) {}
+    disposeNormWorld(false);
     _normSession = null;
     _normPlayers = [];
-    _normKeys = {};
-    try {
-        var ov = document.getElementById("normGameOverlay");
-        if (ov) { ov.style.display = "none"; ov.style.visibility = "hidden"; }
-        var play = document.getElementById("normGamePlay");
-        if (play) play.style.display = "none";
-        var loading = document.getElementById("normGameLoading");
-        if (loading) loading.style.display = "flex";
-        var fill = document.getElementById("normLoadFill");
-        if (fill) fill.style.width = "0%";
-        var confEl = document.getElementById("normLeaveConfirm");
-        if (confEl) confEl.style.display = "none";
-    } catch (e) {}
-    console.log("[Azora] Left Norm Game");
+    var ov = document.getElementById("normGameOverlay");
+    if (ov) ov.style.display = "none";
+    var play = document.getElementById("normGamePlay");
+    if (play) play.style.display = "none";
+    var loading = document.getElementById("normGameLoading");
+    if (loading) loading.style.display = "flex";
+    var fill = document.getElementById("normLoadFill");
+    if (fill) fill.style.width = "0%";
+    var conf = document.getElementById("normLeaveConfirm");
+    if (conf) conf.style.display = "none";
 }
 
 window.joinNormGame = joinNormGame;

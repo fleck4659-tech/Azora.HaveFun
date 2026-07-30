@@ -52,10 +52,7 @@
 <div id="azoraConnectionLostToast" class="azora-connection-lost-toast" style="display:none;" role="alert" aria-live="assertive">
     <div class="azora-cl-inner">
         <span class="azora-cl-icon" aria-hidden="true">📡</span>
-        <div class="azora-cl-text-wrap">
-            <span class="azora-cl-text">You&apos;re offline right now.</span>
-            <span class="azora-cl-sub">Azora will keep running, but some features may not work until you reconnect.</span>
-        </div>
+        <span class="azora-cl-text">Your connection was lost. Please reconnect your internet</span>
     </div>
     <div class="azora-cl-bar"><div class="azora-cl-bar-fill" id="azoraConnectionLostBar"></div></div>
 </div>
@@ -564,7 +561,7 @@
         <h2><img src="logo.jpg" alt="Azora"> <span id="normGameTitle">Norm Game</span></h2>
         <div class="azafn-tabs">
             <button type="button" id="normMusicToggleBtn" class="norm-music-btn" onclick="toggleNormMusicPause()">Pause Music</button>
-            <button type="button" onclick="requestLeaveNormGame()" style="margin:0;background:#ff3b30;color:#fff;" title="Leave game">Leave</button>
+            <button type="button" onclick="requestLeaveNormGame()" style="margin:0;background:#ff3b30;color:#fff;">Leave</button>
         </div>
     </div>
     <div class="norm-game-body">
@@ -645,7 +642,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=37"></script>
+<script src="script.js"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {
