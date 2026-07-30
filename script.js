@@ -2396,7 +2396,7 @@ function initPlay3D() {
         // street lines
         for (var ln = -2; ln <= 2; ln++) {
             for (var seg = 0; seg < 8; seg++) {
-                var line = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.13, 2), new THREE.MeshLambertMaterial({ color: 0xfbbf24 }));
+                var line = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.13, 2), new THREE.MeshBasicMaterial({ color: 0xfbbf24 }));
                 line.position.set(ln * 12, 0.08, -24 + seg * 7 + (rand() * 1.5));
                 _play.scene.add(line);
             }
@@ -5518,7 +5518,7 @@ function makeNormAvatar(colors) {
     function box(w, h, d, color) {
         return new THREE.Mesh(
             new THREE.BoxGeometry(w, h, d),
-            new THREE.MeshLambertMaterial({ color: color })
+            new THREE.MeshBasicMaterial({ color: color })
         );
     }
 
@@ -5822,16 +5822,17 @@ function resolveNormWallCollisions(mesh) {
 function buildNormCity(scene) {
     _normWallColliders = [];
     _normFloorColliders = [];
+    // Use Basic materials so the world always shows (no light dependency)
     // Large ground
     var ground = new THREE.Mesh(
         new THREE.BoxGeometry(400, 1.2, 400),
-        new THREE.MeshLambertMaterial({ color: 0x2f6b3c })
+        new THREE.MeshBasicMaterial({ color: 0x2f6b3c })
     );
     ground.position.y = -0.6;
     scene.add(ground);
 
     // Road cross
-    var roadMat = new THREE.MeshLambertMaterial({ color: 0x374151 });
+    var roadMat = new THREE.MeshBasicMaterial({ color: 0x374151 });
     var roadX = new THREE.Mesh(new THREE.BoxGeometry(400, 0.15, 18), roadMat);
     roadX.position.y = 0.02;
     scene.add(roadX);
@@ -5840,7 +5841,7 @@ function buildNormCity(scene) {
     scene.add(roadZ);
 
     // Sidewalks
-    var walkMat = new THREE.MeshLambertMaterial({ color: 0x9ca3af });
+    var walkMat = new THREE.MeshBasicMaterial({ color: 0x9ca3af });
     [[0, 12], [0, -12], [12, 0], [-12, 0]].forEach(function (off) {
         var w = new THREE.Mesh(
             new THREE.BoxGeometry(off[0] === 0 ? 400 : 6, 0.12, off[1] === 0 ? 400 : 6),
@@ -5858,10 +5859,10 @@ function buildNormCity(scene) {
 
     function building(x, z, w, h, d, color) {
         var wallT = 0.55; // wall thickness
-        var mat = new THREE.MeshLambertMaterial({ color: color });
-        var winMat = new THREE.MeshLambertMaterial({ color: 0x93c5fd });
-        var floorMat = new THREE.MeshLambertMaterial({ color: 0x78716c });
-        var stairMat = new THREE.MeshLambertMaterial({ color: 0x57534e });
+        var mat = new THREE.MeshBasicMaterial({ color: color });
+        var winMat = new THREE.MeshBasicMaterial({ color: 0x93c5fd });
+        var floorMat = new THREE.MeshBasicMaterial({ color: 0x78716c });
+        var stairMat = new THREE.MeshBasicMaterial({ color: 0x57534e });
         var doorW = Math.min(3.2, w * 0.35); // front door opening
         var floorStep = 3.2; // height between floors
 
@@ -5906,7 +5907,7 @@ function buildNormCity(scene) {
             _normWallColliders[_normWallColliders.length - 1].maxY = h;
             var lintel = new THREE.Mesh(
                 new THREE.BoxGeometry(doorW + 0.15, 0.25, wallT + 0.08),
-                new THREE.MeshLambertMaterial({ color: 0x1f2937 })
+                new THREE.MeshBasicMaterial({ color: 0x1f2937 })
             );
             lintel.position.set(x, doorH + 0.1, frontZ);
             scene.add(lintel);
@@ -5991,7 +5992,7 @@ function buildNormCity(scene) {
         // Roof (walkable top surface too)
         var roof = new THREE.Mesh(
             new THREE.BoxGeometry(w + 0.4, 0.35, d + 0.4),
-            new THREE.MeshLambertMaterial({ color: 0x1f2937 })
+            new THREE.MeshBasicMaterial({ color: 0x1f2937 })
         );
         roof.position.set(x, h + 0.12, z);
         scene.add(roof);
@@ -6040,7 +6041,7 @@ function buildNormCity(scene) {
     // Plaza center low walls
     var plaza = new THREE.Mesh(
         new THREE.BoxGeometry(24, 0.3, 24),
-        new THREE.MeshLambertMaterial({ color: 0xd1d5db })
+        new THREE.MeshBasicMaterial({ color: 0xd1d5db })
     );
     plaza.position.y = 0.1;
     scene.add(plaza);
@@ -6050,7 +6051,7 @@ function buildNormCity(scene) {
         [1, -1].forEach(function (side) {
             var pole = new THREE.Mesh(
                 new THREE.BoxGeometry(0.35, 8, 0.35),
-                new THREE.MeshLambertMaterial({ color: 0x111827 })
+                new THREE.MeshBasicMaterial({ color: 0x111827 })
             );
             pole.position.set(s, 4, side * 14);
             scene.add(pole);
@@ -6223,7 +6224,7 @@ function startNormGameWorld(def) {
     try {
         _normScene = new THREE.Scene();
         _normScene.background = new THREE.Color(0x7eb6e8);
-        _normScene.fog = new THREE.Fog(0x7eb6e8, 80, 220);
+        _normScene.fog = null; // fog off while debugging visibility — keeps near world clear
 
         _normCamera = new THREE.PerspectiveCamera(55, w / h, 0.1, 500);
         _normCamera.position.set(0, 3.2, 6.5);
@@ -6261,7 +6262,25 @@ function startNormGameWorld(def) {
         _normScene.add(_normLocalMesh);
         _normRemoteMeshes = {};
 
-        // First paint immediately so the view is never stuck black
+        // Bright spawn marker (always visible) — confirms 3D is drawing
+        try {
+            var marker = new THREE.Mesh(
+                new THREE.BoxGeometry(2.2, 0.15, 2.2),
+                new THREE.MeshBasicMaterial({ color: 0xffee00 })
+            );
+            marker.position.set(0, 0.08, 0);
+            _normScene.add(marker);
+            var tall = new THREE.Mesh(
+                new THREE.BoxGeometry(1.5, 4, 1.5),
+                new THREE.MeshBasicMaterial({ color: 0xff3333 })
+            );
+            tall.position.set(4, 2, 0);
+            _normScene.add(tall);
+        } catch (e) {}
+
+        // Snap camera to a known good view of the avatar + plaza
+        _normCamera.position.set(0, 4.5, 10);
+        _normCamera.lookAt(0, 1.2, 0);
         _normRenderer.render(_normScene, _normCamera);
     } catch (err) {
         console.error("Norm world failed:", err);
@@ -6278,8 +6297,8 @@ function startNormGameWorld(def) {
     _normSession.charYaw = 0;
     _normSession.camYaw = 0;
     _normSession.camPitch = 0.42;
-    _normSession.camDist = 5.0;
-    _normSession.camHeight = 2.6;
+    _normSession.camDist = 7.5;
+    _normSession.camHeight = 3.4;
     _normSession.moveX = 0;
     _normSession.moveZ = 0;
     _normSession.orbitX = 0;
@@ -6401,10 +6420,17 @@ function startNormGameWorld(def) {
             _normSession.onGround = false;
         }
 
+        // Safety: never let avatar fall through the world
+        if (_normLocalMesh.position.y < -2) {
+            _normLocalMesh.position.y = (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02);
+            _normSession.velY = 0;
+            _normSession.onGround = true;
+        }
+
         // --- Camera LOCKED behind character, slightly above (orbit off) ---
         var target = _normLocalMesh.position;
-        var dist = _normSession.camDist || 5.0;
-        var height = _normSession.camHeight || 2.6;
+        var dist = _normSession.camDist || 7.0;
+        var height = _normSession.camHeight || 3.2;
         // Behind = opposite of facing
         var idealX = target.x - fwdX * dist;
         var idealZ = target.z - fwdZ * dist;
