@@ -5915,8 +5915,8 @@ function getNormSupportY(px, pz, currentY) {
         } else {
             sy = c.y;
         }
-        // Only snap onto surfaces at or below us (or slightly above while climbing)
-        if (sy <= currentY + 0.55 && sy > best) best = sy;
+        // Snap onto surfaces under/near feet (forgiving so landings catch you)
+        if (sy <= currentY + 0.85 && sy > best) best = sy;
     }
     return best;
 }
@@ -6061,71 +6061,63 @@ function buildNormCity(scene) {
         var stairX1 = stairX0 + stairW;
 
         // --- FLOORS + RAMPS ---
+        // Full solid floor (no hole) + ramp that meets the floor at the top
         var floorCount = Math.max(1, Math.floor((h - 1.2) / floorStep));
         for (var fi = 1; fi <= floorCount; fi++) {
             var floorY = fi * floorStep;
             if (floorY >= h - 0.5) break;
 
-            // Floor slab (leaves a cutout where the stair ramp comes through)
-            // Main floor = everything except the stair column rectangle
-            var slabH = 0.28;
-            // Floor piece to the RIGHT of stairs (main walkable floor)
-            var mainW = ix1 - stairX1 - 0.05;
-            if (mainW > 0.5) {
-                var floorMesh = new THREE.Mesh(
-                    new THREE.BoxGeometry(mainW, slabH, iD - 0.1),
-                    floorMat
-                );
-                floorMesh.position.set((stairX1 + 0.05 + ix1) / 2, floorY - slabH / 2, (iz0 + iz1) / 2);
-                scene.add(floorMesh);
-                _normFloorColliders.push({
-                    type: "flat",
-                    y: floorY,
-                    minX: stairX1 + 0.05,
-                    maxX: ix1,
-                    minZ: iz0 + 0.05,
-                    maxZ: iz1 - 0.05
-                });
-            }
-            // Thin strip in front/behind stairs area still walkable at edges if space
-            // (skip for simplicity — main floor is enough)
+            var slabH = 0.32;
+            // SOLID full interior floor — no cutout (fixes falling at 1st floor landing)
+            var floorMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(Math.max(0.5, iW - 0.15), slabH, Math.max(0.5, iD - 0.15)),
+                floorMat
+            );
+            floorMesh.position.set((ix0 + ix1) / 2, floorY - slabH / 2, (iz0 + iz1) / 2);
+            scene.add(floorMesh);
+            _normFloorColliders.push({
+                type: "flat",
+                y: floorY,
+                minX: ix0 + 0.05,
+                maxX: ix1 - 0.05,
+                minZ: iz0 + 0.05,
+                maxZ: iz1 - 0.05
+            });
 
-            // Ramp from previous level up to this floor (stretched rotated cube)
+            // Ramp from previous level up to this floor (meets solid floor at top)
             var yBottom = (fi - 1) * floorStep;
             var yTop = floorY;
             var rise = yTop - yBottom;
-            var run = Math.max(3.5, Math.min(iD - 0.4, rise * 1.35)); // ramp length on Z
+            var run = Math.max(3.5, Math.min(iD - 0.5, rise * 1.4));
             var rampLen = Math.sqrt(run * run + rise * rise);
             var rampAngle = Math.atan2(rise, run);
-            var rampZ0 = iz0 + 0.15;
+            var rampZ0 = iz0 + 0.2;
             var rampZ1 = rampZ0 + run;
-            if (rampZ1 > iz1 - 0.15) {
-                rampZ1 = iz1 - 0.15;
-                run = rampZ1 - rampZ0;
+            if (rampZ1 > iz1 - 0.2) {
+                rampZ1 = iz1 - 0.2;
+                run = Math.max(1.5, rampZ1 - rampZ0);
                 rampLen = Math.sqrt(run * run + rise * rise);
                 rampAngle = Math.atan2(rise, run);
             }
 
             var ramp = new THREE.Mesh(
-                new THREE.BoxGeometry(stairW - 0.1, 0.22, rampLen),
+                new THREE.BoxGeometry(Math.max(0.8, stairW - 0.05), 0.28, rampLen),
                 stairMat
             );
-            // Center of ramp sits midway along the slope
             ramp.position.set(
                 (stairX0 + stairX1) / 2,
                 (yBottom + yTop) / 2,
                 (rampZ0 + rampZ1) / 2
             );
-            // Rotate so the box becomes a ramp (pitch around X)
             ramp.rotation.x = -rampAngle;
             scene.add(ramp);
 
             _normFloorColliders.push({
                 type: "ramp",
-                minX: stairX0,
-                maxX: stairX1,
-                minZ: rampZ0,
-                maxZ: rampZ1,
+                minX: stairX0 - 0.05,
+                maxX: stairX1 + 0.05,
+                minZ: rampZ0 - 0.05,
+                maxZ: rampZ1 + 0.05,
                 yAtMinZ: yBottom,
                 yAtMaxZ: yTop
             });
@@ -6204,8 +6196,55 @@ function buildNormCity(scene) {
     }
 }
 
+
+/* ===== Roleplay music (Mossy.mp3) ===== */
+var _normMusic = null;
+
+function getNormMusic() {
+    if (_normMusic) return _normMusic;
+    try {
+        _normMusic = new Audio("Mossy.mp3");
+        _normMusic.loop = true;
+        _normMusic.preload = "auto";
+        _normMusic.volume = 0.45;
+    } catch (e) {
+        _normMusic = null;
+    }
+    return _normMusic;
+}
+
+function startNormMusic() {
+    var a = getNormMusic();
+    if (!a) return;
+    try {
+        a.currentTime = 0;
+        var p = a.play();
+        if (p && typeof p.catch === "function") {
+            p.catch(function () {
+                // Autoplay blocked until a gesture — retry once on next click/touch
+                var once = function () {
+                    try { a.play().catch(function () {}); } catch (e2) {}
+                    document.removeEventListener("click", once, true);
+                    document.removeEventListener("touchstart", once, true);
+                };
+                document.addEventListener("click", once, true);
+                document.addEventListener("touchstart", once, true);
+            });
+        }
+    } catch (e) {}
+}
+
+function stopNormMusic() {
+    if (!_normMusic) return;
+    try {
+        _normMusic.pause();
+        _normMusic.currentTime = 0;
+    } catch (e) {}
+}
+
 function startNormGameWorld(def) {
     disposeNormWorld(false);
+    startNormMusic();
 
     // Only YOU at start — other rows come from live presence
     var meName = getNormDisplayName();
@@ -6688,6 +6727,7 @@ function stopNormPresence() {
 }
 
 function disposeNormWorld(keepSession) {
+    stopNormMusic();
     stopNormPresence();
     if (_normAnim) {
         cancelAnimationFrame(_normAnim);
@@ -6722,6 +6762,7 @@ function disposeNormWorld(keepSession) {
 }
 
 function leaveNormGame() {
+    stopNormMusic();
     try {
         var st = document.querySelector(".norm-game-stage");
         if (st) st.classList.remove("show-joysticks");

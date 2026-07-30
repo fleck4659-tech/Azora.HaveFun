@@ -1,6 +1,6 @@
 /* Azora main app service worker */
-var CACHE = "azora-app-v26-floors";
-var ASSETS = ["./", "./index.html", "./style.css", "./script.js", "./logo.jpg", "./manifest-azora.json", "./Smile.png"];
+var CACHE = "azora-app-v28-music";
+var ASSETS = ["./", "./index.html", "./style.css", "./script.js", "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./Mossy.mp3"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ASSETS).catch(function () {}); }).then(function () { return self.skipWaiting(); }));
 });
