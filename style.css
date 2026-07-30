@@ -2791,3 +2791,25 @@ button.azora-temp-disabled:hover{transform:none!important;box-shadow:none!import
 .norm-game-play {
     min-height: min(70vh, 560px);
 }
+
+/* v37 force visible game viewport */
+#normGameCanvas, .norm-game-canvas {
+  min-height: 420px !important;
+  height: 420px !important;
+  position: relative !important;
+  background: #5dade2 !important;
+  overflow: hidden !important;
+}
+.norm-game-play { min-height: 480px !important; }
+.norm-game-canvas canvas {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+}
+#normLeaveConfirm {
+  z-index: 2147483646 !important;
+  pointer-events: auto !important;
+}
