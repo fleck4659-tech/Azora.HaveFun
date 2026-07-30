@@ -6159,24 +6159,18 @@ function startNormGameWorld(def) {
     disposeNormWorld(false);
     startNormMusic();
 
-    // Only YOU at start — other rows come from live presence
     var meName = getNormDisplayName();
-    _normPlayers = [{
-        id: "me",
-        name: meName,
-        isMe: true,
-        isGuest: isNormGuest()
-    }];
+    _normPlayers = [{ id: "me", name: meName, isMe: true, isGuest: isNormGuest() }];
     renderNormPlayerList();
 
     var chat = document.getElementById("normChatMessages");
     if (chat) {
         chat.innerHTML = "";
-        appendNormChat("System", "Welcome to " + def.title + ". Only real players who join this room appear here.", true);
+        appendNormChat("System", "Welcome to " + def.title + ". Move with WASD, jump with Space.", true);
         if (typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()) {
-            appendNormChat("System", "Live multiplayer is on — you should see other players move in near real-time when they join this room.", true);
+            appendNormChat("System", "Live multiplayer is on.", true);
         } else {
-            appendNormChat("System", "Cloud not linked yet — you are the only live player here until Firebase is set up on the site.", true);
+            appendNormChat("System", "Playing offline (solo) until cloud is linked.", true);
         }
     }
 
@@ -6186,119 +6180,102 @@ function startNormGameWorld(def) {
         return;
     }
     if (typeof THREE === "undefined") {
-        container.innerHTML = "<p style='color:#fff;padding:20px;text-align:center;'>3D needs Three.js (check internet for the CDN). Chat still works.</p>";
+        container.innerHTML = "<p style='color:#fff;padding:20px;text-align:center;'>3D needs Three.js. Check your connection and refresh.</p>";
         startNormPresence(def);
         return;
     }
 
-    // Ensure session object always exists (dispose must not wipe it)
     if (!_normSession) {
-        _normSession = {
-            id: def.id,
-            title: def.title,
-            roomPath: def.roomPath,
-            startedAt: Date.now()
-        };
+        _normSession = { id: def.id, title: def.title, roomPath: def.roomPath, startedAt: Date.now() };
     }
 
+    // Clear previous canvas
     while (container.firstChild) container.removeChild(container.firstChild);
 
-    // Force layout so canvas is not 0×0 (black screen bug)
+    // Force visible layout BEFORE measuring
     try {
         var playEl = document.getElementById("normGamePlay");
-        if (playEl) playEl.style.display = "flex";
+        if (playEl) {
+            playEl.style.display = "flex";
+            playEl.style.minHeight = "420px";
+        }
+        container.style.display = "block";
+        container.style.position = "relative";
+        container.style.width = "100%";
+        container.style.minHeight = "420px";
+        container.style.height = "420px";
+        container.style.background = "#7eb6e8";
         void container.offsetWidth;
     } catch (e) {}
 
-    function measureCanvas() {
-        var w = container.clientWidth || (container.parentElement && container.parentElement.clientWidth) || 0;
-        var h = container.clientHeight || (container.parentElement && container.parentElement.clientHeight) || 0;
-        if (w < 100) w = 640;
-        if (h < 100) h = 360;
-        return { w: w, h: h };
-    }
-
-    var size = measureCanvas();
-    var w = size.w, h = size.h;
+    // Fixed drawing buffer size (never trust flex 0-height)
+    var w = Math.max(container.clientWidth || 0, 640);
+    var h = Math.max(container.clientHeight || 0, 420);
 
     try {
         _normScene = new THREE.Scene();
-        _normScene.background = new THREE.Color(0x7eb6e8);
-        _normScene.fog = null; // fog off while debugging visibility — keeps near world clear
+        _normScene.background = new THREE.Color(0x87ceeb);
+        _normScene.fog = null;
 
-        _normCamera = new THREE.PerspectiveCamera(55, w / h, 0.1, 500);
-        _normCamera.position.set(0, 3.2, 6.5);
-        _normCamera.lookAt(0, 1.2, 0);
+        _normCamera = new THREE.PerspectiveCamera(60, w / h, 0.1, 800);
+        _normCamera.position.set(0, 5, 12);
+        _normCamera.lookAt(0, 1, 0);
 
         _normRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-        _normRenderer.setClearColor(0x7eb6e8, 1);
+        _normRenderer.setClearColor(0x87ceeb, 1);
         _normRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         _normRenderer.setSize(w, h, false);
-        // IMPORTANT: use pixel sizes (not height:100%) or the canvas can display as 0px tall → black box
+
         var canvasEl = _normRenderer.domElement;
-        canvasEl.style.display = "block";
-        canvasEl.style.position = "absolute";
-        canvasEl.style.left = "0";
-        canvasEl.style.top = "0";
-        canvasEl.style.width = w + "px";
-        canvasEl.style.height = h + "px";
-        canvasEl.style.maxWidth = "100%";
-        canvasEl.style.maxHeight = "100%";
-        container.style.position = "relative";
-        container.style.minHeight = Math.max(h, 280) + "px";
+        canvasEl.style.cssText = "display:block;width:100%;height:100%;position:absolute;left:0;top:0;";
         container.appendChild(canvasEl);
 
-        _normScene.add(new THREE.AmbientLight(0xffffff, 0.7));
-        var sun = new THREE.DirectionalLight(0xffffff, 1.0);
-        sun.position.set(40, 80, 30);
+        // Lights (Basic materials don't need them, but keep for future)
+        _normScene.add(new THREE.AmbientLight(0xffffff, 1.0));
+        var sun = new THREE.DirectionalLight(0xffffff, 0.8);
+        sun.position.set(30, 50, 20);
         _normScene.add(sun);
-        var hemi = new THREE.HemisphereLight(0xbfd9ff, 0x3d5c40, 0.45);
-        _normScene.add(hemi);
 
-        buildNormCity(_normScene);
+        // Build city + avatar
+        if (typeof buildNormCity === "function") buildNormCity(_normScene);
 
         _normLocalMesh = makeNormAvatar(getNormAvatarColors());
         placeNormAvatarOnGround(_normLocalMesh, 0, 0, 0);
         _normScene.add(_normLocalMesh);
         _normRemoteMeshes = {};
 
-        // Bright spawn marker (always visible) — confirms 3D is drawing
-        try {
-            var marker = new THREE.Mesh(
-                new THREE.BoxGeometry(2.2, 0.15, 2.2),
-                new THREE.MeshBasicMaterial({ color: 0xffee00 })
-            );
-            marker.position.set(0, 0.08, 0);
-            _normScene.add(marker);
-            var tall = new THREE.Mesh(
-                new THREE.BoxGeometry(1.5, 4, 1.5),
-                new THREE.MeshBasicMaterial({ color: 0xff3333 })
-            );
-            tall.position.set(4, 2, 0);
-            _normScene.add(tall);
-        } catch (e) {}
+        // Always-visible debug props near spawn
+        var pad = new THREE.Mesh(
+            new THREE.BoxGeometry(3, 0.12, 3),
+            new THREE.MeshBasicMaterial({ color: 0xffee00 })
+        );
+        pad.position.set(0, 0.06, 0);
+        _normScene.add(pad);
 
-        // Snap camera to a known good view of the avatar + plaza
-        _normCamera.position.set(0, 4.5, 10);
-        _normCamera.lookAt(0, 1.2, 0);
+        var beacon = new THREE.Mesh(
+            new THREE.BoxGeometry(1.2, 3, 1.2),
+            new THREE.MeshBasicMaterial({ color: 0xff2244 })
+        );
+        beacon.position.set(3, 1.5, 0);
+        _normScene.add(beacon);
+
+        // Immediate first frame
         _normRenderer.render(_normScene, _normCamera);
     } catch (err) {
-        console.error("Norm world failed:", err);
-        container.innerHTML = "<p style='color:#fff;padding:20px;text-align:center;'>Could not start 3D world. Try refreshing.<br><small style='opacity:.8'>" +
+        console.error("Norm world start failed:", err);
+        container.innerHTML = "<p style='color:#fff;padding:20px;text-align:center;'>Could not start 3D world.<br><small>" +
             String((err && err.message) || err) + "</small></p>";
         startNormPresence(def);
         return;
     }
 
-    // ---- Controls (orbit TEMPORARILY DISABLED) ----
-    // W = forward, S = reverse, A = turn left, D = turn right
-    // Camera locked behind character, slightly above
+    // Controls
     _normKeys = {};
     _normSession.charYaw = 0;
     _normSession.camYaw = 0;
     _normSession.camPitch = 0.42;
-    _normSession.camDist = 7.5;
-    _normSession.camHeight = 3.4;
+    _normSession.camDist = 8;
+    _normSession.camHeight = 3.5;
     _normSession.moveX = 0;
     _normSession.moveZ = 0;
     _normSession.orbitX = 0;
@@ -6308,40 +6285,35 @@ function startNormGameWorld(def) {
     _normSession.onGround = true;
     _normSession.jumpQueued = false;
 
-    // Prevent Space from activating focused buttons (was reloading/rejoining the game)
     try {
         if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     } catch (e) {}
 
-    function onKey(e, down) {
+    function onKeyDown(e) {
+        if (!_normSession) return;
         var k = (e.key || "").toLowerCase();
-        var code = e.code || "";
-
-        // Always eat Space while in Norm Game — stops page scroll + button "click" reload bug
-        if (k === " " || k === "spacebar" || code === "Space") {
-            if (e.preventDefault) e.preventDefault();
-            if (e.stopPropagation) e.stopPropagation();
-            if (down) {
-                _normSession.jumpQueued = true;
-            }
+        if (k === " " || e.code === "Space") {
+            e.preventDefault();
+            e.stopPropagation();
+            _normSession.jumpQueued = true;
             return;
         }
-
-        if (["w", "a", "s", "d", "p"].indexOf(k) !== -1) {
-            _normKeys[k] = down;
-            if (e.preventDefault) e.preventDefault();
-        }
-        if (down && e.key === "Escape") {
-            requestLeaveNormGame();
+        if (k === "w" || k === "a" || k === "s" || k === "d" || k === "p") {
+            _normKeys[k] = true;
+            e.preventDefault();
         }
     }
-    _normSession._kd = function (e) { onKey(e, true); };
-    _normSession._ku = function (e) { onKey(e, false); };
-    // capture:true so we beat buttons/links that would fire on Space
-    window.addEventListener("keydown", _normSession._kd, true);
-    window.addEventListener("keyup", _normSession._ku, true);
+    function onKeyUp(e) {
+        var k = (e.key || "").toLowerCase();
+        if (k === "w" || k === "a" || k === "s" || k === "d" || k === "p") {
+            _normKeys[k] = false;
+        }
+    }
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keyup", onKeyUp, true);
+    _normSession._kd = onKeyDown;
+    _normSession._ku = onKeyUp;
 
-    // Joysticks + mobile jump
     setupNormJoysticks();
     setupNormJumpButton();
 
@@ -6349,158 +6321,124 @@ function startNormGameWorld(def) {
         _normAnim = requestAnimationFrame(animate);
         if (!_normLocalMesh || !_normRenderer || !_normCamera || !_normSession) return;
         try {
-        if (!_normKeys) _normKeys = {};
+            if (!_normKeys) _normKeys = {};
 
-        var sp = 0.18;
-        var turnSp = 0.045;
+            var sp = 0.18;
+            var turnSp = 0.045;
 
-        // --- Turn: A left, D right (also left stick X) ---
-        if (_normKeys["a"]) _normSession.charYaw += turnSp;
-        if (_normKeys["d"]) _normSession.charYaw -= turnSp;
-        _normSession.charYaw -= (_normSession.moveX || 0) * 0.05;
+            if (_normKeys["a"]) _normSession.charYaw += turnSp;
+            if (_normKeys["d"]) _normSession.charYaw -= turnSp;
+            _normSession.charYaw -= (_normSession.moveX || 0) * 0.05;
+            _normLocalMesh.rotation.y = _normSession.charYaw;
 
-        // Character faces charYaw (mesh forward matches movement)
-        _normLocalMesh.rotation.y = _normSession.charYaw;
+            var yaw = _normSession.charYaw || 0;
+            var fwdX = Math.sin(yaw);
+            var fwdZ = Math.cos(yaw);
 
-        // Forward along facing: in our convention rotation.y with atan2(dx,dz)
-        // local forward on XZ = (sin(yaw), cos(yaw))
-        var yaw = _normSession.charYaw || 0;
-        var fwdX = Math.sin(yaw);
-        var fwdZ = Math.cos(yaw);
+            var throttle = 0;
+            if (_normKeys["w"] || _normKeys["p"]) throttle += 1;
+            if (_normKeys["s"]) throttle -= 1;
+            throttle += (_normSession.moveZ || 0);
+            if (throttle > 1) throttle = 1;
+            if (throttle < -1) throttle = -1;
 
-        // --- Move: W forward, S reverse (also left stick Y) ---
-        var throttle = 0;
-        if (_normKeys["w"] || _normKeys["p"]) throttle += 1;
-        if (_normKeys["s"]) throttle -= 1;
-        throttle += (_normSession.moveZ || 0);
-        if (throttle > 1) throttle = 1;
-        if (throttle < -1) throttle = -1;
+            if (Math.abs(throttle) > 0.001) {
+                _normLocalMesh.position.x += fwdX * throttle * sp;
+                _normLocalMesh.position.z += fwdZ * throttle * sp;
+            }
 
-        if (Math.abs(throttle) > 0.001) {
-            _normLocalMesh.position.x += fwdX * throttle * sp;
-            _normLocalMesh.position.z += fwdZ * throttle * sp;
-        }
+            if (typeof resolveNormWallCollisions === "function") {
+                resolveNormWallCollisions(_normLocalMesh);
+            }
 
-        // Can't walk through building walls (hollow shells, solid walls)
-        if (typeof resolveNormWallCollisions === "function") {
-            resolveNormWallCollisions(_normLocalMesh);
-        }
+            _normLocalMesh.position.x = Math.max(-180, Math.min(180, _normLocalMesh.position.x));
+            _normLocalMesh.position.z = Math.max(-180, Math.min(180, _normLocalMesh.position.z));
 
-        _normLocalMesh.position.x = Math.max(-180, Math.min(180, _normLocalMesh.position.x));
-        _normLocalMesh.position.z = Math.max(-180, Math.min(180, _normLocalMesh.position.z));
+            var gravity = 0.018;
+            var jumpPower = 0.32;
+            if (_normSession.jumpQueued) {
+                _normSession.jumpQueued = false;
+                if (_normSession.onGround) {
+                    _normSession.velY = jumpPower;
+                    _normSession.onGround = false;
+                }
+            }
+            _normSession.velY = (_normSession.velY || 0) - gravity;
+            _normLocalMesh.position.y += _normSession.velY;
 
-        // --- Jump + floors/ramps ---
-        var gravity = 0.018;
-        var jumpPower = 0.32;
-        if (_normSession.jumpQueued) {
-            _normSession.jumpQueued = false;
-            if (_normSession.onGround) {
-                _normSession.velY = jumpPower;
+            var supportY = 0.02;
+            if (typeof getNormSupportY === "function") {
+                supportY = getNormSupportY(
+                    _normLocalMesh.position.x,
+                    _normLocalMesh.position.z,
+                    _normLocalMesh.position.y
+                );
+            }
+            if (_normLocalMesh.position.y <= supportY) {
+                _normLocalMesh.position.y = supportY;
+                _normSession.velY = 0;
+                _normSession.onGround = true;
+            } else {
                 _normSession.onGround = false;
             }
-        }
-        _normSession.velY = (_normSession.velY || 0) - gravity;
-        _normLocalMesh.position.y += _normSession.velY;
-
-        var supportY = getNormSupportY(
-            _normLocalMesh.position.x,
-            _normLocalMesh.position.z,
-            _normLocalMesh.position.y
-        );
-        // Stick to ramp while walking (even if vel small)
-        if (_normLocalMesh.position.y <= supportY + 0.08 && _normSession.velY <= 0.02) {
-            _normLocalMesh.position.y = supportY;
-            _normSession.velY = 0;
-            _normSession.onGround = true;
-        } else if (_normLocalMesh.position.y < supportY - 0.01 && _normSession.velY <= 0) {
-            _normLocalMesh.position.y = supportY;
-            _normSession.velY = 0;
-            _normSession.onGround = true;
-        } else {
-            _normSession.onGround = false;
-        }
-
-        // Safety: never let avatar fall through the world
-        if (_normLocalMesh.position.y < -2) {
-            _normLocalMesh.position.y = (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02);
-            _normSession.velY = 0;
-            _normSession.onGround = true;
-        }
-
-        // --- Camera LOCKED behind character, slightly above (orbit off) ---
-        var target = _normLocalMesh.position;
-        var dist = _normSession.camDist || 7.0;
-        var height = _normSession.camHeight || 3.2;
-        // Behind = opposite of facing
-        var idealX = target.x - fwdX * dist;
-        var idealZ = target.z - fwdZ * dist;
-        var idealY = target.y + height;
-
-        var lerp = 0.18;
-        _normCamera.position.x += (idealX - _normCamera.position.x) * lerp;
-        _normCamera.position.y += (idealY - _normCamera.position.y) * lerp;
-        _normCamera.position.z += (idealZ - _normCamera.position.z) * lerp;
-        _normCamera.lookAt(target.x, target.y + 1.5, target.z);
-
-        // Live multiplayer: ease other players toward their latest positions
-        if (_normSession && typeof _normSession._smoothRemotes === "function") {
-            _normSession._smoothRemotes();
-        }
-        // Keep publishing while we move so others see us in near real-time
-        if (typeof publishSelf !== "function") { /* local */ }
-        try {
-            if (_normSession && Math.abs((_normKeys && (_normKeys.w || _normKeys.s || _normKeys.a || _normKeys.d)) ? 1 : 0)) {
-                /* interval handles publish */
+            if (_normLocalMesh.position.y < -2) {
+                _normLocalMesh.position.y = 0.02;
+                _normSession.velY = 0;
+                _normSession.onGround = true;
             }
-        } catch (e) {}
 
-        _normRenderer.render(_normScene, _normCamera);
+            // Camera locked behind character
+            var target = _normLocalMesh.position;
+            var dist = _normSession.camDist || 8;
+            var height = _normSession.camHeight || 3.5;
+            var idealX = target.x - Math.sin(yaw) * dist;
+            var idealZ = target.z - Math.cos(yaw) * dist;
+            var idealY = target.y + height;
+            var lerp = 0.2;
+            _normCamera.position.x += (idealX - _normCamera.position.x) * lerp;
+            _normCamera.position.y += (idealY - _normCamera.position.y) * lerp;
+            _normCamera.position.z += (idealZ - _normCamera.position.z) * lerp;
+            _normCamera.lookAt(target.x, target.y + 1.4, target.z);
+
+            if (_normSession && typeof _normSession._smoothRemotes === "function") {
+                _normSession._smoothRemotes();
+            }
+
+            _normRenderer.render(_normScene, _normCamera);
         } catch (animErr) {
             console.error("Norm animate error:", animErr);
         }
     }
     animate();
 
+    // Safe resize — never allow 0×0
     function fitNormCanvas() {
         if (!_normRenderer || !_normCamera || !container) return;
-        var s = measureCanvas();
-        // Prefer real container box once layout exists
-        var rw = container.clientWidth || s.w;
-        var rh = container.clientHeight || s.h;
-        if (rw < 120) rw = s.w;
-        if (rh < 120) rh = s.h;
+        var rw = Math.max(container.clientWidth || 0, 320);
+        var rh = Math.max(container.clientHeight || 0, 280);
+        if (rh < 200) {
+            rh = 420;
+            container.style.height = "420px";
+            container.style.minHeight = "420px";
+        }
         _normCamera.aspect = rw / rh;
         _normCamera.updateProjectionMatrix();
         _normRenderer.setSize(rw, rh, false);
         var el = _normRenderer.domElement;
-        el.style.width = rw + "px";
-        el.style.height = rh + "px";
-        container.style.minHeight = Math.max(rh, 280) + "px";
+        el.style.width = "100%";
+        el.style.height = "100%";
         _normRenderer.render(_normScene, _normCamera);
     }
-    setTimeout(fitNormCanvas, 30);
-    setTimeout(fitNormCanvas, 120);
-    setTimeout(fitNormCanvas, 400);
+    setTimeout(fitNormCanvas, 50);
+    setTimeout(fitNormCanvas, 200);
+    setTimeout(fitNormCanvas, 500);
     window.addEventListener("resize", fitNormCanvas);
     _normSession._onResize = fitNormCanvas;
-
-    // Resize observer
-    try {
-        _normSession._onResize = function () {
-            if (!_normRenderer || !_normCamera || !container) return;
-            var ww = Math.max(container.clientWidth, 1);
-            var hh = Math.max(container.clientHeight, 1);
-            _normCamera.aspect = ww / hh;
-            _normCamera.updateProjectionMatrix();
-            _normRenderer.setSize(ww, hh);
-        };
-        window.addEventListener("resize", _normSession._onResize);
-        setTimeout(_normSession._onResize, 100);
-    } catch (e) {}
 
     updateNormHudCount();
     startNormPresence(def);
 }
+
 
 function updateNormHudCount() {
     var hud = document.getElementById("normHudPlayers");
