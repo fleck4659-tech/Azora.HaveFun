@@ -6219,11 +6219,14 @@ function startNormMusic() {
     try {
         a.currentTime = 0;
         var p = a.play();
+        updateNormMusicButton(true);
         if (p && typeof p.catch === "function") {
             p.catch(function () {
-                // Autoplay blocked until a gesture — retry once on next click/touch
+                updateNormMusicButton(false);
                 var once = function () {
-                    try { a.play().catch(function () {}); } catch (e2) {}
+                    try {
+                        a.play().then(function () { updateNormMusicButton(true); }).catch(function () {});
+                    } catch (e2) {}
                     document.removeEventListener("click", once, true);
                     document.removeEventListener("touchstart", once, true);
                 };
@@ -6240,7 +6243,40 @@ function stopNormMusic() {
         _normMusic.pause();
         _normMusic.currentTime = 0;
     } catch (e) {}
+    updateNormMusicButton(false);
 }
+
+/** Pause keeps place in the track; Unpause continues from there */
+function toggleNormMusicPause() {
+    var a = getNormMusic();
+    if (!a) return;
+    var btn = document.getElementById("normMusicToggleBtn");
+    try {
+        if (a.paused) {
+            var p = a.play();
+            if (p && typeof p.catch === "function") p.catch(function () {});
+            updateNormMusicButton(true);
+        } else {
+            a.pause(); // keep currentTime — resume later from same spot
+            updateNormMusicButton(false);
+        }
+    } catch (e) {}
+}
+
+function updateNormMusicButton(isPlaying) {
+    var btn = document.getElementById("normMusicToggleBtn");
+    if (!btn) return;
+    if (isPlaying) {
+        btn.textContent = "Pause Music";
+        btn.classList.remove("is-paused");
+    } else {
+        btn.textContent = "Unpause Music";
+        btn.classList.add("is-paused");
+    }
+}
+
+window.toggleNormMusicPause = toggleNormMusicPause;
+
 
 function startNormGameWorld(def) {
     disposeNormWorld(false);

@@ -2739,3 +2739,21 @@ button.azora-temp-disabled:hover{transform:none!important;box-shadow:none!import
 @media (hover: none), (pointer: coarse) {
     .norm-jump-btn { display: flex !important; }
 }
+
+
+.norm-music-btn {
+    margin: 0 !important;
+    background: #374151 !important;
+    color: #f3f4f6 !important;
+    border: 1px solid #6b7280 !important;
+    font-weight: 700 !important;
+    font-size: 13px !important;
+    padding: 8px 12px !important;
+    border-radius: 10px !important;
+    cursor: pointer;
+}
+.norm-music-btn.is-paused {
+    background: #1e3a5f !important;
+    border-color: #60a5fa !important;
+    color: #fff !important;
+}
