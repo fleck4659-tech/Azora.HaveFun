@@ -2265,7 +2265,7 @@ button.azora-temp-disabled:hover{transform:none!important;box-shadow:none!import
 .norm-load-hint{margin-top:12px;font-size:13px;color:#93c5fd}
 .norm-game-play{flex:1;min-height:0;display:flex;flex-direction:row}
 .norm-game-stage{flex:1;min-width:0;display:flex;flex-direction:column;padding:10px}
-.norm-game-canvas{flex:1;min-height:220px;border-radius:12px;border:3px solid #1e60ff;background:#111827;overflow:hidden;position:relative}
+.norm-game-canvas{flex:1;min-height:min(52vh,420px);height:min(52vh,420px);border-radius:12px;border:3px solid #1e60ff;background:#7eb6e8;overflow:hidden;position:relative}
 .norm-game-hud{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;color:#cbd5e1;font-size:13px;font-weight:bold}
 .norm-game-side{width:min(320px,38vw);flex-shrink:0;display:flex;flex-direction:column;border-left:2px solid rgba(255,255,255,.15);background:rgba(0,0,0,.35)}
 .norm-side-block{padding:12px}
@@ -2777,4 +2777,17 @@ button.azora-temp-disabled:hover{transform:none!important;box-shadow:none!import
     font-weight: 600;
     opacity: 0.9;
     line-height: 1.35;
+}
+
+.norm-game-canvas canvas {
+    display: block !important;
+    position: absolute !important;
+    left: 0; top: 0;
+}
+.norm-game-body, .norm-game-play, .norm-game-stage {
+    min-height: 0;
+    height: 100%;
+}
+.norm-game-play {
+    min-height: min(70vh, 560px);
 }

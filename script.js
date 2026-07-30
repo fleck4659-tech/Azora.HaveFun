@@ -6063,6 +6063,17 @@ function buildNormCity(scene) {
 
 
 /* ===== Roleplay music (Mossy.mp3) ===== */
+var _normWallColliders = [];
+var _normFloorColliders = [];
+var _normScene = null;
+var _normCamera = null;
+var _normRenderer = null;
+var _normLocalMesh = null;
+var _normRemoteMeshes = {};
+var _normAnim = null;
+var _normSession = null;
+var _normPlayers = [];
+var _normKeys = {};
 var _normMusic = null;
 
 function getNormMusic() {
@@ -6220,12 +6231,21 @@ function startNormGameWorld(def) {
 
         _normRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
         _normRenderer.setClearColor(0x7eb6e8, 1);
-        _normRenderer.setSize(w, h, true);
         _normRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-        _normRenderer.domElement.style.display = "block";
-        _normRenderer.domElement.style.width = "100%";
-        _normRenderer.domElement.style.height = "100%";
-        container.appendChild(_normRenderer.domElement);
+        _normRenderer.setSize(w, h, false);
+        // IMPORTANT: use pixel sizes (not height:100%) or the canvas can display as 0px tall → black box
+        var canvasEl = _normRenderer.domElement;
+        canvasEl.style.display = "block";
+        canvasEl.style.position = "absolute";
+        canvasEl.style.left = "0";
+        canvasEl.style.top = "0";
+        canvasEl.style.width = w + "px";
+        canvasEl.style.height = h + "px";
+        canvasEl.style.maxWidth = "100%";
+        canvasEl.style.maxHeight = "100%";
+        container.style.position = "relative";
+        container.style.minHeight = Math.max(h, 280) + "px";
+        container.appendChild(canvasEl);
 
         _normScene.add(new THREE.AmbientLight(0xffffff, 0.7));
         var sun = new THREE.DirectionalLight(0xffffff, 1.0);
@@ -6415,26 +6435,28 @@ function startNormGameWorld(def) {
     }
     animate();
 
-    // Re-measure after layout settles (fixes black canvas when size was 0)
-    setTimeout(function () {
-        try {
-            if (!_normRenderer || !_normCamera || !container) return;
-            var s2 = measureCanvas();
-            _normCamera.aspect = s2.w / s2.h;
-            _normCamera.updateProjectionMatrix();
-            _normRenderer.setSize(s2.w, s2.h, true);
-            _normRenderer.render(_normScene, _normCamera);
-        } catch (e) {}
-    }, 50);
-    setTimeout(function () {
-        try {
-            if (!_normRenderer || !_normCamera || !container) return;
-            var s3 = measureCanvas();
-            _normCamera.aspect = s3.w / s3.h;
-            _normCamera.updateProjectionMatrix();
-            _normRenderer.setSize(s3.w, s3.h, true);
-        } catch (e) {}
-    }, 300);
+    function fitNormCanvas() {
+        if (!_normRenderer || !_normCamera || !container) return;
+        var s = measureCanvas();
+        // Prefer real container box once layout exists
+        var rw = container.clientWidth || s.w;
+        var rh = container.clientHeight || s.h;
+        if (rw < 120) rw = s.w;
+        if (rh < 120) rh = s.h;
+        _normCamera.aspect = rw / rh;
+        _normCamera.updateProjectionMatrix();
+        _normRenderer.setSize(rw, rh, false);
+        var el = _normRenderer.domElement;
+        el.style.width = rw + "px";
+        el.style.height = rh + "px";
+        container.style.minHeight = Math.max(rh, 280) + "px";
+        _normRenderer.render(_normScene, _normCamera);
+    }
+    setTimeout(fitNormCanvas, 30);
+    setTimeout(fitNormCanvas, 120);
+    setTimeout(fitNormCanvas, 400);
+    window.addEventListener("resize", fitNormCanvas);
+    _normSession._onResize = fitNormCanvas;
 
     // Resize observer
     try {
