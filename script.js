@@ -5250,21 +5250,14 @@ function isAzoraOnline() {
 }
 
 function showAzoraOfflineScreen(show) {
+    // Official Wi‑Fi full-screen error is RETIRED.
+    // Always keep it hidden so Azora keeps running offline.
     var el = document.getElementById("azoraOfflineScreen");
     if (!el) return;
-    if (show) {
-        el.classList.add("show");
-        el.style.display = "flex";
-        el.setAttribute("aria-hidden", "false");
-        document.documentElement.setAttribute("data-azora-offline", "1");
-    } else {
-        el.classList.remove("show");
-        el.style.display = "none";
-        el.setAttribute("aria-hidden", "true");
-        document.documentElement.removeAttribute("data-azora-offline");
-        var st = document.getElementById("azoraOfflineStatus");
-        if (st) st.textContent = "";
-    }
+    el.classList.remove("show");
+    el.style.display = "none";
+    el.setAttribute("aria-hidden", "true");
+    document.documentElement.removeAttribute("data-azora-offline");
 }
 
 var _azoraLostTimer = null;
@@ -5276,7 +5269,6 @@ function showConnectionLostReminder(show) {
     if (show) {
         el.classList.add("show");
         el.style.display = "block";
-        // restart progress bar animation
         var bar = document.getElementById("azoraConnectionLostBar");
         if (bar) {
             bar.style.animation = "none";
@@ -5296,43 +5288,21 @@ function clearConnectionLostTimer() {
     }
 }
 
-/** After 10s offline: leave any Norm Game, then show full Wi‑Fi screen */
+/** After 10s: only hide the popup. Do NOT kick from games. Azora keeps running. */
 function finishConnectionLostSequence() {
     _azoraLostTimer = null;
     showConnectionLostReminder(false);
-
-    // Leave Norm Game if currently in one
-    try {
-        if (typeof _normSession !== "undefined" && _normSession) {
-            if (typeof leaveNormGame === "function") leaveNormGame();
-        }
-        // Also leave playable Quick Game runtime if open
-        if (typeof closeGamePlay === "function") {
-            var gp = document.getElementById("gamePlayOverlay");
-            if (gp && gp.style.display !== "none" && gp.style.display !== "") {
-                try { closeGamePlay(); } catch (e) {}
-            }
-        }
-    } catch (e) {}
-
-    // Full offline / Wi‑Fi error screen
-    showAzoraOfflineScreen(true);
+    // Full Wi‑Fi screen is gone — stay in whatever you were doing
 }
 
 function handleAzoraWentOffline() {
-    if (!isAzoraOnline()) {
-        // Already showing full screen? still ok
-        clearConnectionLostTimer();
-        showConnectionLostReminder(true);
-        _azoraLostTimer = setTimeout(function () {
-            // Only finish if still offline
-            if (!isAzoraOnline()) {
-                finishConnectionLostSequence();
-            } else {
-                showConnectionLostReminder(false);
-            }
-        }, 10000);
-    }
+    // Show 10s popup anywhere (main app or in a game). App keeps running.
+    clearConnectionLostTimer();
+    showAzoraOfflineScreen(false); // ensure old screen never blocks
+    showConnectionLostReminder(true);
+    _azoraLostTimer = setTimeout(function () {
+        finishConnectionLostSequence();
+    }, 10000);
 }
 
 function handleAzoraWentOnline() {
@@ -5344,18 +5314,13 @@ function handleAzoraWentOnline() {
 function updateAzoraOnlineStatus() {
     var online = isAzoraOnline();
     if (online) {
-        handleAzoraWentOnline();
+        if (!_azoraWasOnline) handleAzoraWentOnline();
     } else {
-        // On first load already offline → go straight to full Wi‑Fi screen
-        // (no 10s wait). Mid-session drop uses handleAzoraWentOffline.
-        var el = document.getElementById("azoraOfflineScreen");
+        // Went offline (or already offline): soft popup only, never full screen
         var toast = document.getElementById("azoraConnectionLostToast");
         var toastShowing = toast && toast.classList.contains("show");
-        var fullShowing = el && (el.classList.contains("show") || el.style.display === "flex");
-        if (!toastShowing && !fullShowing && _azoraWasOnline) {
+        if (!toastShowing) {
             handleAzoraWentOffline();
-        } else if (!online && !toastShowing && !fullShowing) {
-            showAzoraOfflineScreen(true);
         }
     }
     _azoraWasOnline = online;
@@ -5363,378 +5328,37 @@ function updateAzoraOnlineStatus() {
 }
 
 function retryAzoraConnection() {
-    var st = document.getElementById("azoraOfflineStatus");
-    if (st) st.textContent = "Checking connection…";
-
-    // navigator.onLine is fast; also try a tiny network check when possible
-    function finish(ok) {
-        if (ok) {
-            if (st) st.textContent = "Connected! Loading Azora…";
-            showAzoraOfflineScreen(false);
-        } else {
-            if (st) st.textContent = "Still offline. Check Wi‑Fi or data and try again.";
-            showAzoraOfflineScreen(true);
-        }
-    }
-
-    if (!isAzoraOnline()) {
-        finish(false);
-        return;
-    }
-
-    // Probe the network (may fail on pure offline / blocked fetch)
-    var ctrl = null;
-    var timer = null;
-    try {
-        if (typeof AbortController !== "undefined") ctrl = new AbortController();
-        timer = setTimeout(function () {
-            try { if (ctrl) ctrl.abort(); } catch (e) {}
-        }, 4000);
-        // Prefer same-origin so SW / CORS don't false-fail when online
-        var url = (typeof location !== "undefined" ? location.href.split("#")[0] : "./") + (location.search ? "" : "") ;
-        // cache-bust
-        var probe = "./manifest-azora.json?azora_ping=" + Date.now();
-        fetch(probe, {
-            method: "GET",
-            cache: "no-store",
-            signal: ctrl ? ctrl.signal : undefined
-        }).then(function (r) {
-            if (timer) clearTimeout(timer);
-            // Even a 404 means the network reached something
-            finish(true);
-        }).catch(function () {
-            if (timer) clearTimeout(timer);
-            // If browser says online but fetch fails, still trust onLine for file:// / local
-            if (typeof location !== "undefined" && location.protocol === "file:") {
-                finish(isAzoraOnline());
-            } else {
-                finish(isAzoraOnline());
-            }
-        });
-    } catch (e) {
-        if (timer) clearTimeout(timer);
-        finish(isAzoraOnline());
+    // Kept for any old buttons — just hides legacy screen and rechecks
+    showAzoraOfflineScreen(false);
+    if (isAzoraOnline()) {
+        handleAzoraWentOnline();
+    } else {
+        handleAzoraWentOffline();
     }
 }
+window.retryAzoraConnection = retryAzoraConnection;
 
 function initAzoraOfflineDetection() {
-    try { _azoraWasOnline = isAzoraOnline(); } catch (e) { _azoraWasOnline = true; }
-    // Initial: if already offline at open, show full Wi‑Fi screen immediately
+    // Never block the app with the old full Wi‑Fi screen
+    showAzoraOfflineScreen(false);
+
     if (!isAzoraOnline()) {
-        showAzoraOfflineScreen(true);
         _azoraWasOnline = false;
+        handleAzoraWentOffline();
     } else {
-        showAzoraOfflineScreen(false);
-        showConnectionLostReminder(false);
+        _azoraWasOnline = true;
     }
+
+    window.addEventListener("offline", function () {
+        _azoraWasOnline = false;
+        handleAzoraWentOffline();
+    });
     window.addEventListener("online", function () {
         _azoraWasOnline = true;
         handleAzoraWentOnline();
     });
-    window.addEventListener("offline", function () {
-        handleAzoraWentOffline();
-        _azoraWasOnline = false;
-    });
-    document.addEventListener("visibilitychange", function () {
-        if (!document.hidden) {
-            if (isAzoraOnline()) handleAzoraWentOnline();
-            else if (!_azoraLostTimer) {
-                // Still offline and no reminder running → full screen
-                showAzoraOfflineScreen(true);
-            }
-        }
-    });
 }
 
-window.isAzoraOnline = isAzoraOnline;
-window.showAzoraOfflineScreen = showAzoraOfflineScreen;
-window.updateAzoraOnlineStatus = updateAzoraOnlineStatus;
-window.retryAzoraConnection = retryAzoraConnection;
-window.initAzoraOfflineDetection = initAzoraOfflineDetection;
-window.showConnectionLostReminder = showConnectionLostReminder;
-window.handleAzoraWentOffline = handleAzoraWentOffline;
-window.handleAzoraWentOnline = handleAzoraWentOnline;
-
-(function bootOffline() {
-    function run() { initAzoraOfflineDetection(); }
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
-    else run();
-    window.addEventListener("load", function () { updateAzoraOnlineStatus(); });
-})();
-
-
-
-
-
-
-// ============================================================
-// NORM GAMES — real-time presence (Firebase when configured)
-// No fake player lists. Only real sessions that join the room.
-// ============================================================
-var _normSession = null;
-var _normAnim = null;
-var _normScene = null;
-var _normRenderer = null;
-var _normCamera = null;
-var _normPlayers = []; // filled only from live presence / local you
-var _normRemoteMeshes = {};
-var _normKeys = {};
-var _normWallColliders = []; // AABB walls for hollow buildings
-var _normFloorColliders = []; // floors + ramp surfaces
-var _normLocalMesh = null;
-var _normPresenceTimer = null;
-var _normMyPresenceId = null;
-
-var NORM_GAMES = {
-    "azora-roleplay": {
-        id: "azora-roleplay",
-        title: "Azora Roleplay",
-        owner: "Azora",
-        dimensions: "3D",
-        roomPath: "/azoraNormRooms/azora-roleplay/players"
-    }
-};
-
-function getNormDisplayName() {
-    try {
-        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
-        var logged = localStorage.getItem("loggedIn");
-        if (logged === "guest" || acc.isGuest || !acc.username) return "___";
-        return String(acc.username);
-    } catch (e) { return "___"; }
-}
-
-function isNormGuest() {
-    return localStorage.getItem("loggedIn") === "guest" || getNormDisplayName() === "___";
-}
-
-function getNormAvatarColors() {
-    var av = { head: "#ffcc00", torso: "#1e60ff", leftArm: "#ffcc00", rightArm: "#ffcc00", leftLeg: "#00ebd4", rightLeg: "#00ebd4" };
-    try {
-        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
-        if (acc && acc.avatar) {
-            av.head = acc.avatar.head || av.head;
-            av.torso = acc.avatar.torso || av.torso;
-            av.leftArm = acc.avatar.leftArm || av.leftArm;
-            av.rightArm = acc.avatar.rightArm || av.rightArm;
-            av.leftLeg = acc.avatar.leftLeg || av.leftLeg;
-            av.rightLeg = acc.avatar.rightLeg || av.rightLeg;
-        }
-    } catch (e) {}
-    return av;
-}
-
-/** Same proportions as the main avatar customizer */
-function makeNormAvatar(colors) {
-    colors = colors || getNormAvatarColors();
-    var g = new THREE.Group();
-    g.name = "normAvatar";
-
-    function box(w, h, d, color) {
-        return new THREE.Mesh(
-            new THREE.BoxGeometry(w, h, d),
-            new THREE.MeshLambertMaterial({ color: color })
-        );
-    }
-
-    // Build with FEET on local Y = 0 so standing on ground is just position.y = surfaceY
-    // Legs height 1.0 → centers at 0.5; torso above legs; head on top
-    var legH = 1.0, torsoH = 1.0, headS = 0.65, armH = 1.0;
-
-    var leftLeg = box(0.35, legH, 0.35, colors.leftLeg);
-    leftLeg.position.set(-0.22, legH / 2, 0);
-    leftLeg.name = "leftLeg";
-
-    var rightLeg = box(0.35, legH, 0.35, colors.rightLeg);
-    rightLeg.position.set(0.22, legH / 2, 0);
-    rightLeg.name = "rightLeg";
-
-    var torso = box(0.85, torsoH, 0.45, colors.torso);
-    torso.position.y = legH + torsoH / 2;
-    torso.name = "torso";
-
-    var leftArm = box(0.35, armH, 0.35, colors.leftArm);
-    leftArm.position.set(-0.62, legH + torsoH / 2, 0);
-    leftArm.name = "leftArm";
-
-    var rightArm = box(0.35, armH, 0.35, colors.rightArm);
-    rightArm.position.set(0.62, legH + torsoH / 2, 0);
-    rightArm.name = "rightArm";
-
-    var head = box(headS, headS, headS, colors.head);
-    head.position.y = legH + torsoH + headS / 2;
-    head.name = "head";
-
-    g.add(leftLeg);
-    g.add(rightLeg);
-    g.add(torso);
-    g.add(leftArm);
-    g.add(rightArm);
-    g.add(head);
-
-    // Smile.png face on front of head
-    attachNormFaceDecal(g, head);
-
-    // Mark foot height for placement helpers
-    g.userData.footOffset = 0; // feet already at y=0 in local space
-    return g;
-}
-
-/** Bottom of feet in local space (leg center -0.7, height 1.0 → bottom -1.2) */
-var NORM_AVATAR_FOOT_OFFSET = 0.02; // feet at local y=0; sit just above ground top
-
-/** Stand avatar so soles sit on surfaceY (default ground top = 0) */
-function placeNormAvatarOnGround(mesh, x, z, surfaceY) {
-    if (!mesh) return;
-    if (typeof surfaceY !== "number") surfaceY = 0;
-    mesh.position.x = x || 0;
-    mesh.position.z = z || 0;
-    mesh.position.y = surfaceY + NORM_AVATAR_FOOT_OFFSET;
-}
-
-/** Flat Smile.png on front of head — hidden until texture loads (no white square) */
-function attachNormFaceDecal(avatarGroup, headMesh) {
-    if (typeof THREE === "undefined" || !headMesh) return;
-    try {
-        var mat = new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0,
-            depthWrite: false,
-            side: THREE.FrontSide,
-            alphaTest: 0.15
-        });
-        var plane = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.52), mat);
-        plane.name = "faceDecal";
-        // Sit just in front of the head cube
-        plane.position.set(0, headMesh.position.y + 0.02, 0.34);
-        plane.visible = false;
-        avatarGroup.add(plane);
-
-        function showTex(tex) {
-            if (!tex) return;
-            tex.minFilter = THREE.LinearFilter;
-            tex.magFilter = THREE.LinearFilter;
-            tex.generateMipmaps = false;
-            tex.needsUpdate = true;
-            mat.map = tex;
-            mat.transparent = true;
-            mat.opacity = 1;
-            mat.needsUpdate = true;
-            plane.visible = true;
-        }
-
-        function loadThree(url, onFail) {
-            try {
-                var loader = new THREE.TextureLoader();
-                if (typeof location !== "undefined" && location.protocol !== "file:") {
-                    loader.setCrossOrigin("anonymous");
-                }
-                loader.load(url, function (tex) { showTex(tex); }, undefined, function () { if (onFail) onFail(); });
-            } catch (e) { if (onFail) onFail(); }
-        }
-
-        function loadImage(url, onFail) {
-            try {
-                var img = new Image();
-                if (typeof location !== "undefined" && location.protocol !== "file:") {
-                    img.crossOrigin = "anonymous";
-                }
-                img.onload = function () {
-                    try {
-                        var c = document.createElement("canvas");
-                        c.width = img.naturalWidth || img.width || 64;
-                        c.height = img.naturalHeight || img.height || 64;
-                        var ctx = c.getContext("2d");
-                        ctx.clearRect(0, 0, c.width, c.height);
-                        ctx.drawImage(img, 0, 0);
-                        var data = ctx.getImageData(0, 0, c.width, c.height);
-                        var px = data.data;
-                        for (var i = 0; i < px.length; i += 4) {
-                            var lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-                            if (px[i + 3] < 15 || lum > 95) {
-                                px[i] = px[i + 1] = px[i + 2] = px[i + 3] = 0;
-                            } else {
-                                px[i] = px[i + 1] = px[i + 2] = 12;
-                                px[i + 3] = 255;
-                            }
-                        }
-                        ctx.putImageData(data, 0, 0);
-                        showTex(new THREE.CanvasTexture(c));
-                    } catch (e) {
-                        try {
-                            var t = new THREE.Texture(img);
-                            t.needsUpdate = true;
-                            showTex(t);
-                        } catch (e2) { if (onFail) onFail(); }
-                    }
-                };
-                img.onerror = function () { if (onFail) onFail(); };
-                img.src = url;
-            } catch (e) { if (onFail) onFail(); }
-        }
-
-        loadThree("Smile.png", function () {
-            loadThree("./Smile.png", function () {
-                loadImage("Smile.png", function () {
-                    loadImage("./Smile.png", function () {});
-                });
-            });
-        });
-    } catch (e) {}
-}
-
-
-function requestLeaveNormGame() {
-    var c = document.getElementById("normLeaveConfirm");
-    if (!c) {
-        // Fallback if confirm UI missing
-        if (window.confirm("Are you sure?\n\nLeave this Norm Game?")) {
-            leaveNormGame();
-        }
-        return;
-    }
-    // Must sit above the game overlay (azafn z-index ~20000)
-    c.style.zIndex = "2147483000";
-    c.style.display = "flex";
-}
-
-function confirmLeaveNormGame(yes) {
-    var c = document.getElementById("normLeaveConfirm");
-    if (c) {
-        c.style.display = "none";
-    }
-    if (yes) {
-        leaveNormGame();
-    }
-}
-
-
-function isNormTouchDevice() {
-    try {
-        return ("ontouchstart" in window) || (navigator.maxTouchPoints > 0) ||
-            (window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
-    } catch (e) { return false; }
-}
-
-
-function setupNormJumpButton() {
-    var btn = document.getElementById("normJumpBtn");
-    if (!btn) return;
-    // Show on touch devices
-    try {
-        if (isNormTouchDevice()) btn.style.display = "flex";
-        else btn.style.display = "none";
-    } catch (e) { btn.style.display = "flex"; }
-
-    function doJump(e) {
-        if (e) { e.preventDefault(); e.stopPropagation(); }
-        if (_normSession) _normSession.jumpQueued = true;
-        return false;
-    }
-    btn.onclick = doJump;
-    btn.ontouchstart = function (e) { doJump(e); };
-}
 window.setupNormJumpButton = setupNormJumpButton;
 window.normJump = function () {
     if (_normSession) _normSession.jumpQueued = true;
