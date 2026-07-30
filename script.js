@@ -5465,6 +5465,242 @@ function setupNormJoysticks() {
 
 window.setupNormJoysticks = setupNormJoysticks;
 
+
+/* ===== Norm Games core helpers (restored) ===== */
+var NORM_GAMES = {
+    "azora-roleplay": {
+        id: "azora-roleplay",
+        title: "Azora Roleplay",
+        owner: "Azora",
+        dimensions: "3D",
+        roomPath: "/azoraNormRooms/azora-roleplay/players"
+    }
+};
+
+if (typeof NORM_AVATAR_FOOT_OFFSET === "undefined") {
+    var NORM_AVATAR_FOOT_OFFSET = 0.02;
+}
+
+function getNormDisplayName() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+        var logged = localStorage.getItem("loggedIn");
+        if (logged === "guest" || acc.isGuest || !acc.username) return "___";
+        return String(acc.username);
+    } catch (e) { return "___"; }
+}
+
+function isNormGuest() {
+    return localStorage.getItem("loggedIn") === "guest" || getNormDisplayName() === "___";
+}
+
+function getNormAvatarColors() {
+    var av = { head: "#ffcc00", torso: "#1e60ff", leftArm: "#ffcc00", rightArm: "#ffcc00", leftLeg: "#00ebd4", rightLeg: "#00ebd4" };
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+        if (acc && acc.avatar) {
+            av.head = acc.avatar.head || av.head;
+            av.torso = acc.avatar.torso || av.torso;
+            av.leftArm = acc.avatar.leftArm || av.leftArm;
+            av.rightArm = acc.avatar.rightArm || av.rightArm;
+            av.leftLeg = acc.avatar.leftLeg || av.leftLeg;
+            av.rightLeg = acc.avatar.rightLeg || av.rightLeg;
+        }
+    } catch (e) {}
+    return av;
+}
+
+function makeNormAvatar(colors) {
+    colors = colors || getNormAvatarColors();
+    var g = new THREE.Group();
+    g.name = "normAvatar";
+
+    function box(w, h, d, color) {
+        return new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, d),
+            new THREE.MeshLambertMaterial({ color: color })
+        );
+    }
+
+    // Feet at local Y = 0 so standing on ground is position.y ≈ 0.02
+    var legH = 1.0, torsoH = 1.0, headS = 0.65, armH = 1.0;
+
+    var leftLeg = box(0.35, legH, 0.35, colors.leftLeg);
+    leftLeg.position.set(-0.22, legH / 2, 0);
+    leftLeg.name = "leftLeg";
+
+    var rightLeg = box(0.35, legH, 0.35, colors.rightLeg);
+    rightLeg.position.set(0.22, legH / 2, 0);
+    rightLeg.name = "rightLeg";
+
+    var torso = box(0.85, torsoH, 0.45, colors.torso);
+    torso.position.y = legH + torsoH / 2;
+    torso.name = "torso";
+
+    var leftArm = box(0.35, armH, 0.35, colors.leftArm);
+    leftArm.position.set(-0.62, legH + torsoH / 2, 0);
+    leftArm.name = "leftArm";
+
+    var rightArm = box(0.35, armH, 0.35, colors.rightArm);
+    rightArm.position.set(0.62, legH + torsoH / 2, 0);
+    rightArm.name = "rightArm";
+
+    var head = box(headS, headS, headS, colors.head);
+    head.position.y = legH + torsoH + headS / 2;
+    head.name = "head";
+
+    g.add(leftLeg);
+    g.add(rightLeg);
+    g.add(torso);
+    g.add(leftArm);
+    g.add(rightArm);
+    g.add(head);
+
+    attachNormFaceDecal(g, head);
+    g.userData.footOffset = 0;
+    return g;
+}
+
+function placeNormAvatarOnGround(mesh, x, z, surfaceY) {
+    if (!mesh) return;
+    if (typeof surfaceY !== "number") surfaceY = 0;
+    mesh.position.x = x || 0;
+    mesh.position.z = z || 0;
+    mesh.position.y = surfaceY + (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02);
+}
+
+function attachNormFaceDecal(avatarGroup, headMesh) {
+    if (typeof THREE === "undefined" || !headMesh) return;
+    try {
+        var mat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0,
+            depthWrite: false,
+            side: THREE.FrontSide,
+            alphaTest: 0.15
+        });
+        var plane = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.52), mat);
+        plane.name = "faceDecal";
+        plane.position.set(0, headMesh.position.y + 0.02, 0.34);
+        plane.visible = false;
+        avatarGroup.add(plane);
+
+        function showTex(tex) {
+            if (!tex) return;
+            tex.minFilter = THREE.LinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            tex.generateMipmaps = false;
+            tex.needsUpdate = true;
+            mat.map = tex;
+            mat.transparent = true;
+            mat.opacity = 1;
+            mat.needsUpdate = true;
+            plane.visible = true;
+        }
+
+        function loadThree(url, onFail) {
+            try {
+                var loader = new THREE.TextureLoader();
+                if (typeof location !== "undefined" && location.protocol !== "file:") {
+                    loader.setCrossOrigin("anonymous");
+                }
+                loader.load(url, function (tex) { showTex(tex); }, undefined, function () { if (onFail) onFail(); });
+            } catch (e) { if (onFail) onFail(); }
+        }
+
+        function loadImage(url, onFail) {
+            try {
+                var img = new Image();
+                if (typeof location !== "undefined" && location.protocol !== "file:") {
+                    img.crossOrigin = "anonymous";
+                }
+                img.onload = function () {
+                    try {
+                        var c = document.createElement("canvas");
+                        c.width = img.naturalWidth || img.width || 64;
+                        c.height = img.naturalHeight || img.height || 64;
+                        var ctx = c.getContext("2d");
+                        ctx.clearRect(0, 0, c.width, c.height);
+                        ctx.drawImage(img, 0, 0);
+                        var data = ctx.getImageData(0, 0, c.width, c.height);
+                        var px = data.data;
+                        for (var i = 0; i < px.length; i += 4) {
+                            var lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+                            if (px[i + 3] < 15 || lum > 95) {
+                                px[i] = px[i + 1] = px[i + 2] = px[i + 3] = 0;
+                            } else {
+                                px[i] = px[i + 1] = px[i + 2] = 12;
+                                px[i + 3] = 255;
+                            }
+                        }
+                        ctx.putImageData(data, 0, 0);
+                        showTex(new THREE.CanvasTexture(c));
+                    } catch (e) {
+                        try {
+                            var t = new THREE.Texture(img);
+                            t.needsUpdate = true;
+                            showTex(t);
+                        } catch (e2) { if (onFail) onFail(); }
+                    }
+                };
+                img.onerror = function () { if (onFail) onFail(); };
+                img.src = url;
+            } catch (e) { if (onFail) onFail(); }
+        }
+
+        loadThree("Smile.png", function () {
+            loadImage("Smile.png", function () {});
+        });
+    } catch (e) {}
+}
+
+function requestLeaveNormGame() {
+    var conf = document.getElementById("normLeaveConfirm");
+    if (conf) {
+        conf.style.display = "flex";
+        conf.style.zIndex = "2147483000";
+    } else if (typeof leaveNormGame === "function") {
+        leaveNormGame();
+    }
+}
+
+function confirmLeaveNormGame(yes) {
+    var conf = document.getElementById("normLeaveConfirm");
+    if (conf) conf.style.display = "none";
+    if (yes && typeof leaveNormGame === "function") leaveNormGame();
+}
+
+function isNormTouchDevice() {
+    try {
+        return ("ontouchstart" in window) || (navigator.maxTouchPoints > 0) ||
+            (window.matchMedia && window.matchMedia("(hover: none), (pointer: coarse)").matches);
+    } catch (e) {
+        return false;
+    }
+}
+
+function setupNormJumpButton() {
+    var btn = document.getElementById("normJumpBtn");
+    if (!btn) return;
+    try {
+        if (isNormTouchDevice()) btn.style.display = "flex";
+        else btn.style.display = "none";
+    } catch (e) { btn.style.display = "flex"; }
+
+    function doJump(e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        if (_normSession) _normSession.jumpQueued = true;
+        return false;
+    }
+    btn.onclick = doJump;
+    btn.ontouchstart = function (e) { doJump(e); };
+}
+window.setupNormJumpButton = setupNormJumpButton;
+window.normJump = function () {
+    if (_normSession) _normSession.jumpQueued = true;
+};
+
 function joinNormGame(gameId) {
     var def = NORM_GAMES[gameId];
     if (!def) {
