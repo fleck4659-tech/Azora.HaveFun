@@ -5750,7 +5750,12 @@ function joinNormGame(gameId) {
         } else {
             if (loading) loading.style.display = "none";
             if (play) play.style.display = "flex";
-            startNormGameWorld(def);
+            // Wait 2 frames so the canvas has real width/height (avoids black screen)
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                    startNormGameWorld(def);
+                });
+            });
         }
     }
     requestAnimationFrame(tick);
@@ -6164,45 +6169,87 @@ function startNormGameWorld(def) {
     }
 
     var container = document.getElementById("normGameCanvas");
-    if (!container || typeof THREE === "undefined") {
-        if (container) {
-            container.innerHTML = "<p style='color:#fff;padding:20px;text-align:center;'>3D needs Three.js. Chat and the player list still work.</p>";
-        }
+    if (!container) {
         startNormPresence(def);
         return;
     }
+    if (typeof THREE === "undefined") {
+        container.innerHTML = "<p style='color:#fff;padding:20px;text-align:center;'>3D needs Three.js (check internet for the CDN). Chat still works.</p>";
+        startNormPresence(def);
+        return;
+    }
+
+    // Ensure session object always exists (dispose must not wipe it)
+    if (!_normSession) {
+        _normSession = {
+            id: def.id,
+            title: def.title,
+            roomPath: def.roomPath,
+            startedAt: Date.now()
+        };
+    }
+
     while (container.firstChild) container.removeChild(container.firstChild);
 
-    // Size after layout
-    var w = Math.max(container.clientWidth, 320);
-    var h = Math.max(container.clientHeight, 240);
+    // Force layout so canvas is not 0×0 (black screen bug)
+    try {
+        var playEl = document.getElementById("normGamePlay");
+        if (playEl) playEl.style.display = "flex";
+        void container.offsetWidth;
+    } catch (e) {}
 
-    _normScene = new THREE.Scene();
-    _normScene.background = new THREE.Color(0x7eb6e8);
-    _normScene.fog = new THREE.Fog(0x7eb6e8, 80, 220);
+    function measureCanvas() {
+        var w = container.clientWidth || (container.parentElement && container.parentElement.clientWidth) || 0;
+        var h = container.clientHeight || (container.parentElement && container.parentElement.clientHeight) || 0;
+        if (w < 100) w = 640;
+        if (h < 100) h = 360;
+        return { w: w, h: h };
+    }
 
-    // Closer camera → avatar feels larger
-    _normCamera = new THREE.PerspectiveCamera(55, w / h, 0.1, 500);
-    _normCamera.position.set(0, 2.4, 4.2);
+    var size = measureCanvas();
+    var w = size.w, h = size.h;
 
-    _normRenderer = new THREE.WebGLRenderer({ antialias: true });
-    _normRenderer.setSize(w, h);
-    _normRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    container.appendChild(_normRenderer.domElement);
+    try {
+        _normScene = new THREE.Scene();
+        _normScene.background = new THREE.Color(0x7eb6e8);
+        _normScene.fog = new THREE.Fog(0x7eb6e8, 80, 220);
 
-    _normScene.add(new THREE.AmbientLight(0xffffff, 0.55));
-    var sun = new THREE.DirectionalLight(0xffffff, 0.95);
-    sun.position.set(40, 80, 30);
-    _normScene.add(sun);
-    var hemi = new THREE.HemisphereLight(0xbfd9ff, 0x3d5c40, 0.35);
-    _normScene.add(hemi);
+        _normCamera = new THREE.PerspectiveCamera(55, w / h, 0.1, 500);
+        _normCamera.position.set(0, 3.2, 6.5);
+        _normCamera.lookAt(0, 1.2, 0);
 
-    buildNormCity(_normScene);
+        _normRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        _normRenderer.setClearColor(0x7eb6e8, 1);
+        _normRenderer.setSize(w, h, true);
+        _normRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        _normRenderer.domElement.style.display = "block";
+        _normRenderer.domElement.style.width = "100%";
+        _normRenderer.domElement.style.height = "100%";
+        container.appendChild(_normRenderer.domElement);
 
-    _normLocalMesh = makeNormAvatar(getNormAvatarColors());
-    placeNormAvatarOnGround(_normLocalMesh, 0, 0, 0);
-    _normScene.add(_normLocalMesh);
-    _normRemoteMeshes = {};
+        _normScene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        var sun = new THREE.DirectionalLight(0xffffff, 1.0);
+        sun.position.set(40, 80, 30);
+        _normScene.add(sun);
+        var hemi = new THREE.HemisphereLight(0xbfd9ff, 0x3d5c40, 0.45);
+        _normScene.add(hemi);
+
+        buildNormCity(_normScene);
+
+        _normLocalMesh = makeNormAvatar(getNormAvatarColors());
+        placeNormAvatarOnGround(_normLocalMesh, 0, 0, 0);
+        _normScene.add(_normLocalMesh);
+        _normRemoteMeshes = {};
+
+        // First paint immediately so the view is never stuck black
+        _normRenderer.render(_normScene, _normCamera);
+    } catch (err) {
+        console.error("Norm world failed:", err);
+        container.innerHTML = "<p style='color:#fff;padding:20px;text-align:center;'>Could not start 3D world. Try refreshing.<br><small style='opacity:.8'>" +
+            String((err && err.message) || err) + "</small></p>";
+        startNormPresence(def);
+        return;
+    }
 
     // ---- Controls (orbit TEMPORARILY DISABLED) ----
     // W = forward, S = reverse, A = turn left, D = turn right
@@ -6261,7 +6308,9 @@ function startNormGameWorld(def) {
 
     function animate() {
         _normAnim = requestAnimationFrame(animate);
-        if (!_normLocalMesh || !_normRenderer || !_normCamera) return;
+        if (!_normLocalMesh || !_normRenderer || !_normCamera || !_normSession) return;
+        try {
+        if (!_normKeys) _normKeys = {};
 
         var sp = 0.18;
         var turnSp = 0.045;
@@ -6360,8 +6409,32 @@ function startNormGameWorld(def) {
         } catch (e) {}
 
         _normRenderer.render(_normScene, _normCamera);
+        } catch (animErr) {
+            console.error("Norm animate error:", animErr);
+        }
     }
     animate();
+
+    // Re-measure after layout settles (fixes black canvas when size was 0)
+    setTimeout(function () {
+        try {
+            if (!_normRenderer || !_normCamera || !container) return;
+            var s2 = measureCanvas();
+            _normCamera.aspect = s2.w / s2.h;
+            _normCamera.updateProjectionMatrix();
+            _normRenderer.setSize(s2.w, s2.h, true);
+            _normRenderer.render(_normScene, _normCamera);
+        } catch (e) {}
+    }, 50);
+    setTimeout(function () {
+        try {
+            if (!_normRenderer || !_normCamera || !container) return;
+            var s3 = measureCanvas();
+            _normCamera.aspect = s3.w / s3.h;
+            _normCamera.updateProjectionMatrix();
+            _normRenderer.setSize(s3.w, s3.h, true);
+        } catch (e) {}
+    }, 300);
 
     // Resize observer
     try {
