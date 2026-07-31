@@ -1,5 +1,5 @@
-/* Azora main app service worker — v45 */
-var CACHE = "azora-app-v45-soft-connection";
+/* Azora main app service worker — v46 */
+var CACHE = "azora-app-v46-auth-wipe";
 var ASSETS = [
   "./", "./index.html", "./style.css",
   "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./Mossy.mp3",

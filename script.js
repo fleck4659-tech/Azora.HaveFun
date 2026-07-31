@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v45 soft connection + Online/Offline mode + textures + reset","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v46 soft connection + Online/Offline mode + textures + reset","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -525,6 +525,9 @@ function continueAsGuest() {
 }
 
 function openCreateAccount() {
+    var fl = document.getElementById("forgotPasswordLink");
+    if (fl) fl.style.display = "none";
+
     if (typeof clearAccountError === "function") clearAccountError();
     document.getElementById("accountOverlay").style.display = "flex";
     document.getElementById("popupTitle").innerHTML = "Join Azora";
@@ -541,6 +544,9 @@ function openCreateAccount() {
 }
 
 function openLogin() {
+    var fl = document.getElementById("forgotPasswordLink");
+    if (fl) fl.style.display = "block";
+
     if (typeof clearAccountError === "function") clearAccountError();
     document.getElementById("accountOverlay").style.display = "flex";
     document.getElementById("popupTitle").innerHTML = "Welcome Back!";
@@ -561,6 +567,64 @@ function openLogin() {
     if (hint) hint.style.display = "block";
 }
 
+
+// ============================================================
+// PLATFORM RESET — wipe all accounts except official Azora (once)
+// ============================================================
+var AZORA_PLATFORM_WIPE_VERSION = "azora-wipe-v46-2026-07";
+
+function runPlatformAccountWipeOnce() {
+    try {
+        if (localStorage.getItem("azoraPlatformWipe") === AZORA_PLATFORM_WIPE_VERSION) return;
+        var map = {};
+        try { map = JSON.parse(localStorage.getItem("azoraAccounts") || "{}"); } catch (e) { map = {}; }
+        var kept = {};
+        Object.keys(map).forEach(function (k) {
+            if (String(k || "").toLowerCase() === "azora") {
+                var o = map[k] || {};
+                o.username = "Azora";
+                o.isOwner = true;
+                if (typeof o.password !== "string") o.password = "";
+                kept["Azora"] = o;
+            }
+        });
+        if (!kept["Azora"]) {
+            kept["Azora"] = { username: "Azora", password: "", userId: "Aza: 0", isOwner: true, email: "", createdAt: Date.now() };
+        }
+        localStorage.setItem("azoraAccounts", JSON.stringify(kept));
+        try {
+            var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+            reg = (reg || []).filter(function (u) { return u && String(u.username || "").toLowerCase() === "azora"; });
+            if (!reg.length) reg = [{ username: "Azora", userId: "Aza: 0", isGuest: false, createdAt: Date.now() }];
+            localStorage.setItem("azoraUserRegistry", JSON.stringify(reg));
+        } catch (e) {}
+        try {
+            var cur = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+            var logged = localStorage.getItem("loggedIn");
+            if (logged === "guest") {
+                localStorage.removeItem("azoraAccount");
+                localStorage.removeItem("loggedIn");
+            } else if (cur && String(cur.username || "").toLowerCase() !== "azora") {
+                localStorage.removeItem("azoraAccount");
+                localStorage.removeItem("loggedIn");
+            } else if (cur && String(cur.username || "").toLowerCase() === "azora") {
+                cur.username = "Azora";
+                cur.isOwner = true;
+                localStorage.setItem("azoraAccount", JSON.stringify(cur));
+                localStorage.setItem("loggedIn", "true");
+            }
+        } catch (e) {
+            localStorage.removeItem("azoraAccount");
+            localStorage.removeItem("loggedIn");
+        }
+        try { localStorage.removeItem("azoraAzaFnGames"); } catch (e) {}
+        localStorage.setItem("azoraPlatformWipe", AZORA_PLATFORM_WIPE_VERSION);
+        console.log("%c[Azora] Platform reset: only official Azora account kept.", "color:#1e60ff;font-weight:bold");
+    } catch (e) {
+        console.warn("[Azora] platform wipe failed", e);
+    }
+}
+
 function getSavedAccounts() {
     try {
         return JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
@@ -575,6 +639,7 @@ function saveSavedAccounts(map) {
 
 // Import single legacy account into multi-account store if needed
 function migrateLegacyAccount() {
+    runPlatformAccountWipeOnce();
     try {
         var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
         if (!acc || !acc.username || acc.isGuest) return;
@@ -592,13 +657,14 @@ function setLoggedInAccount(account) {
     localStorage.setItem("loggedIn", "true");
 }
 
-function finishCreateAccount(username, password, userId) {
+function finishCreateAccount(username, password, userId, email) {
     migrateLegacyAccount();
     var map = getSavedAccounts();
     var account = {
         username: username,
         password: password,
         userId: userId,
+        email: email ? String(email).trim().toLowerCase() : "",
         isGuest: false,
         avatar: {
             head: "#ffcc00",
@@ -608,30 +674,182 @@ function finishCreateAccount(username, password, userId) {
             leftLeg: "#00ebd4",
             rightLeg: "#00ebd4",
             face: "default"
-        }
+        },
+        createdAt: Date.now()
     };
     map[username] = account;
     saveSavedAccounts(map);
 
     var registry = [];
     try { registry = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]"); } catch (e) {}
-    registry.push({
-        userId: userId,
-        username: username,
-        isGuest: false,
-        createdAt: Date.now()
-    });
+    registry.push({ userId: userId, username: username, isGuest: false, createdAt: Date.now() });
     localStorage.setItem("azoraUserRegistry", JSON.stringify(registry));
 
     setLoggedInAccount(account);
-    alert("Welcome to Azora, " + username + "!\nYour User ID is " + userId + "\nYour account has been saved.");
+    var extra = account.email
+        ? "\nEmail saved for password recovery."
+        : "\n(No email saved — Forgot password will not work for this account.)";
+    alert("Welcome to Azora, " + username + "!\nYour User ID is " + userId + "\nYour account has been saved." + extra);
     location.reload();
 }
+
 
 
 // ============================================================
 // Platform owner account: "Azora" — full access, no password code
 // ============================================================
+
+var _azoraResetPending = null;
+
+function maskEmail(email) {
+    email = String(email || "");
+    var at = email.indexOf("@");
+    if (at < 1) return "your email";
+    return email.charAt(0) + "********" + email.slice(at);
+}
+
+function findAccountByEmail(email) {
+    email = String(email || "").trim().toLowerCase();
+    if (!email) return null;
+    var map = getSavedAccounts();
+    var keys = Object.keys(map);
+    for (var i = 0; i < keys.length; i++) {
+        var a = map[keys[i]];
+        if (a && String(a.email || "").toLowerCase() === email) return a;
+    }
+    return null;
+}
+
+function openForgotPassword() {
+    if (typeof clearAccountError === "function") clearAccountError();
+    var ov = document.getElementById("forgotPasswordOverlay");
+    if (!ov) return;
+    var step1 = document.getElementById("forgotStepEmail");
+    var step2 = document.getElementById("forgotStepCode");
+    var step3 = document.getElementById("forgotStepNewPass");
+    if (step1) step1.style.display = "block";
+    if (step2) step2.style.display = "none";
+    if (step3) step3.style.display = "none";
+    ["forgotEmailInput", "forgotCodeInput", "forgotNewPass", "forgotNewPass2"].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.value = "";
+    });
+    var st = document.getElementById("forgotStatus");
+    if (st) st.textContent = "";
+    ov.style.display = "flex";
+}
+
+function closeForgotPassword() {
+    var ov = document.getElementById("forgotPasswordOverlay");
+    if (ov) ov.style.display = "none";
+    _azoraResetPending = null;
+}
+
+function startForgotPasswordSend() {
+    var st = document.getElementById("forgotStatus");
+    var email = String((document.getElementById("forgotEmailInput") || {}).value || "").trim().toLowerCase();
+    if (!email || email.indexOf("@") < 1) {
+        if (st) st.textContent = "Enter the email on your account.";
+        return;
+    }
+    var acc = findAccountByEmail(email);
+    if (!acc) {
+        if (st) st.textContent = "No account found with that email.";
+        return;
+    }
+    if (st) st.textContent = "Sending a code to " + maskEmail(email) + "… (about 5 seconds)";
+    var num = String(Math.floor(Math.random() * 9000));
+    _azoraResetPending = { email: email, username: acc.username, code: "Aza-" + num, at: Date.now() };
+    try {
+        sessionStorage.setItem("azoraPwReset", JSON.stringify(_azoraResetPending));
+        console.info("[Azora] Password reset code (do not share): " + _azoraResetPending.code);
+    } catch (e) {}
+    setTimeout(function () {
+        if (!_azoraResetPending || _azoraResetPending.email !== email) return;
+        var step1 = document.getElementById("forgotStepEmail");
+        var step2 = document.getElementById("forgotStepCode");
+        if (step1) step1.style.display = "none";
+        if (step2) step2.style.display = "block";
+        if (st) st.textContent = "A code was sent to " + maskEmail(email) + ". Enter it below (Aza-____). Do not share this code with anybody.";
+        var cd = document.getElementById("forgotCodeInput");
+        if (cd) cd.focus();
+    }, 5000);
+}
+
+function verifyForgotCode() {
+    var st = document.getElementById("forgotStatus");
+    var raw = String((document.getElementById("forgotCodeInput") || {}).value || "").trim();
+    var pending = _azoraResetPending;
+    try { if (!pending) pending = JSON.parse(sessionStorage.getItem("azoraPwReset") || "null"); } catch (e) {}
+    if (!pending || !pending.code) {
+        if (st) st.textContent = "No reset in progress. Start again.";
+        return;
+    }
+    if (Date.now() - (pending.at || 0) > 15 * 60 * 1000) {
+        if (st) st.textContent = "Code expired. Request a new one.";
+        return;
+    }
+    function norm(s) {
+        s = String(s || "").trim().toLowerCase();
+        if (s.indexOf("aza-") !== 0) s = "aza-" + s.replace(/^aza-/, "");
+        return s;
+    }
+    if (norm(raw) !== norm(pending.code)) {
+        if (st) st.textContent = "Incorrect code. Check the email and try again.";
+        return;
+    }
+    _azoraResetPending = pending;
+    var step2 = document.getElementById("forgotStepCode");
+    var step3 = document.getElementById("forgotStepNewPass");
+    if (step2) step2.style.display = "none";
+    if (step3) step3.style.display = "block";
+    if (st) st.textContent = "Code accepted. Choose a new password.";
+}
+
+function finishForgotPassword() {
+    var st = document.getElementById("forgotStatus");
+    var p1 = String((document.getElementById("forgotNewPass") || {}).value || "");
+    var p2 = String((document.getElementById("forgotNewPass2") || {}).value || "");
+    if (!p1 || p1.length < 3) {
+        if (st) st.textContent = "Password must be at least 3 characters.";
+        return;
+    }
+    if (p1 !== p2) {
+        if (st) st.textContent = "Passwords do not match.";
+        return;
+    }
+    var pending = _azoraResetPending;
+    try { if (!pending) pending = JSON.parse(sessionStorage.getItem("azoraPwReset") || "null"); } catch (e) {}
+    if (!pending || !pending.username) {
+        if (st) st.textContent = "Session expired. Start again.";
+        return;
+    }
+    var map = getSavedAccounts();
+    var acc = findAccountByUsername(pending.username);
+    if (!acc) {
+        if (st) st.textContent = "Account not found.";
+        return;
+    }
+    acc.password = p1;
+    map[acc.username] = acc;
+    saveSavedAccounts(map);
+    try { sessionStorage.removeItem("azoraPwReset"); } catch (e) {}
+    _azoraResetPending = null;
+    if (st) st.textContent = "Password updated! You can log in now.";
+    setTimeout(function () {
+        closeForgotPassword();
+        if (typeof openLogin === "function") openLogin();
+        if (typeof clearAccountError === "function") clearAccountError();
+        alert("Password reset successful. Log in with your new password.");
+    }, 500);
+}
+
+window.openForgotPassword = openForgotPassword;
+window.closeForgotPassword = closeForgotPassword;
+window.startForgotPasswordSend = startForgotPasswordSend;
+window.verifyForgotCode = verifyForgotCode;
+window.finishForgotPassword = finishForgotPassword;
+
 var AZORA_OWNER_NAME = "Azora";
 
 function isOwnerUsername(name) {
@@ -710,34 +928,93 @@ window.isAzoraOwner = isAzoraOwner;
 window.isOwnerUsername = isOwnerUsername;
 window.ensureOwnerAccount = ensureOwnerAccount;
 
+
+function isUsernameTakenLocal(username) {
+    var lower = String(username || "").trim().toLowerCase();
+    if (!lower) return false;
+    if (lower === "azora") return true;
+    var map = getSavedAccounts();
+    var keys = Object.keys(map);
+    for (var i = 0; i < keys.length; i++) {
+        if (String(keys[i]).toLowerCase() === lower) return true;
+    }
+    try {
+        var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+        for (var j = 0; j < (reg || []).length; j++) {
+            if (String(reg[j].username || "").toLowerCase() === lower) return true;
+        }
+    } catch (e) {}
+    return false;
+}
+
+function suggestUsernames(base) {
+    base = String(base || "player").replace(/[^a-zA-Z0-9_]/g, "").slice(0, 16) || "player";
+    var out = [];
+    var suffixes = ["1", "2", "3", "12", "99", "2026", "X", "Pro", "Play", "_fn"];
+    for (var i = 0; i < suffixes.length; i++) {
+        var cand = base + suffixes[i];
+        if (!isUsernameTakenLocal(cand) && out.indexOf(cand) === -1) out.push(cand);
+        if (out.length >= 5) break;
+    }
+    var alt = base + String.fromCharCode(97 + (base.length % 26));
+    if (!isUsernameTakenLocal(alt) && out.indexOf(alt) === -1) out.push(alt);
+    return out.slice(0, 5);
+}
+
+function showUsernameTakenError(username) {
+    var suggestions = suggestUsernames(username);
+    var msg = "That username already exists. Try a different one.";
+    if (suggestions.length) msg += " Suggestions: " + suggestions.join(", ");
+    showAccountError(msg);
+    var u = document.getElementById("username");
+    if (u) { try { u.focus(); u.select(); } catch (e) {} }
+}
+
 function createAccount() {
     if (typeof clearAccountError === "function") clearAccountError();
     var username = document.getElementById("username").value.trim();
     var password = document.getElementById("password").value;
     var confirm = document.getElementById("confirmPassword").value;
+    var emailEl = document.getElementById("email");
+    var email = emailEl ? String(emailEl.value || "").trim() : "";
     var btn = document.getElementById("mainButton");
 
-    if (isOwnerUsername(username)) {
-        alert("The username \"Azora\" is reserved for the official platform owner. Please choose another name.");
+    if (!username || !password) {
+        showAccountError("Please fill out username and password.");
         return;
     }
-    if (!username || !password) {
-        alert("Please fill out username and password!");
+    if (username.length < 2) {
+        showAccountError("Username must be at least 2 characters.");
+        return;
+    }
+    if (isOwnerUsername(username) || isUsernameTakenLocal(username)) {
+        showUsernameTakenError(username);
         return;
     }
     if (password !== confirm) {
-        alert("Passwords do not match!");
+        showAccountError("Passwords do not match.");
         return;
     }
 
     migrateLegacyAccount();
-    var map = getSavedAccounts();
-    if (map[username]) {
-        alert("That username is already taken on this device. Try another, or Log In.");
+    try { runPlatformAccountWipeOnce(); } catch (e) {}
+
+    if (!email) {
+        var skip = confirm(
+            "We strongly recommend adding an email to your account.\n\n" +
+            "With an email you can reset your password later with a private code.\n\n" +
+            "OK = continue WITHOUT email\nCancel = go back and add an email"
+        );
+        if (!skip) {
+            if (emailEl) emailEl.focus();
+            showAccountError("Tip: add an email so you can recover your password later.");
+            return;
+        }
+    } else if (email.indexOf("@") < 1 || email.indexOf(".") < 0) {
+        showAccountError("That email does not look valid. Fix it or leave the field empty.");
         return;
     }
 
-    // Local fallback ID (used if cloud is offline / not set up yet)
     var registry = [];
     try { registry = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]"); } catch (e) {}
     var localId = "Aza: " + registry.length;
@@ -747,23 +1024,22 @@ function createAccount() {
         registerGlobalUser(username, null, function (err, entry) {
             if (btn) { btn.disabled = false; btn.textContent = "Create Account"; }
             if (err && err.message === "USERNAME_TAKEN") {
-                showAccountError("That username is already taken on Azora. Try another.");
+                showUsernameTakenError(username);
                 return;
             }
             if (err || !entry) {
-                // Still allow local account so signup is not blocked
                 console.warn("Cloud register failed, saving locally only", err);
-                finishCreateAccount(username, password, localId);
+                finishCreateAccount(username, password, localId, email);
                 return;
             }
-            finishCreateAccount(username, password, entry.userId);
+            finishCreateAccount(username, password, entry.userId, email);
         });
         return;
     }
 
-    // No cloud configured → local only (old behavior)
-    finishCreateAccount(username, password, localId);
+    finishCreateAccount(username, password, localId, email);
 }
+
 
 function showAccountError(msg) {
     var el = document.getElementById("accountError");
@@ -5437,6 +5713,7 @@ window.setAzoraPlayMode = setAzoraPlayMode;
 
 (function bootOffline() {
     function run() {
+        try { runPlatformAccountWipeOnce(); } catch (e) {}
         try { initAzoraOfflineDetection(); } catch (e) {}
     }
     if (document.readyState === "loading") {
@@ -6048,7 +6325,7 @@ function buildNormCity(scene, tex) {
     // Ground — grass (shared material, green tint)
     var ground = new THREE.Mesh(
         new THREE.BoxGeometry(400, 1.2, 400),
-        makeNormMatShared("grass", tex.grass ? 0x6fbf6a : 0x2f6b3c, 400, 400, 10)
+        makeNormMatShared("grass", tex.grass ? 0x6fbf6a : 0x2f6b3c, 400, 400, 4)
     );
     ground.position.y = -0.6;
     scene.add(ground);
@@ -6056,19 +6333,19 @@ function buildNormCity(scene, tex) {
     // Roads — shared asphalt mats
     var roadX = new THREE.Mesh(
         new THREE.BoxGeometry(400, 0.15, 18),
-        makeNormMatShared("road", tex.road ? 0xbbbbbb : 0x374151, 400, 18, 8)
+        makeNormMatShared("road", tex.road ? 0xbbbbbb : 0x374151, 400, 18, 3)
     );
     roadX.position.y = 0.02;
     scene.add(roadX);
     var roadZ = new THREE.Mesh(
         new THREE.BoxGeometry(18, 0.15, 400),
-        makeNormMatShared("road", tex.road ? 0xbbbbbb : 0x374151, 18, 400, 8)
+        makeNormMatShared("road", tex.road ? 0xbbbbbb : 0x374151, 18, 400, 3)
     );
     roadZ.position.y = 0.025;
     scene.add(roadZ);
 
     // Sidewalks — one shared concrete mat for all
-    var walkMat = makeNormMatShared("concrete", tex.concrete ? 0xc8c8c8 : 0x9ca3af, 40, 6, 5);
+    var walkMat = makeNormMatShared("concrete", tex.concrete ? 0xc8c8c8 : 0x9ca3af, 20, 4, 2);
     [[0, 12], [0, -12], [12, 0], [-12, 0]].forEach(function (off) {
         var sx = off[0] === 0 ? 400 : 6;
         var sz = off[1] === 0 ? 400 : 6;
@@ -6086,7 +6363,7 @@ function buildNormCity(scene, tex) {
     function building(x, z, w, h, d, color) {
         var wallT = 0.55; // wall thickness
         // Shared mats per building size (not per wall) — big lag win
-        var mat = makeNormMatShared("concrete", color || 0x909090, Math.max(w, d), h, 4);
+        var mat = makeNormMatShared("concrete", color || 0x909090, Math.max(w, d), h, 2);
         var winMat = makeNormMat({ color: 0x93c5fd });
         var floorMat = makeNormMatShared(
             tex.wood1 ? "wood1" : "wood2",

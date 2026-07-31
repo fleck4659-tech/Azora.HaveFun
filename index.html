@@ -13,7 +13,7 @@
     <link rel="manifest" href="manifest-azora.json">
     <link rel="apple-touch-icon" href="logo.jpg">
     <link rel="icon" href="logo.jpg">
-    <link rel="stylesheet" href="style.css?v=45">
+    <link rel="stylesheet" href="style.css?v=46">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -85,13 +85,16 @@
         <input id="username" type="text" placeholder="Username">
         <input id="password" type="password" placeholder="Password">
         <input id="confirmPassword" type="password" placeholder="Confirm Password">
-        <input id="email" type="email" placeholder="Email (Optional)">
+        <input id="email" type="email" placeholder="Email (strongly recommended)">
         <label class="checkbox">
           <input type="checkbox" id="tosCheckbox">
           I agree to the <a href="#" onclick="openTOS(event)" style="color:#1e60ff;text-decoration:underline;">Terms of Service</a>
         </label>
         <label class="checkbox"><input type="checkbox"> I agree to follow the Community Rules</label>
         <p id="accountError" class="account-error" style="display:none;"></p>
+        <p id="forgotPasswordLink" style="display:none;margin:8px 0 0;font-size:13px;">
+            <a href="#" onclick="openForgotPassword();return false;" style="color:#1e60ff;font-weight:bold;">Forgot password?</a>
+        </p>
         <button id="mainButton">Create Account</button>
 
         <div class="guest-divider">or</div>
@@ -103,6 +106,30 @@
 
         <p>Already have an account? <a href="#" id="switchMode">Log In</a>
            &nbsp;·&nbsp; <a href="#" onclick="continueAsGuest();return false;" style="color:#64748b;font-weight:bold;">Continue as Guest</a></p>
+    </div>
+</div>
+
+
+<div id="forgotPasswordOverlay" class="overlay" style="display:none;z-index:10050;">
+    <div class="popup" style="max-width:min(360px,calc(100vw - 20px));text-align:left;">
+        <h2 style="text-align:center;color:#1e60ff !important;">Forgot password</h2>
+        <p id="forgotStatus" class="account-error" style="display:block;min-height:1.2em;"></p>
+        <div id="forgotStepEmail">
+            <p style="color:#333 !important;font-size:13px;">Enter the email on your account. A private code will be sent in about 5 seconds. Do not share it.</p>
+            <input id="forgotEmailInput" type="email" placeholder="Email">
+            <button type="button" onclick="startForgotPasswordSend()" style="width:100%;margin-top:10px;">Send code</button>
+        </div>
+        <div id="forgotStepCode" style="display:none;">
+            <label style="font-size:12px;font-weight:bold;color:#1e60ff;">Code (Aza-____)</label>
+            <input id="forgotCodeInput" type="text" placeholder="Aza-0" maxlength="12">
+            <button type="button" onclick="verifyForgotCode()" style="width:100%;margin-top:10px;">Verify code</button>
+        </div>
+        <div id="forgotStepNewPass" style="display:none;">
+            <input id="forgotNewPass" type="password" placeholder="New password">
+            <input id="forgotNewPass2" type="password" placeholder="Confirm new password">
+            <button type="button" onclick="finishForgotPassword()" style="width:100%;margin-top:10px;background:linear-gradient(180deg,#34d399,#059669);color:#fff;">Save new password</button>
+        </div>
+        <button type="button" class="secondary" onclick="closeForgotPassword()" style="width:100%;margin-top:10px;">Cancel</button>
     </div>
 </div>
 
@@ -660,7 +687,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=45"></script>
+<script src="script.js?v=46"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {
