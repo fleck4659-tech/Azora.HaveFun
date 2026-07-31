@@ -1,5 +1,5 @@
 /* Azora main app service worker — v40 */
-var CACHE = "azora-app-v40-clean";
+var CACHE = "azora-app-v41-firebase";
 var ASSETS = [
   "./", "./index.html", "./style.css",
   "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./Mossy.mp3",
