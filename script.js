@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v46 soft connection + Online/Offline mode + textures + reset","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v48.1 sequential IDs by join date + owner Aza:0","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -137,9 +137,24 @@ function registerGlobalUser(username, preferredUserId, callback) {
             return fetch(metaUrl)
                 .then(function (r) { return r.json(); })
                 .then(function (nextId) {
-                    var n = (typeof nextId === "number" && nextId >= 0) ? nextId : 0;
+                    // Aza: 0 is RESERVED for the official Azora owner account.
+                    // New accounts always get 1, 2, 3, …
+                    var n = (typeof nextId === "number" && nextId >= 1) ? nextId : 1;
+                    if (preferredUserId && String(preferredUserId).indexOf("Aza:") === 0) {
+                        var pm = String(preferredUserId).match(/Aza:\s*(\d+)/i);
+                        if (pm) {
+                            var prefN = parseInt(pm[1], 10);
+                            if (prefN >= 1) n = Math.max(n, prefN);
+                        }
+                    }
                     var userId = preferredUserId || ("Aza: " + n);
+                    // Never allow non-owner to claim 0
+                    if (userId === "Aza: 0" || userId === "Aza:0") {
+                        userId = "Aza: " + n;
+                        if (n < 1) { n = 1; userId = "Aza: 1"; }
+                    }
                     var entry = buildPublicRegistryEntry(username, userId);
+                    var bumpTo = n + 1;
                     // Write user + bump nextId (best-effort; small race possible)
                     return Promise.all([
                         fetch(entryUrl, {
@@ -150,7 +165,7 @@ function registerGlobalUser(username, preferredUserId, callback) {
                         fetch(metaUrl, {
                             method: "PUT",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(n + 1)
+                            body: JSON.stringify(bumpTo)
                         })
                     ]).then(function () { return entry; });
                 });
@@ -195,6 +210,64 @@ function fetchGlobalRegistry(callback) {
 window.AZORA_CLOUD = AZORA_CLOUD;
 window.registerGlobalUser = registerGlobalUser;
 window.fetchGlobalRegistry = fetchGlobalRegistry;
+
+/** Ensure cloud has official Azora as Aza: 0 and nextId is at least 1 */
+function seedCloudOwnerAndNextId() {
+    try {
+        if (typeof AZORA_CLOUD === "undefined" || !AZORA_CLOUD.isReady || !AZORA_CLOUD.isReady()) return;
+        var base = (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "");
+        var ownerUrl = base + AZORA_CLOUD.registryPath + "/azora.json";
+        var metaUrl = base + AZORA_CLOUD.metaPath + "/nextId.json";
+        // Register owner public profile if missing
+        fetch(ownerUrl + "?ts=" + Date.now(), { cache: "no-store" })
+            .then(function (r) { return r.json(); })
+            .then(function (existing) {
+                if (!existing || !existing.username) {
+                    return fetch(ownerUrl, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            username: "Azora",
+                            userId: "Aza: 0",
+                            isGuest: false,
+                            isOwner: true,
+                            createdAt: Date.now()
+                        }),
+                        cache: "no-store"
+                    });
+                }
+                // Fix wrong ID if somehow not 0
+                if (existing.userId && existing.userId !== "Aza: 0") {
+                    existing.userId = "Aza: 0";
+                    existing.isOwner = true;
+                    return fetch(ownerUrl, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(existing),
+                        cache: "no-store"
+                    });
+                }
+            })
+            .catch(function () {});
+        // nextId must never be 0 for new users
+        fetch(metaUrl + "?ts=" + Date.now(), { cache: "no-store" })
+            .then(function (r) { return r.json(); })
+            .then(function (n) {
+                if (typeof n !== "number" || n < 1) {
+                    return fetch(metaUrl, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(1),
+                        cache: "no-store"
+                    });
+                }
+            })
+            .catch(function () {});
+    } catch (e) {}
+}
+try { seedCloudOwnerAndNextId(); } catch (e) {}
+window.seedCloudOwnerAndNextId = seedCloudOwnerAndNextId;
+
 
 // --- Global server flags (from Staff Console / Firebase) ---
 function applyServerFlags(flags) {
@@ -469,7 +542,7 @@ function getPublicUserId(username, accountHint) {
     return null;
 }
 
-function setProfileUserIdDisplay(userId, isGuest) {
+function setProfileUserIdDisplay(userId, isGuest, joinedAt) {
     var el = document.getElementById("profileUserId");
     if (!el) return;
     if (!userId) {
@@ -479,18 +552,25 @@ function setProfileUserIdDisplay(userId, isGuest) {
         return;
     }
     el.style.display = "block";
-    el.textContent = userId;
+    var line = userId;
+    if (joinedAt && typeof joinedAt === "number" && joinedAt > 0) {
+        try {
+            var d = new Date(joinedAt);
+            var mm = d.getMonth() + 1;
+            var dd = d.getDate();
+            var yyyy = d.getFullYear();
+            line = userId + " · Joined " + mm + "/" + dd + "/" + yyyy;
+        } catch (e) {}
+    }
+    el.textContent = line;
     el.className = "profile-user-id " + (isGuest ? "guest" : "normal");
 }
 
 function continueAsGuest() {
     var sessionId = "guest_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
 
-    // Guests also get a public User ID (Aza: N)
-    var registry = [];
-    try { registry = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]"); } catch (e) {}
-    var nextId = registry.length;
-    var userId = "Aza: " + nextId;
+    // Guests also get a public User ID — never Aza: 0 (reserved for owner Azora)
+    var userId = (typeof allocateNextUserId === "function") ? allocateNextUserId() : "Aza: 1";
 
     var account = {
         isGuest: true,
@@ -852,6 +932,199 @@ window.finishForgotPassword = finishForgotPassword;
 
 var AZORA_OWNER_NAME = "Azora";
 
+function parseAzaIdNumber(userId) {
+    var m = String(userId || "").match(/Aza:\s*(\d+)/i);
+    if (!m) return -1;
+    return parseInt(m[1], 10);
+}
+
+/**
+ * Next free User ID for real accounts / guests.
+ * Aza: 0 is reserved for the official owner "Azora".
+ * Returns "Aza: 1", "Aza: 2", …
+ */
+function allocateNextUserId() {
+    var maxN = 0; // so next is at least 1
+    function consider(id) {
+        var n = parseAzaIdNumber(id);
+        if (n > maxN) maxN = n;
+    }
+    try {
+        var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+        (reg || []).forEach(function (u) { if (u) consider(u.userId); });
+    } catch (e) {}
+    try {
+        var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+        Object.keys(map || {}).forEach(function (k) {
+            if (map[k]) consider(map[k].userId);
+        });
+    } catch (e) {}
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc) consider(acc.userId);
+    } catch (e) {}
+    return "Aza: " + (maxN + 1);
+}
+
+/**
+ * Re-number every NON-owner account by join date (createdAt).
+ * Owner "Azora" is always Aza: 0.
+ * Everyone who joined after Azora becomes Aza: 1, 2, 3, …
+ * Guests keep temporary IDs but never 0.
+ * Runs once per device (versioned) so collisions from empty registries are fixed.
+ */
+var AZORA_ID_RENUMBER_VERSION = "azora-id-renumber-v48";
+
+function renumberUserIdsByJoinDate() {
+    try {
+        if (localStorage.getItem("azoraIdRenumber") === AZORA_ID_RENUMBER_VERSION) return;
+    } catch (e) {}
+
+    var map = {};
+    try {
+        map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+    } catch (e) { map = {}; }
+
+    // Force owner
+    var ownerKey = null;
+    Object.keys(map).forEach(function (k) {
+        if (String(k).toLowerCase() === "azora") ownerKey = k;
+    });
+    if (ownerKey) {
+        map[ownerKey].userId = "Aza: 0";
+        map[ownerKey].isOwner = true;
+        if (!map[ownerKey].createdAt) map[ownerKey].createdAt = 0; // earliest
+        if (ownerKey !== "Azora") {
+            map["Azora"] = map[ownerKey];
+            map["Azora"].username = "Azora";
+            delete map[ownerKey];
+        }
+    }
+
+    // Collect non-owner real accounts sorted by createdAt then username
+    var list = [];
+    Object.keys(map).forEach(function (k) {
+        var a = map[k];
+        if (!a || a.isGuest) return;
+        if (String(a.username || k).toLowerCase() === "azora") return;
+        list.push({ key: k, account: a });
+    });
+    list.sort(function (a, b) {
+        var ca = a.account.createdAt || 0;
+        var cb = b.account.createdAt || 0;
+        if (ca !== cb) return ca - cb;
+        return String(a.account.username || a.key).localeCompare(String(b.account.username || b.key));
+    });
+
+    // Assign sequential IDs starting at 1
+    for (var i = 0; i < list.length; i++) {
+        var id = "Aza: " + (i + 1);
+        list[i].account.userId = id;
+        if (!list[i].account.createdAt) list[i].account.createdAt = Date.now() - (list.length - i) * 1000;
+        map[list[i].key] = list[i].account;
+    }
+
+    try {
+        if (typeof saveSavedAccounts === "function") saveSavedAccounts(map);
+        else localStorage.setItem("azoraAccounts", JSON.stringify(map));
+    } catch (e) {}
+
+    // Rebuild local registry from accounts (no guests for global list clarity; guests may still exist)
+    var registry = [];
+    if (map["Azora"]) {
+        registry.push({
+            userId: "Aza: 0",
+            username: "Azora",
+            isGuest: false,
+            isOwner: true,
+            createdAt: map["Azora"].createdAt || 0
+        });
+    }
+    list.forEach(function (row, idx) {
+        registry.push({
+            userId: "Aza: " + (idx + 1),
+            username: row.account.username || row.key,
+            isGuest: false,
+            createdAt: row.account.createdAt || Date.now()
+        });
+    });
+    try { localStorage.setItem("azoraUserRegistry", JSON.stringify(registry)); } catch (e) {}
+
+    // Update currently logged-in account object if present
+    try {
+        var cur = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (cur && !cur.isGuest) {
+            if (String(cur.username || "").toLowerCase() === "azora") {
+                cur.userId = "Aza: 0";
+                cur.isOwner = true;
+            } else if (map[cur.username] && map[cur.username].userId) {
+                cur.userId = map[cur.username].userId;
+                if (map[cur.username].createdAt) cur.createdAt = map[cur.username].createdAt;
+            }
+            localStorage.setItem("azoraAccount", JSON.stringify(cur));
+        }
+    } catch (e) {}
+
+    try { localStorage.setItem("azoraIdRenumber", AZORA_ID_RENUMBER_VERSION); } catch (e) {}
+    console.log("[Azora] User IDs renumbered by join date. Owner=Aza: 0, others=1…");
+}
+
+/** Push corrected local accounts up to cloud registry (best-effort). */
+function syncLocalIdsToCloud() {
+    try {
+        if (typeof AZORA_CLOUD === "undefined" || !AZORA_CLOUD.isReady || !AZORA_CLOUD.isReady()) return;
+        var base = (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "");
+        var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : {};
+        var maxN = 0;
+        Object.keys(map || {}).forEach(function (k) {
+            var a = map[k];
+            if (!a || a.isGuest) return;
+            var uname = a.username || k;
+            var safeKey = encodeURIComponent(String(uname).toLowerCase().replace(/[.#$\/\[\]]/g, "_"));
+            var entry = {
+                username: uname,
+                userId: a.userId || "Aza: 1",
+                isGuest: false,
+                isOwner: String(uname).toLowerCase() === "azora",
+                createdAt: a.createdAt || Date.now()
+            };
+            var n = parseAzaIdNumber(entry.userId);
+            if (n > maxN) maxN = n;
+            fetch(base + AZORA_CLOUD.registryPath + "/" + safeKey + ".json", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(entry),
+                cache: "no-store"
+            }).catch(function () {});
+        });
+        // nextId = max+1 (at least 1)
+        var next = Math.max(1, maxN + 1);
+        fetch(base + AZORA_CLOUD.metaPath + "/nextId.json", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(next),
+            cache: "no-store"
+        }).catch(function () {});
+    } catch (e) {}
+}
+
+window.parseAzaIdNumber = parseAzaIdNumber;
+window.allocateNextUserId = allocateNextUserId;
+window.renumberUserIdsByJoinDate = renumberUserIdsByJoinDate;
+window.syncLocalIdsToCloud = syncLocalIdsToCloud;
+
+// Fix user IDs on every load (once per renumber version)
+try {
+    if (typeof ensureOwnerAccount === "function") ensureOwnerAccount();
+    if (typeof renumberUserIdsByJoinDate === "function") renumberUserIdsByJoinDate();
+    if (typeof syncLocalIdsToCloud === "function") setTimeout(syncLocalIdsToCloud, 1200);
+} catch (e) {}
+
+
+
+
+
+
 function isOwnerUsername(name) {
     return String(name || "").trim().toLowerCase() === "azora";
 }
@@ -875,6 +1148,7 @@ function ensureOwnerAccount() {
     if (existing) {
         existing.isOwner = true;
         existing.username = AZORA_OWNER_NAME;
+        existing.userId = "Aza: 0"; // reserved official ID
         // Owner may have empty password ("no code")
         if (typeof existing.password !== "string") existing.password = "";
         map[AZORA_OWNER_NAME] = existing;
@@ -891,7 +1165,7 @@ function ensureOwnerAccount() {
         email: "",
         isGuest: false,
         isOwner: true,
-        userId: "Aza: Owner",
+        userId: "Aza: 0",
         bio: "Official Azora account. Build games. Customize avatars. Have fun.",
         avatar: {
             head: "#ffcc00",
@@ -1015,9 +1289,8 @@ function createAccount() {
         return;
     }
 
-    var registry = [];
-    try { registry = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]"); } catch (e) {}
-    var localId = "Aza: " + registry.length;
+    // Never use registry.length (empty device → Aza: 0 collides with owner)
+    var localId = (typeof allocateNextUserId === "function") ? allocateNextUserId() : "Aza: 1";
 
     if (typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady()) {
         if (btn) { btn.disabled = true; btn.textContent = "Creating…"; }
@@ -3385,7 +3658,7 @@ function openGuestProfile() {
     var acc = {};
     try { acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}"); } catch (e) {}
     var uid = acc.userId || getPublicUserId("", acc) || "Aza: ?";
-    setProfileUserIdDisplay(uid, true);
+    setProfileUserIdDisplay(uid, true, acc.createdAt || null);
 
     var statusEl = document.getElementById("profileStatus");
     if (statusEl) statusEl.innerHTML = '<span class="status-dot online"></span> Online';
@@ -3452,7 +3725,23 @@ function openUserProfile(username) {
 
     // Public User ID (smaller, below username for normal accounts)
     var pubId = getPublicUserId(username);
-    setProfileUserIdDisplay(pubId, false);
+    var joinedAt = null;
+    try {
+        var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : {};
+        if (map[username] && map[username].createdAt) joinedAt = map[username].createdAt;
+        else {
+            var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+            for (var ri = 0; ri < reg.length; ri++) {
+                if (reg[ri].username === username && reg[ri].createdAt) { joinedAt = reg[ri].createdAt; break; }
+            }
+        }
+        // Viewing self
+        if (!joinedAt) {
+            var me = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+            if (me && me.username === username && me.createdAt) joinedAt = me.createdAt;
+        }
+    } catch (e) {}
+    setProfileUserIdDisplay(pubId, false, joinedAt);
 
     // Status (below username)
     var st = getUserStatus(username);
@@ -6799,6 +7088,9 @@ function startNormGameWorld(def) {
             try { _normRenderer.render(_normScene, _normCamera); } catch (e) {}
             return;
         }
+        if (_normSession && typeof _normSession.tickRemoteMeshes === "function") {
+            _normSession.tickRemoteMeshes();
+        }
 
         var sp = 0.18;
         var turnSp = 0.045;
@@ -7005,24 +7297,26 @@ function sendNormChat() {
 function startNormPresence(def) {
     stopNormPresence();
     _normMyPresenceId = "p_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+    if (!_normSession) return;
     _normSession._lastPublishAt = 0;
     _normSession._lastPullAt = 0;
+    _normSession._seenRemoteIds = {};
 
     function publishSelf(force) {
         if (!_normSession) return;
         if (typeof AZORA_CLOUD === "undefined" || !AZORA_CLOUD.isReady || !AZORA_CLOUD.isReady()) return;
         var now = Date.now();
-        // Live-ish: publish often while moving, still throttle a little
-        if (!force && now - (_normSession._lastPublishAt || 0) < 180) return;
+        if (!force && now - (_normSession._lastPublishAt || 0) < 150) return;
         _normSession._lastPublishAt = now;
 
         var base = (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "");
+        // Cache-bust path is unique per player id; still force no-store
         var url = base + def.roomPath + "/" + _normMyPresenceId + ".json";
         var pos = _normLocalMesh ? {
             x: _normLocalMesh.position.x,
             y: _normLocalMesh.position.y,
             z: _normLocalMesh.position.z
-        } : { x: 0, y: (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02), z: 0 };
+        } : { x: 0, y: 0.02, z: 0 };
         var yaw = (_normLocalMesh && _normLocalMesh.rotation) ? _normLocalMesh.rotation.y : (_normSession.charYaw || 0);
         var body = {
             name: getNormDisplayName(),
@@ -7030,16 +7324,26 @@ function startNormPresence(def) {
             avatar: getNormAvatarColors(),
             pos: pos,
             yaw: yaw,
-            updatedAt: now
+            updatedAt: now,
+            presenceId: _normMyPresenceId
         };
         fetch(url, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body)
+            body: JSON.stringify(body),
+            cache: "no-store"
         }).catch(function () {});
     }
 
-    function pullPlayers() {
+    function removeRemoteMesh(pid) {
+        if (!_normRemoteMeshes || !_normRemoteMeshes[pid]) return;
+        try {
+            if (_normScene) _normScene.remove(_normRemoteMeshes[pid]);
+        } catch (e) {}
+        delete _normRemoteMeshes[pid];
+    }
+
+    function pullPlayers(force) {
         if (!_normSession) return;
         if (typeof AZORA_CLOUD === "undefined" || !AZORA_CLOUD.isReady || !AZORA_CLOUD.isReady()) {
             _normPlayers = [{ id: "me", name: getNormDisplayName(), isMe: true, isGuest: isNormGuest() }];
@@ -7047,24 +7351,31 @@ function startNormPresence(def) {
             return;
         }
         var now = Date.now();
-        if (now - (_normSession._lastPullAt || 0) < 250) return;
+        if (!force && now - (_normSession._lastPullAt || 0) < 200) return;
         _normSession._lastPullAt = now;
 
         var base = (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "");
-        var url = base + def.roomPath + ".json";
-        fetch(url)
+        // IMPORTANT: cache-bust so the FIRST joiner does not keep a stale room snapshot
+        var url = base + def.roomPath + ".json?ts=" + now + "&r=" + Math.random().toString(36).slice(2, 7);
+        fetch(url, { method: "GET", cache: "no-store", headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" } })
             .then(function (r) { return r.json(); })
             .then(function (data) {
+                if (!_normSession) return;
                 var list = [];
                 var tnow = Date.now();
+                var alive = {};
                 list.push({ id: "me", name: getNormDisplayName(), isMe: true, isGuest: isNormGuest() });
+
                 if (data && typeof data === "object") {
                     Object.keys(data).forEach(function (pid) {
-                        if (pid === _normMyPresenceId) return;
+                        if (!pid || pid === _normMyPresenceId) return;
                         var row = data[pid];
-                        if (!row || !row.updatedAt) return;
-                        // Drop stale presence (>8s — tighter live room)
-                        if (tnow - row.updatedAt > 8000) return;
+                        if (!row) return;
+                        // Accept rows even if updatedAt missing (treat as now)
+                        var updated = typeof row.updatedAt === "number" ? row.updatedAt : tnow;
+                        // 15s stale window (was 8s — could drop phones with lag)
+                        if (tnow - updated > 15000) return;
+                        alive[pid] = true;
                         list.push({
                             id: pid,
                             name: row.name || "___",
@@ -7074,73 +7385,86 @@ function startNormPresence(def) {
                             yaw: row.yaw,
                             avatar: row.avatar
                         });
+
                         if (_normScene && typeof THREE !== "undefined") {
                             if (!_normRemoteMeshes[pid]) {
-                                var mesh = makeNormAvatar(row.avatar || getNormAvatarColors());
-                                placeNormAvatarOnGround(mesh, (row.pos && row.pos.x) || 0, (row.pos && row.pos.z) || 0, 0);
+                                var mesh = makeNormAvatar(row.avatar || null);
+                                placeNormAvatarOnGround(
+                                    mesh,
+                                    (row.pos && typeof row.pos.x === "number") ? row.pos.x : 2,
+                                    (row.pos && typeof row.pos.z === "number") ? row.pos.z : 2,
+                                    0
+                                );
+                                if (typeof row.yaw === "number") mesh.rotation.y = row.yaw;
                                 _normScene.add(mesh);
                                 _normRemoteMeshes[pid] = mesh;
-                                mesh.userData.targetPos = mesh.position.clone();
-                                mesh.userData.targetYaw = row.yaw || 0;
-                            }
-                            var remote = _normRemoteMeshes[pid];
-                            if (row.pos && remote) {
-                                var footY = (typeof NORM_AVATAR_FOOT_OFFSET !== "undefined" ? NORM_AVATAR_FOOT_OFFSET : 0.02);
-                                var ry = (row.pos.y != null) ? row.pos.y : footY;
-                                if (ry > 0.15 && ry < 1.5) ry = footY;
-                                if (ry < 0) ry = footY;
-                                // Store target for smooth lerp each frame (looks live)
-                                if (!remote.userData.targetPos) remote.userData.targetPos = remote.position.clone();
-                                remote.userData.targetPos.set(row.pos.x || 0, ry, row.pos.z || 0);
-                                remote.userData.targetYaw = (typeof row.yaw === "number") ? row.yaw : remote.rotation.y;
+                                mesh.userData.targetPos = {
+                                    x: mesh.position.x,
+                                    y: mesh.position.y,
+                                    z: mesh.position.z
+                                };
+                                mesh.userData.targetYaw = mesh.rotation.y;
+                            } else {
+                                var m = _normRemoteMeshes[pid];
+                                if (row.pos && typeof row.pos.x === "number") {
+                                    m.userData.targetPos = {
+                                        x: row.pos.x,
+                                        y: (typeof row.pos.y === "number") ? row.pos.y : m.position.y,
+                                        z: row.pos.z
+                                    };
+                                }
+                                if (typeof row.yaw === "number") m.userData.targetYaw = row.yaw;
                             }
                         }
                     });
                 }
+
+                // Remove meshes for players who left / went stale
                 if (_normRemoteMeshes) {
                     Object.keys(_normRemoteMeshes).forEach(function (pid) {
-                        var still = list.some(function (p) { return p.id === pid; });
-                        if (!still) {
-                            try { _normScene.remove(_normRemoteMeshes[pid]); } catch (e) {}
-                            delete _normRemoteMeshes[pid];
-                        }
+                        if (!alive[pid]) removeRemoteMesh(pid);
                     });
                 }
+
                 _normPlayers = list;
                 renderNormPlayerList();
             })
-            .catch(function () {});
+            .catch(function () { /* keep last known list */ });
     }
 
-    // Smooth remote avatars every frame toward latest live target
-    _normSession._smoothRemotes = function () {
+    // Smooth remote motion every frame (called from interval + expose for animate)
+    _normSession.tickRemoteMeshes = function () {
         if (!_normRemoteMeshes) return;
         Object.keys(_normRemoteMeshes).forEach(function (pid) {
             var mesh = _normRemoteMeshes[pid];
-            if (!mesh || !mesh.userData.targetPos) return;
+            if (!mesh || !mesh.userData) return;
             var t = mesh.userData.targetPos;
-            mesh.position.x += (t.x - mesh.position.x) * 0.25;
-            mesh.position.y += (t.y - mesh.position.y) * 0.25;
-            mesh.position.z += (t.z - mesh.position.z) * 0.25;
+            if (t) {
+                mesh.position.x += (t.x - mesh.position.x) * 0.28;
+                mesh.position.y += (t.y - mesh.position.y) * 0.28;
+                mesh.position.z += (t.z - mesh.position.z) * 0.28;
+            }
             if (typeof mesh.userData.targetYaw === "number") {
-                // shortest-angle lerp
                 var cur = mesh.rotation.y;
                 var goal = mesh.userData.targetYaw;
                 var diff = goal - cur;
                 while (diff > Math.PI) diff -= Math.PI * 2;
                 while (diff < -Math.PI) diff += Math.PI * 2;
-                mesh.rotation.y = cur + diff * 0.25;
+                mesh.rotation.y = cur + diff * 0.28;
             }
         });
     };
 
     publishSelf(true);
-    pullPlayers();
-    // Fast live loop (~4–5 updates/sec network, smooth motion in between)
+    pullPlayers(true);
+    // Fast live loop — both devices must pull often so the FIRST joiner sees newcomers
     _normPresenceTimer = setInterval(function () {
         publishSelf(false);
-        pullPlayers();
-    }, 280);
+        pullPlayers(false);
+        if (_normSession && typeof _normSession.tickRemoteMeshes === "function") {
+            _normSession.tickRemoteMeshes();
+        }
+    }, 220);
 }
 
 function stopNormPresence() {
@@ -7339,9 +7663,9 @@ function finishNormCharacterReset(spawnPos) {
             try { _normScene.remove(_normLocalMesh); } catch (e) {}
         }
         _normLocalMesh = makeNormAvatar(getNormAvatarColors());
-        var x = (spawnPos && spawnPos.x) || 0;
-        var z = (spawnPos && spawnPos.z) || 0;
-        placeNormAvatarOnGround(_normLocalMesh, x, z, 0);
+        // Always respawn at map center (spawn area)
+        placeNormAvatarOnGround(_normLocalMesh, 0, 0, 0);
+        if (_normSession) { _normSession.charYaw = 0; }
         _normScene.add(_normLocalMesh);
     } catch (e) {
         console.warn("[Azora] reset respawn", e);
