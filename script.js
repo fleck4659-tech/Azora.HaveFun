@@ -1,3 +1,4 @@
+console.log("%c[Azora] script.js v39 TEXTURES loaded","color:#1e60ff;font-weight:bold");
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
 const rotationSpeed = 0.5; // Higher number = faster rotation
@@ -5686,27 +5687,27 @@ function attachNormFaceDecal(avatarGroup, headMesh) {
 
 
 function requestLeaveNormGame() {
-    var c = document.getElementById("normLeaveConfirm");
-    if (!c) {
-        // Fallback if confirm UI missing
-        if (window.confirm("Are you sure?\n\nLeave this Norm Game?")) {
-            leaveNormGame();
+    try {
+        var conf = document.getElementById("normLeaveConfirm");
+        if (conf) {
+            conf.style.display = "flex";
+            conf.style.zIndex = "2147483646";
+            conf.style.pointerEvents = "auto";
+            conf.style.visibility = "visible";
+            conf.style.opacity = "1";
+            try { document.body.appendChild(conf); } catch (e) {}
+            return;
         }
-        return;
-    }
-    // Must sit above the game overlay (azafn z-index ~20000)
-    c.style.zIndex = "2147483000";
-    c.style.display = "flex";
+    } catch (e) {}
+    if (typeof leaveNormGame === "function") leaveNormGame();
 }
 
 function confirmLeaveNormGame(yes) {
-    var c = document.getElementById("normLeaveConfirm");
-    if (c) {
-        c.style.display = "none";
-    }
-    if (yes) {
-        leaveNormGame();
-    }
+    try {
+        var c = document.getElementById("normLeaveConfirm");
+        if (c) c.style.display = "none";
+    } catch (e) {}
+    if (yes && typeof leaveNormGame === "function") leaveNormGame();
 }
 
 
@@ -5954,28 +5955,107 @@ function resolveNormWallCollisions(mesh) {
     mesh.position.z = pz;
 }
 
-function buildNormCity(scene) {
+
+// ============================================================
+// TEXTURES update — grass / road / concrete maps for Norm Games
+// ============================================================
+var _normTexCache = null;
+
+function loadNormTextures(done) {
+    done = done || function () {};
+    if (_normTexCache) {
+        done(_normTexCache);
+        return;
+    }
+    if (typeof THREE === "undefined" || !THREE.TextureLoader) {
+        _normTexCache = {};
+        done(_normTexCache);
+        return;
+    }
+    var loader = new THREE.TextureLoader();
+    var out = { grass: null, road: null, concrete: null };
+    var left = 3;
+    function finishOne() {
+        left -= 1;
+        if (left <= 0) {
+            _normTexCache = out;
+            done(out);
+        }
+    }
+    function prep(tex, repeatX, repeatY) {
+        if (!tex) return null;
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(repeatX, repeatY);
+        if (tex.anisotropy !== undefined && typeof _normRenderer !== "undefined" && _normRenderer) {
+            try {
+                tex.anisotropy = Math.min(8, _normRenderer.capabilities.getMaxAnisotropy());
+            } catch (e) {}
+        }
+        tex.needsUpdate = true;
+        return tex;
+    }
+    function loadOne(key, url, rx, ry) {
+        loader.load(
+            url,
+            function (tex) {
+                out[key] = prep(tex, rx, ry);
+                finishOne();
+            },
+            undefined,
+            function () {
+                console.warn("[Azora Textures] failed to load", url);
+                out[key] = null;
+                finishOne();
+            }
+        );
+    }
+    loadOne("grass", "grass.jpg", 40, 40);
+    loadOne("road", "road.jpg", 24, 4);
+    loadOne("concrete", "concrete.jpg", 4, 4);
+}
+
+function makeNormMat(opts) {
+    opts = opts || {};
+    var conf = { color: opts.color != null ? opts.color : 0xffffff };
+    if (opts.map) conf.map = opts.map;
+    return new THREE.MeshBasicMaterial(conf);
+}
+
+
+function buildNormCity(scene, tex) {
     _normWallColliders = [];
     _normFloorColliders = [];
-    // Large ground
+    tex = tex || _normTexCache || {};
+    // Large ground — grass texture
+    var groundMat = makeNormMat({
+        map: tex.grass || null,
+        color: tex.grass ? 0x6bcf6b : 0x2f6b3c
+    });
     var ground = new THREE.Mesh(
         new THREE.BoxGeometry(400, 1.2, 400),
-        new THREE.MeshLambertMaterial({ color: 0x2f6b3c })
+        groundMat
     );
     ground.position.y = -0.6;
     scene.add(ground);
 
-    // Road cross
-    var roadMat = new THREE.MeshLambertMaterial({ color: 0x374151 });
+    // Road cross — asphalt texture
+    var roadMat = makeNormMat({
+        map: tex.road || null,
+        color: tex.road ? 0xffffff : 0x374151
+    });
     var roadX = new THREE.Mesh(new THREE.BoxGeometry(400, 0.15, 18), roadMat);
     roadX.position.y = 0.02;
     scene.add(roadX);
-    var roadZ = new THREE.Mesh(new THREE.BoxGeometry(18, 0.15, 400), roadMat);
+    var roadZ = new THREE.Mesh(new THREE.BoxGeometry(18, 0.15, 400), roadMat.clone ? roadMat.clone() : roadMat);
     roadZ.position.y = 0.025;
     scene.add(roadZ);
 
-    // Sidewalks
-    var walkMat = new THREE.MeshLambertMaterial({ color: 0x9ca3af });
+    // Sidewalks — concrete texture
+    var walkMat = makeNormMat({
+        map: tex.concrete || null,
+        color: tex.concrete ? 0xc8c8c8 : 0x9ca3af
+    });
     [[0, 12], [0, -12], [12, 0], [-12, 0]].forEach(function (off) {
         var w = new THREE.Mesh(
             new THREE.BoxGeometry(off[0] === 0 ? 400 : 6, 0.12, off[1] === 0 ? 400 : 6),
@@ -5993,10 +6073,13 @@ function buildNormCity(scene) {
 
     function building(x, z, w, h, d, color) {
         var wallT = 0.55; // wall thickness
-        var mat = new THREE.MeshLambertMaterial({ color: color });
+        var mat = makeNormMat({
+            map: (tex && tex.concrete) || null,
+            color: (tex && tex.concrete) ? color : color
+        });
         var winMat = new THREE.MeshLambertMaterial({ color: 0x93c5fd });
-        var floorMat = new THREE.MeshLambertMaterial({ color: 0x78716c });
-        var stairMat = new THREE.MeshLambertMaterial({ color: 0x57534e });
+        var floorMat = makeNormMat({ map: (tex && tex.concrete) || null, color: (tex && tex.concrete) ? 0xa09080 : 0x78716c });
+        var stairMat = makeNormMat({ map: (tex && tex.concrete) || null, color: (tex && tex.concrete) ? 0x888078 : 0x57534e });
         var doorW = Math.min(3.2, w * 0.35); // front door opening
         var floorStep = 3.2; // height between floors
 
@@ -6279,247 +6362,297 @@ window.toggleNormMusicPause = toggleNormMusicPause;
 
 
 function startNormGameWorld(def) {
-    disposeNormWorld(false);
-    startNormMusic();
+    console.log("[Azora] Norm Game engine v39 TEXTURES");
+    try { disposeNormWorld(false); } catch (e) {}
+    try { startNormMusic(); } catch (e) {}
 
-    // Only YOU at start — other rows come from live presence
-    var meName = getNormDisplayName();
-    _normPlayers = [{
-        id: "me",
-        name: meName,
-        isMe: true,
-        isGuest: isNormGuest()
-    }];
-    renderNormPlayerList();
+    var meName = (typeof getNormDisplayName === "function") ? getNormDisplayName() : "You";
+    _normPlayers = [{ id: "me", name: meName, isMe: true, isGuest: (typeof isNormGuest === "function" && isNormGuest()) }];
+    try { renderNormPlayerList(); } catch (e) {}
 
     var chat = document.getElementById("normChatMessages");
     if (chat) {
         chat.innerHTML = "";
-        appendNormChat("System", "Welcome to " + def.title + ". Only real players who join this room appear here.", true);
-        if (typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()) {
-            appendNormChat("System", "Live multiplayer is on — you should see other players move in near real-time when they join this room.", true);
-        } else {
-            appendNormChat("System", "Cloud not linked yet — you are the only live player here until Firebase is set up on the site.", true);
-        }
+        try {
+            appendNormChat("System", "Textures loaded · WASD move · Space jump · Leave or Esc to exit.", true);
+        } catch (e) {}
+    }
+
+    if (!_normSession) {
+        _normSession = {
+            id: (def && def.id) || "azora-roleplay",
+            title: (def && def.title) || "Azora Roleplay",
+            roomPath: (def && def.roomPath) || "",
+            startedAt: Date.now()
+        };
     }
 
     var container = document.getElementById("normGameCanvas");
-    if (!container || typeof THREE === "undefined") {
-        if (container) {
-            container.innerHTML = "<p style='color:#fff;padding:20px;text-align:center;'>3D needs Three.js. Chat and the player list still work.</p>";
-        }
-        startNormPresence(def);
+    if (!container) {
+        try { startNormPresence(def); } catch (e) {}
         return;
     }
+    if (typeof THREE === "undefined") {
+        container.innerHTML = "<p style='color:#fff;padding:24px;text-align:center;font-weight:bold;'>Three.js failed to load. Refresh with internet, then Join again.</p>";
+        try { startNormPresence(def); } catch (e) {}
+        return;
+    }
+
     while (container.firstChild) container.removeChild(container.firstChild);
 
-    // Size after layout
-    var w = Math.max(container.clientWidth, 320);
-    var h = Math.max(container.clientHeight, 240);
+    container.style.cssText = "position:relative;display:block;width:100%;height:420px;min-height:420px;background:#5dade2;border-radius:12px;overflow:hidden;border:3px solid #1e60ff;";
+    var playEl = document.getElementById("normGamePlay");
+    if (playEl) {
+        playEl.style.display = "flex";
+        playEl.style.minHeight = "480px";
+    }
 
-    _normScene = new THREE.Scene();
-    _normScene.background = new THREE.Color(0x7eb6e8);
-    _normScene.fog = new THREE.Fog(0x7eb6e8, 80, 220);
+    var w = Math.max(container.clientWidth || 0, 640);
+    var h = Math.max(container.clientHeight || 0, 420);
 
-    // Closer camera → avatar feels larger
-    _normCamera = new THREE.PerspectiveCamera(55, w / h, 0.1, 500);
-    _normCamera.position.set(0, 2.4, 4.2);
+    function buildWorldWithTextures(tex) {
+        tex = tex || {};
+        try {
+            _normScene = new THREE.Scene();
+            _normScene.background = new THREE.Color(0x5dade2);
 
-    _normRenderer = new THREE.WebGLRenderer({ antialias: true });
-    _normRenderer.setSize(w, h);
-    _normRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    container.appendChild(_normRenderer.domElement);
+            _normCamera = new THREE.PerspectiveCamera(60, w / h, 0.1, 1000);
+            _normCamera.position.set(0, 6, 14);
+            _normCamera.lookAt(0, 1, 0);
 
-    _normScene.add(new THREE.AmbientLight(0xffffff, 0.55));
-    var sun = new THREE.DirectionalLight(0xffffff, 0.95);
-    sun.position.set(40, 80, 30);
-    _normScene.add(sun);
-    var hemi = new THREE.HemisphereLight(0xbfd9ff, 0x3d5c40, 0.35);
-    _normScene.add(hemi);
+            _normRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            _normRenderer.setClearColor(0x5dade2, 1);
+            _normRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            _normRenderer.setSize(w, h, false);
+            var canvasEl = _normRenderer.domElement;
+            canvasEl.style.cssText = "display:block!important;width:100%!important;height:100%!important;position:absolute;left:0;top:0;";
+            container.appendChild(canvasEl);
 
-    buildNormCity(_normScene);
+            // Re-apply anisotropy now that renderer exists
+            ["grass", "road", "concrete"].forEach(function (k) {
+                if (tex[k] && _normRenderer.capabilities) {
+                    try {
+                        tex[k].anisotropy = Math.min(8, _normRenderer.capabilities.getMaxAnisotropy());
+                        tex[k].needsUpdate = true;
+                    } catch (e) {}
+                }
+            });
 
-    _normLocalMesh = makeNormAvatar(getNormAvatarColors());
-    placeNormAvatarOnGround(_normLocalMesh, 0, 0, 0);
-    _normScene.add(_normLocalMesh);
-    _normRemoteMeshes = {};
+            // Ground — grass texture
+            var ground = new THREE.Mesh(
+                new THREE.BoxGeometry(200, 1, 200),
+                makeNormMat({ map: tex.grass || null, color: tex.grass ? 0x7dce6a : 0x2ecc71 })
+            );
+            ground.position.y = -0.5;
+            _normScene.add(ground);
 
-    // ---- Controls (orbit TEMPORARILY DISABLED) ----
-    // W = forward, S = reverse, A = turn left, D = turn right
-    // Camera locked behind character, slightly above
-    _normKeys = {};
-    _normSession.charYaw = 0;
-    _normSession.camYaw = 0;
-    _normSession.camPitch = 0.42;
-    _normSession.camDist = 5.0;
-    _normSession.camHeight = 2.6;
-    _normSession.moveX = 0;
-    _normSession.moveZ = 0;
-    _normSession.orbitX = 0;
-    _normSession.orbitY = 0;
-    _normSession.orbitEnabled = false;
-    _normSession.velY = 0;
-    _normSession.onGround = true;
-    _normSession.jumpQueued = false;
+            // Road — asphalt texture
+            var road = new THREE.Mesh(
+                new THREE.BoxGeometry(200, 0.25, 12),
+                makeNormMat({ map: tex.road || null, color: tex.road ? 0xffffff : 0x566573 })
+            );
+            road.position.y = 0.05;
+            _normScene.add(road);
 
-    // Prevent Space from activating focused buttons (was reloading/rejoining the game)
-    try {
-        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-    } catch (e) {}
-
-    function onKey(e, down) {
-        var k = (e.key || "").toLowerCase();
-        var code = e.code || "";
-
-        // Always eat Space while in Norm Game — stops page scroll + button "click" reload bug
-        if (k === " " || k === "spacebar" || code === "Space") {
-            if (e.preventDefault) e.preventDefault();
-            if (e.stopPropagation) e.stopPropagation();
-            if (down) {
-                _normSession.jumpQueued = true;
+            // Buildings — concrete texture
+            var bcols = [0xb0b0b0, 0x9a9a9a, 0xc4c4c4, 0x8e8e8e, 0xa8a8a8];
+            var spots = [
+                [12, 8, 10, 10, 8], [-14, 10, 12, 12, 9], [0, 18, 14, 8, 10],
+                [22, 16, 9, 14, 9], [-20, 18, 11, 10, 11], [18, -18, 12, 11, 8],
+                [-16, -16, 10, 9, 10], [8, -22, 8, 13, 8]
+            ];
+            for (var bi = 0; bi < spots.length; bi++) {
+                var s = spots[bi];
+                var bm = new THREE.Mesh(
+                    new THREE.BoxGeometry(s[2], s[3], s[4]),
+                    makeNormMat({ map: tex.concrete || null, color: tex.concrete ? bcols[bi % bcols.length] : bcols[bi % bcols.length] })
+                );
+                bm.position.set(s[0], s[3] / 2, s[1]);
+                _normScene.add(bm);
             }
+
+            // Yellow pad + red beacon
+            var pad = new THREE.Mesh(new THREE.BoxGeometry(4, 0.15, 4), new THREE.MeshBasicMaterial({ color: 0xf1c40f }));
+            pad.position.set(0, 0.1, 0);
+            _normScene.add(pad);
+            var beacon = new THREE.Mesh(new THREE.BoxGeometry(1.5, 4, 1.5), new THREE.MeshBasicMaterial({ color: 0xe74c3c }));
+            beacon.position.set(5, 2, 0);
+            _normScene.add(beacon);
+
+            try {
+                _normLocalMesh = makeNormAvatar(typeof getNormAvatarColors === "function" ? getNormAvatarColors() : null);
+            } catch (e) { _normLocalMesh = null; }
+            if (!_normLocalMesh) {
+                _normLocalMesh = new THREE.Group();
+                var body = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.6), new THREE.MeshBasicMaterial({ color: 0x1e60ff }));
+                body.position.y = 1;
+                _normLocalMesh.add(body);
+                var head = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), new THREE.MeshBasicMaterial({ color: 0xffcc00 }));
+                head.position.y = 2.35;
+                _normLocalMesh.add(head);
+            }
+            _normLocalMesh.position.set(0, 0.05, 0);
+            _normScene.add(_normLocalMesh);
+            _normRemoteMeshes = {};
+
+            try {
+                if (typeof buildNormCity === "function") buildNormCity(_normScene, tex);
+            } catch (cityErr) {
+                console.warn("[Azora] buildNormCity skipped", cityErr);
+            }
+
+            console.log("[Azora] TEXTURES scene children:", _normScene.children.length,
+                "grass:", !!tex.grass, "road:", !!tex.road, "concrete:", !!tex.concrete);
+            _normRenderer.render(_normScene, _normCamera);
+        } catch (err) {
+            console.error("[Azora] 3D start failed:", err);
+            container.innerHTML = "<p style='color:#fff;padding:20px;text-align:center;'>3D failed: " +
+                String((err && err.message) || err) + "<br>You can still Leave.</p>";
+            try { startNormPresence(def); } catch (e) {}
             return;
         }
 
-        if (["w", "a", "s", "d", "p"].indexOf(k) !== -1) {
-            _normKeys[k] = down;
-            if (e.preventDefault) e.preventDefault();
-        }
-        if (down && e.key === "Escape") {
-            requestLeaveNormGame();
-        }
-    }
-    _normSession._kd = function (e) { onKey(e, true); };
-    _normSession._ku = function (e) { onKey(e, false); };
-    // capture:true so we beat buttons/links that would fire on Space
-    window.addEventListener("keydown", _normSession._kd, true);
-    window.addEventListener("keyup", _normSession._ku, true);
+        _normKeys = {};
+        _normSession.charYaw = 0;
+        _normSession.camDist = 10;
+        _normSession.camHeight = 4;
+        _normSession.moveX = 0;
+        _normSession.moveZ = 0;
+        _normSession.velY = 0;
+        _normSession.onGround = true;
+        _normSession.jumpQueued = false;
 
-    // Joysticks + mobile jump
-    setupNormJoysticks();
-    setupNormJumpButton();
-
-    function animate() {
-        _normAnim = requestAnimationFrame(animate);
-        if (!_normLocalMesh || !_normRenderer || !_normCamera) return;
-
-        var sp = 0.18;
-        var turnSp = 0.045;
-
-        // --- Turn: A left, D right (also left stick X) ---
-        if (_normKeys["a"]) _normSession.charYaw += turnSp;
-        if (_normKeys["d"]) _normSession.charYaw -= turnSp;
-        _normSession.charYaw -= (_normSession.moveX || 0) * 0.05;
-
-        // Character faces charYaw (mesh forward matches movement)
-        _normLocalMesh.rotation.y = _normSession.charYaw;
-
-        // Forward along facing: in our convention rotation.y with atan2(dx,dz)
-        // local forward on XZ = (sin(yaw), cos(yaw))
-        var yaw = _normSession.charYaw || 0;
-        var fwdX = Math.sin(yaw);
-        var fwdZ = Math.cos(yaw);
-
-        // --- Move: W forward, S reverse (also left stick Y) ---
-        var throttle = 0;
-        if (_normKeys["w"] || _normKeys["p"]) throttle += 1;
-        if (_normKeys["s"]) throttle -= 1;
-        throttle += (_normSession.moveZ || 0);
-        if (throttle > 1) throttle = 1;
-        if (throttle < -1) throttle = -1;
-
-        if (Math.abs(throttle) > 0.001) {
-            _normLocalMesh.position.x += fwdX * throttle * sp;
-            _normLocalMesh.position.z += fwdZ * throttle * sp;
-        }
-
-        // Can't walk through building walls (hollow shells, solid walls)
-        if (typeof resolveNormWallCollisions === "function") {
-            resolveNormWallCollisions(_normLocalMesh);
-        }
-
-        _normLocalMesh.position.x = Math.max(-180, Math.min(180, _normLocalMesh.position.x));
-        _normLocalMesh.position.z = Math.max(-180, Math.min(180, _normLocalMesh.position.z));
-
-        // --- Jump + floors/ramps ---
-        var gravity = 0.018;
-        var jumpPower = 0.32;
-        if (_normSession.jumpQueued) {
-            _normSession.jumpQueued = false;
-            if (_normSession.onGround) {
-                _normSession.velY = jumpPower;
-                _normSession.onGround = false;
+        function onKeyDown(e) {
+            if (!_normSession) return;
+            var k = (e.key || "").toLowerCase();
+            if (k === "escape") {
+                e.preventDefault();
+                requestLeaveNormGame();
+                return;
+            }
+            if (k === " " || e.code === "Space") {
+                e.preventDefault();
+                _normSession.jumpQueued = true;
+                return;
+            }
+            if (k === "w" || k === "a" || k === "s" || k === "d" || k === "p") {
+                _normKeys[k] = true;
+                e.preventDefault();
             }
         }
-        _normSession.velY = (_normSession.velY || 0) - gravity;
-        _normLocalMesh.position.y += _normSession.velY;
-
-        var supportY = getNormSupportY(
-            _normLocalMesh.position.x,
-            _normLocalMesh.position.z,
-            _normLocalMesh.position.y
-        );
-        // Stick to ramp while walking (even if vel small)
-        if (_normLocalMesh.position.y <= supportY + 0.08 && _normSession.velY <= 0.02) {
-            _normLocalMesh.position.y = supportY;
-            _normSession.velY = 0;
-            _normSession.onGround = true;
-        } else if (_normLocalMesh.position.y < supportY - 0.01 && _normSession.velY <= 0) {
-            _normLocalMesh.position.y = supportY;
-            _normSession.velY = 0;
-            _normSession.onGround = true;
-        } else {
-            _normSession.onGround = false;
+        function onKeyUp(e) {
+            var k = (e.key || "").toLowerCase();
+            if (k === "w" || k === "a" || k === "s" || k === "d" || k === "p") _normKeys[k] = false;
         }
+        window.addEventListener("keydown", onKeyDown, true);
+        window.addEventListener("keyup", onKeyUp, true);
+        _normSession._kd = onKeyDown;
+        _normSession._ku = onKeyUp;
 
-        // --- Camera LOCKED behind character, slightly above (orbit off) ---
-        var target = _normLocalMesh.position;
-        var dist = _normSession.camDist || 5.0;
-        var height = _normSession.camHeight || 2.6;
-        // Behind = opposite of facing
-        var idealX = target.x - fwdX * dist;
-        var idealZ = target.z - fwdZ * dist;
-        var idealY = target.y + height;
+        try { setupNormJoysticks(); } catch (e) {}
+        try { setupNormJumpButton(); } catch (e) {}
 
-        var lerp = 0.18;
-        _normCamera.position.x += (idealX - _normCamera.position.x) * lerp;
-        _normCamera.position.y += (idealY - _normCamera.position.y) * lerp;
-        _normCamera.position.z += (idealZ - _normCamera.position.z) * lerp;
-        _normCamera.lookAt(target.x, target.y + 1.5, target.z);
+        function animate() {
+            _normAnim = requestAnimationFrame(animate);
+            if (!_normLocalMesh || !_normRenderer || !_normCamera || !_normSession) return;
+            try {
+                if (!_normKeys) _normKeys = {};
+                var sp = 0.2, turnSp = 0.05;
+                if (_normKeys["a"]) _normSession.charYaw += turnSp;
+                if (_normKeys["d"]) _normSession.charYaw -= turnSp;
+                _normSession.charYaw -= (_normSession.moveX || 0) * 0.05;
+                _normLocalMesh.rotation.y = _normSession.charYaw;
 
-        // Live multiplayer: ease other players toward their latest positions
-        if (_normSession && typeof _normSession._smoothRemotes === "function") {
-            _normSession._smoothRemotes();
-        }
-        // Keep publishing while we move so others see us in near real-time
-        if (typeof publishSelf !== "function") { /* local */ }
-        try {
-            if (_normSession && Math.abs((_normKeys && (_normKeys.w || _normKeys.s || _normKeys.a || _normKeys.d)) ? 1 : 0)) {
-                /* interval handles publish */
+                var yaw = _normSession.charYaw || 0;
+                var fwdX = Math.sin(yaw), fwdZ = Math.cos(yaw);
+                var throttle = 0;
+                if (_normKeys["w"] || _normKeys["p"]) throttle += 1;
+                if (_normKeys["s"]) throttle -= 1;
+                throttle += (_normSession.moveZ || 0);
+                if (throttle > 1) throttle = 1;
+                if (throttle < -1) throttle = -1;
+                if (Math.abs(throttle) > 0.001) {
+                    _normLocalMesh.position.x += fwdX * throttle * sp;
+                    _normLocalMesh.position.z += fwdZ * throttle * sp;
+                }
+                if (typeof resolveNormWallCollisions === "function") {
+                    try { resolveNormWallCollisions(_normLocalMesh); } catch (e) {}
+                }
+                _normLocalMesh.position.x = Math.max(-90, Math.min(90, _normLocalMesh.position.x));
+                _normLocalMesh.position.z = Math.max(-90, Math.min(90, _normLocalMesh.position.z));
+
+                if (_normSession.jumpQueued) {
+                    _normSession.jumpQueued = false;
+                    if (_normSession.onGround) {
+                        _normSession.velY = 0.34;
+                        _normSession.onGround = false;
+                    }
+                }
+                _normSession.velY = (_normSession.velY || 0) - 0.018;
+                _normLocalMesh.position.y += _normSession.velY;
+                var supportY = 0.05;
+                if (typeof getNormSupportY === "function") {
+                    try {
+                        supportY = getNormSupportY(_normLocalMesh.position.x, _normLocalMesh.position.z, _normLocalMesh.position.y);
+                    } catch (e) {}
+                }
+                if (_normLocalMesh.position.y <= supportY) {
+                    _normLocalMesh.position.y = supportY;
+                    _normSession.velY = 0;
+                    _normSession.onGround = true;
+                } else {
+                    _normSession.onGround = false;
+                }
+
+                var dist = _normSession.camDist || 10;
+                var height = _normSession.camHeight || 4;
+                var idealX = _normLocalMesh.position.x - Math.sin(yaw) * dist;
+                var idealZ = _normLocalMesh.position.z - Math.cos(yaw) * dist;
+                var idealY = _normLocalMesh.position.y + height;
+                _normCamera.position.x += (idealX - _normCamera.position.x) * 0.2;
+                _normCamera.position.y += (idealY - _normCamera.position.y) * 0.2;
+                _normCamera.position.z += (idealZ - _normCamera.position.z) * 0.2;
+                _normCamera.lookAt(_normLocalMesh.position.x, _normLocalMesh.position.y + 1.5, _normLocalMesh.position.z);
+
+                if (_normSession._smoothRemotes) try { _normSession._smoothRemotes(); } catch (e) {}
+                _normRenderer.render(_normScene, _normCamera);
+            } catch (animErr) {
+                console.error("[Azora] animate error", animErr);
             }
-        } catch (e) {}
+        }
+        animate();
 
-        _normRenderer.render(_normScene, _normCamera);
-    }
-    animate();
-
-    // Resize observer
-    try {
-        _normSession._onResize = function () {
+        function fitNormCanvas() {
             if (!_normRenderer || !_normCamera || !container) return;
-            var ww = Math.max(container.clientWidth, 1);
-            var hh = Math.max(container.clientHeight, 1);
-            _normCamera.aspect = ww / hh;
+            var rw = Math.max(container.clientWidth || 0, 320);
+            var rh = Math.max(container.clientHeight || 0, 280);
+            if (rh < 200) {
+                rh = 420;
+                container.style.height = "420px";
+            }
+            _normCamera.aspect = rw / rh;
             _normCamera.updateProjectionMatrix();
-            _normRenderer.setSize(ww, hh);
-        };
-        window.addEventListener("resize", _normSession._onResize);
-        setTimeout(_normSession._onResize, 100);
-    } catch (e) {}
+            _normRenderer.setSize(rw, rh, false);
+            _normRenderer.domElement.style.width = "100%";
+            _normRenderer.domElement.style.height = "100%";
+            _normRenderer.render(_normScene, _normCamera);
+        }
+        setTimeout(fitNormCanvas, 50);
+        setTimeout(fitNormCanvas, 250);
+        window.addEventListener("resize", fitNormCanvas);
+        _normSession._onResize = fitNormCanvas;
 
-    updateNormHudCount();
-    startNormPresence(def);
+        try { updateNormHudCount(); } catch (e) {}
+        try { startNormPresence(def); } catch (e) {}
+    }
+
+    // Load textures first, then build (falls back to solid colors if load fails)
+    loadNormTextures(function (tex) {
+        buildWorldWithTextures(tex || {});
+    });
 }
+
+
 
 function updateNormHudCount() {
     var hud = document.getElementById("normHudPlayers");
@@ -6798,26 +6931,30 @@ function disposeNormWorld(keepSession) {
 }
 
 function leaveNormGame() {
-    stopNormMusic();
+    try { stopNormMusic(); } catch (e) {}
     try {
         var st = document.querySelector(".norm-game-stage");
         if (st) st.classList.remove("show-joysticks");
         var layer = document.getElementById("normJoystickLayer");
         if (layer) layer.style.display = "none";
     } catch (e) {}
-    disposeNormWorld(false);
+    try { disposeNormWorld(false); } catch (e) {}
     _normSession = null;
     _normPlayers = [];
-    var ov = document.getElementById("normGameOverlay");
-    if (ov) ov.style.display = "none";
-    var play = document.getElementById("normGamePlay");
-    if (play) play.style.display = "none";
-    var loading = document.getElementById("normGameLoading");
-    if (loading) loading.style.display = "flex";
-    var fill = document.getElementById("normLoadFill");
-    if (fill) fill.style.width = "0%";
-    var conf = document.getElementById("normLeaveConfirm");
-    if (conf) conf.style.display = "none";
+    _normKeys = {};
+    try {
+        var ov = document.getElementById("normGameOverlay");
+        if (ov) { ov.style.display = "none"; ov.style.visibility = "hidden"; }
+        var play = document.getElementById("normGamePlay");
+        if (play) play.style.display = "none";
+        var loading = document.getElementById("normGameLoading");
+        if (loading) loading.style.display = "flex";
+        var fill = document.getElementById("normLoadFill");
+        if (fill) fill.style.width = "0%";
+        var confEl = document.getElementById("normLeaveConfirm");
+        if (confEl) confEl.style.display = "none";
+    } catch (e) {}
+    console.log("[Azora] Left Norm Game");
 }
 
 window.joinNormGame = joinNormGame;
