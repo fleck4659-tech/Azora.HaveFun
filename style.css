@@ -2699,7 +2699,7 @@ button.azora-temp-disabled:hover{transform:none!important;box-shadow:none!import
     animation: none;
 }
 .azora-connection-lost-toast.show .azora-cl-bar-fill {
-    animation: azoraClShrink 10s linear forwards;
+    animation: azoraClShrink 12s linear forwards;
 }
 @keyframes azoraClIn {
     from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
@@ -2756,4 +2756,70 @@ button.azora-temp-disabled:hover{transform:none!important;box-shadow:none!import
     background: #1e3a5f !important;
     border-color: #60a5fa !important;
     color: #fff !important;
+}
+
+
+.norm-reset-btn {
+    margin: 0 !important;
+    background: #1f2937 !important;
+    color: #f3f4f6 !important;
+    border: 1px solid #9ca3af !important;
+    font-weight: 700 !important;
+    font-size: 13px !important;
+    padding: 8px 12px !important;
+    border-radius: 10px !important;
+    cursor: pointer;
+}
+.norm-reset-btn:hover {
+    background: #374151 !important;
+}
+
+
+/* Play Azora Online / Offline badge */
+.azora-play-mode-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.45);
+    white-space: nowrap;
+    margin: 0 6px;
+    user-select: none;
+}
+.azora-play-mode-badge.online {
+    background: rgba(16, 185, 129, 0.25);
+    color: #ecfdf5;
+    border-color: #34d399;
+}
+.azora-play-mode-badge.offline {
+    background: rgba(245, 158, 11, 0.28);
+    color: #fffbeb;
+    border-color: #fbbf24;
+}
+.azora-cl-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+.azora-cl-sub {
+    font-size: 12px;
+    font-weight: 600;
+    color: #cbd5e1;
+    line-height: 1.35;
+}
+.azora-cl-mode {
+    font-size: 11px;
+    font-weight: 800;
+    color: #fbbf24;
+    margin-top: 2px;
+}
+/* Full offline screen stays in DOM but is never shown */
+.azora-offline-screen {
+    display: none !important;
+    pointer-events: none !important;
 }

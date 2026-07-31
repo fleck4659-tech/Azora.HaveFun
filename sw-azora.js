@@ -1,5 +1,5 @@
-/* Azora main app service worker — v43 */
-var CACHE = "azora-app-v43-textures-wood";
+/* Azora main app service worker — v45 */
+var CACHE = "azora-app-v45-soft-connection";
 var ASSETS = [
   "./", "./index.html", "./style.css",
   "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./Mossy.mp3",

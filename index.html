@@ -13,7 +13,7 @@
     <link rel="manifest" href="manifest-azora.json">
     <link rel="apple-touch-icon" href="logo.jpg">
     <link rel="icon" href="logo.jpg">
-    <link rel="stylesheet" href="style.css?v=43">
+    <link rel="stylesheet" href="style.css?v=45">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -52,7 +52,11 @@
 <div id="azoraConnectionLostToast" class="azora-connection-lost-toast" style="display:none;" role="alert" aria-live="assertive">
     <div class="azora-cl-inner">
         <span class="azora-cl-icon" aria-hidden="true">📡</span>
-        <span class="azora-cl-text">Your connection was lost. Please reconnect your internet</span>
+        <div class="azora-cl-copy">
+            <span class="azora-cl-text">Your connection was lost. Please connect to the internet.</span>
+            <span class="azora-cl-sub">Azora will keep running — some features may not work (cloud accounts, live multiplayer, updates).</span>
+            <span class="azora-cl-mode" id="azoraClModeLine">Mode: Play Azora Offline — some features may not work</span>
+        </div>
     </div>
     <div class="azora-cl-bar"><div class="azora-cl-bar-fill" id="azoraConnectionLostBar"></div></div>
 </div>
@@ -234,6 +238,7 @@
     </a>
     <h2>Azora</h2>
     <div class="topbar-right">
+        <span id="azoraPlayModeBadge" class="azora-play-mode-badge online" title="Connection status">Play Azora Online</span>
         <div class="currency-display">🪙 AzoraCoins: <span id="bucks">0</span></div>
     </div>
     <button id="publicFeedButton" onclick="openPublicFeed()" style="margin:0;">🎮 Feed</button>
@@ -561,6 +566,7 @@
         <h2><img src="logo.jpg" alt="Azora"> <span id="normGameTitle">Norm Game</span></h2>
         <div class="azafn-tabs">
             <button type="button" id="normMusicToggleBtn" class="norm-music-btn" onclick="toggleNormMusicPause()">Pause Music</button>
+            <button type="button" id="normResetBtn" class="norm-reset-btn" onclick="openNormResetConfirm()">Reset</button>
             <button type="button" onclick="requestLeaveNormGame()" style="margin:0;background:#ff3b30;color:#fff;">Leave</button>
         </div>
     </div>
@@ -616,6 +622,18 @@
     </div>
 </div>
 
+<div id="normResetConfirm" class="overlay" style="display:none;z-index:2147483000;">
+    <div class="popup" style="max-width:min(340px,calc(100vw - 20px));">
+        <h2 style="color:#1e60ff !important;">Are you sure?</h2>
+        <p style="color:#333 !important;">Reset your character? Your avatar will fall apart and collapse, then respawn.</p>
+        <div style="display:flex;gap:10px;margin-top:8px;">
+            <button type="button" onclick="confirmNormReset(true)" style="flex:1;background:linear-gradient(180deg,#f87171,#ef4444);color:#fff;">Yes</button>
+            <button type="button" onclick="confirmNormReset(false)" style="flex:1;">No</button>
+        </div>
+    </div>
+</div>
+
+
 <!-- Azora AI Image Generator (heavily moderated) -->
 <div id="aiImageOverlay" class="overlay" style="display:none;">
     <div class="popup ai-image-popup" style="max-width:min(360px,calc(100vw - 20px));text-align:left;">
@@ -642,7 +660,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=43"></script>
+<script src="script.js?v=45"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {

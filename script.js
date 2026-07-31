@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v43 buildings + textures (grass/road/concrete/wood) + Firebase + lights","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v45 soft connection + Online/Offline mode + textures + reset","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -5260,26 +5260,51 @@ function isAzoraOnline() {
     return true;
 }
 
+/** Full-screen Wi‑Fi block is DISABLED — Azora always keeps loading */
 function showAzoraOfflineScreen(show) {
     var el = document.getElementById("azoraOfflineScreen");
     if (!el) return;
-    if (show) {
-        el.classList.add("show");
-        el.style.display = "flex";
-        el.setAttribute("aria-hidden", "false");
-        document.documentElement.setAttribute("data-azora-offline", "1");
-    } else {
-        el.classList.remove("show");
-        el.style.display = "none";
-        el.setAttribute("aria-hidden", "true");
-        document.documentElement.removeAttribute("data-azora-offline");
-        var st = document.getElementById("azoraOfflineStatus");
-        if (st) st.textContent = "";
-    }
+    // Never block the app — always hide
+    el.classList.remove("show");
+    el.style.display = "none";
+    el.setAttribute("aria-hidden", "true");
+    document.documentElement.removeAttribute("data-azora-offline");
 }
 
 var _azoraLostTimer = null;
 var _azoraWasOnline = true;
+var _azoraPlayMode = "online"; // "online" | "offline"
+
+function getAzoraPlayMode() {
+    return _azoraPlayMode === "offline" ? "offline" : "online";
+}
+
+function setAzoraPlayMode(mode) {
+    _azoraPlayMode = (mode === "offline") ? "offline" : "online";
+    try {
+        document.documentElement.setAttribute("data-azora-play-mode", _azoraPlayMode);
+    } catch (e) {}
+    var badge = document.getElementById("azoraPlayModeBadge");
+    if (badge) {
+        if (_azoraPlayMode === "offline") {
+            badge.textContent = "Play Azora Offline";
+            badge.className = "azora-play-mode-badge offline";
+            badge.title = "Connection lost or weak — Azora still runs, but some features may not work";
+        } else {
+            badge.textContent = "Play Azora Online";
+            badge.className = "azora-play-mode-badge online";
+            badge.title = "Connected — cloud features available";
+        }
+        badge.style.display = "inline-flex";
+    }
+    // Sync toast status line if visible
+    var modeLine = document.getElementById("azoraClModeLine");
+    if (modeLine) {
+        modeLine.textContent = _azoraPlayMode === "offline"
+            ? "Mode: Play Azora Offline — some features may not work"
+            : "Mode: Play Azora Online";
+    }
+}
 
 function showConnectionLostReminder(show) {
     var el = document.getElementById("azoraConnectionLostToast");
@@ -5287,13 +5312,13 @@ function showConnectionLostReminder(show) {
     if (show) {
         el.classList.add("show");
         el.style.display = "block";
-        // restart progress bar animation
         var bar = document.getElementById("azoraConnectionLostBar");
         if (bar) {
             bar.style.animation = "none";
             void bar.offsetWidth;
             bar.style.animation = "";
         }
+        setAzoraPlayMode("offline");
     } else {
         el.classList.remove("show");
         el.style.display = "none";
@@ -5307,49 +5332,32 @@ function clearConnectionLostTimer() {
     }
 }
 
-/** After 10s offline: leave any Norm Game, then show full Wi‑Fi screen */
+/**
+ * Soft handling only — NEVER force leave games or block the site.
+ * Toast stays ~12s, then fades, but Play Azora Offline mode remains until back online.
+ */
 function finishConnectionLostSequence() {
     _azoraLostTimer = null;
     showConnectionLostReminder(false);
-
-    // Leave Norm Game if currently in one
-    try {
-        if (typeof _normSession !== "undefined" && _normSession) {
-            if (typeof leaveNormGame === "function") leaveNormGame();
-        }
-        // Also leave playable Quick Game runtime if open
-        if (typeof closeGamePlay === "function") {
-            var gp = document.getElementById("gamePlayOverlay");
-            if (gp && gp.style.display !== "none" && gp.style.display !== "") {
-                try { closeGamePlay(); } catch (e) {}
-            }
-        }
-    } catch (e) {}
-
-    // Full offline / Wi‑Fi error screen
-    showAzoraOfflineScreen(true);
+    // Stay in offline play mode until connection returns
+    setAzoraPlayMode("offline");
 }
 
 function handleAzoraWentOffline() {
-    if (!isAzoraOnline()) {
-        // Already showing full screen? still ok
-        clearConnectionLostTimer();
-        showConnectionLostReminder(true);
-        _azoraLostTimer = setTimeout(function () {
-            // Only finish if still offline
-            if (!isAzoraOnline()) {
-                finishConnectionLostSequence();
-            } else {
-                showConnectionLostReminder(false);
-            }
-        }, 10000);
-    }
+    clearConnectionLostTimer();
+    setAzoraPlayMode("offline");
+    showConnectionLostReminder(true);
+    // Auto-hide toast after 12s (site keeps running)
+    _azoraLostTimer = setTimeout(function () {
+        finishConnectionLostSequence();
+    }, 12000);
 }
 
 function handleAzoraWentOnline() {
     clearConnectionLostTimer();
     showConnectionLostReminder(false);
     showAzoraOfflineScreen(false);
+    setAzoraPlayMode("online");
 }
 
 function updateAzoraOnlineStatus() {
@@ -5357,16 +5365,13 @@ function updateAzoraOnlineStatus() {
     if (online) {
         handleAzoraWentOnline();
     } else {
-        // On first load already offline → go straight to full Wi‑Fi screen
-        // (no 10s wait). Mid-session drop uses handleAzoraWentOffline.
-        var el = document.getElementById("azoraOfflineScreen");
+        // Soft toast only — never full-screen block
         var toast = document.getElementById("azoraConnectionLostToast");
         var toastShowing = toast && toast.classList.contains("show");
-        var fullShowing = el && (el.classList.contains("show") || el.style.display === "flex");
-        if (!toastShowing && !fullShowing && _azoraWasOnline) {
+        if (!toastShowing) {
             handleAzoraWentOffline();
-        } else if (!online && !toastShowing && !fullShowing) {
-            showAzoraOfflineScreen(true);
+        } else {
+            setAzoraPlayMode("offline");
         }
     }
     _azoraWasOnline = online;
@@ -5374,87 +5379,49 @@ function updateAzoraOnlineStatus() {
 }
 
 function retryAzoraConnection() {
-    var st = document.getElementById("azoraOfflineStatus");
-    if (st) st.textContent = "Checking connection…";
-
-    // navigator.onLine is fast; also try a tiny network check when possible
-    function finish(ok) {
-        if (ok) {
-            if (st) st.textContent = "Connected! Loading Azora…";
-            showAzoraOfflineScreen(false);
-        } else {
-            if (st) st.textContent = "Still offline. Check Wi‑Fi or data and try again.";
-            showAzoraOfflineScreen(true);
-        }
-    }
-
-    if (!isAzoraOnline()) {
-        finish(false);
-        return;
-    }
-
-    // Probe the network (may fail on pure offline / blocked fetch)
-    var ctrl = null;
-    var timer = null;
-    try {
-        if (typeof AbortController !== "undefined") ctrl = new AbortController();
-        timer = setTimeout(function () {
-            try { if (ctrl) ctrl.abort(); } catch (e) {}
-        }, 4000);
-        // Prefer same-origin so SW / CORS don't false-fail when online
-        var url = (typeof location !== "undefined" ? location.href.split("#")[0] : "./") + (location.search ? "" : "") ;
-        // cache-bust
-        var probe = "./manifest-azora.json?azora_ping=" + Date.now();
-        fetch(probe, {
-            method: "GET",
-            cache: "no-store",
-            signal: ctrl ? ctrl.signal : undefined
-        }).then(function (r) {
-            if (timer) clearTimeout(timer);
-            // Even a 404 means the network reached something
-            finish(true);
-        }).catch(function () {
-            if (timer) clearTimeout(timer);
-            // If browser says online but fetch fails, still trust onLine for file:// / local
-            if (typeof location !== "undefined" && location.protocol === "file:") {
-                finish(isAzoraOnline());
-            } else {
-                finish(isAzoraOnline());
-            }
-        });
-    } catch (e) {
-        if (timer) clearTimeout(timer);
-        finish(isAzoraOnline());
+    // Kept for any old buttons — just re-check and switch mode
+    if (isAzoraOnline()) {
+        handleAzoraWentOnline();
+    } else {
+        handleAzoraWentOffline();
     }
 }
 
 function initAzoraOfflineDetection() {
     try { _azoraWasOnline = isAzoraOnline(); } catch (e) { _azoraWasOnline = true; }
-    // Initial: if already offline at open, show full Wi‑Fi screen immediately
+
+    // Always allow the site to load
+    showAzoraOfflineScreen(false);
+
     if (!isAzoraOnline()) {
-        showAzoraOfflineScreen(true);
+        // Soft notice only
+        handleAzoraWentOffline();
         _azoraWasOnline = false;
     } else {
-        showAzoraOfflineScreen(false);
         showConnectionLostReminder(false);
+        setAzoraPlayMode("online");
     }
+
     window.addEventListener("online", function () {
         _azoraWasOnline = true;
         handleAzoraWentOnline();
     });
     window.addEventListener("offline", function () {
-        handleAzoraWentOffline();
         _azoraWasOnline = false;
+        handleAzoraWentOffline();
     });
-    document.addEventListener("visibilitychange", function () {
-        if (!document.hidden) {
-            if (isAzoraOnline()) handleAzoraWentOnline();
-            else if (!_azoraLostTimer) {
-                // Still offline and no reminder running → full screen
-                showAzoraOfflineScreen(true);
+
+    // Periodic light check (catches laggy / half-dead connections)
+    setInterval(function () {
+        try {
+            var on = isAzoraOnline();
+            if (on && getAzoraPlayMode() === "offline") {
+                handleAzoraWentOnline();
+            } else if (!on && getAzoraPlayMode() === "online") {
+                handleAzoraWentOffline();
             }
-        }
-    });
+        } catch (e) {}
+    }, 8000);
 }
 
 window.isAzoraOnline = isAzoraOnline;
@@ -5465,13 +5432,20 @@ window.initAzoraOfflineDetection = initAzoraOfflineDetection;
 window.showConnectionLostReminder = showConnectionLostReminder;
 window.handleAzoraWentOffline = handleAzoraWentOffline;
 window.handleAzoraWentOnline = handleAzoraWentOnline;
+window.getAzoraPlayMode = getAzoraPlayMode;
+window.setAzoraPlayMode = setAzoraPlayMode;
 
 (function bootOffline() {
-    function run() { initAzoraOfflineDetection(); }
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
-    else run();
-    window.addEventListener("load", function () { updateAzoraOnlineStatus(); });
+    function run() {
+        try { initAzoraOfflineDetection(); } catch (e) {}
+    }
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", run);
+    } else {
+        run();
+    }
 })();
+
 
 
 
@@ -5981,15 +5955,33 @@ function loadNormTextures(done) {
     var loader = new THREE.TextureLoader();
     var out = { grass: null, road: null, concrete: null, wood1: null, wood2: null };
     var left = 5;
+    // Cap resolution + lighter filters = less GPU lag (textures stay, just cheaper)
+    var MAX_TEX = 256;
+    function optimizeTex(tex) {
+        try {
+            var img = tex.image;
+            if (img && (img.width > MAX_TEX || img.height > MAX_TEX)) {
+                var c = document.createElement("canvas");
+                var scale = Math.min(MAX_TEX / img.width, MAX_TEX / img.height);
+                c.width = Math.max(32, Math.floor(img.width * scale));
+                c.height = Math.max(32, Math.floor(img.height * scale));
+                var ctx = c.getContext("2d");
+                ctx.drawImage(img, 0, 0, c.width, c.height);
+                tex.image = c;
+                tex.needsUpdate = true;
+            }
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.magFilter = THREE.LinearFilter;
+            tex.minFilter = THREE.LinearFilter; // no mipmaps → less lag
+            tex.generateMipmaps = false;
+            if (typeof tex.anisotropy === "number") tex.anisotropy = 1;
+        } catch (e) {}
+        return tex;
+    }
     function one(key, url) {
         loader.load(url, function (tex) {
-            try {
-                tex.wrapS = THREE.RepeatWrapping;
-                tex.wrapT = THREE.RepeatWrapping;
-                tex.magFilter = THREE.LinearFilter;
-                tex.minFilter = THREE.LinearMipmapLinearFilter;
-            } catch (e) {}
-            out[key] = tex;
+            out[key] = optimizeTex(tex);
             left -= 1;
             if (left <= 0) { _normTexCache = out; done(out); }
         }, undefined, function () {
@@ -6005,14 +5997,23 @@ function loadNormTextures(done) {
     one("wood2", "./wood2.jpg");
 }
 
-/** Clone texture with UV repeat so large meshes tile instead of stretch */
+/**
+ * Shared materials with UV repeat set on the base texture once.
+ * Avoids cloning a unique texture per wall (big lag fix).
+ */
+var _normMatPool = {};
 function normTexForSize(baseTex, sizeX, sizeZ, tileSize) {
+    // For shared pool we set repeat on a lightweight clone only when needed;
+    // preferred path is makeNormMatShared.
     if (!baseTex) return null;
     try {
         var t = baseTex.clone();
         t.needsUpdate = true;
         t.wrapS = THREE.RepeatWrapping;
         t.wrapT = THREE.RepeatWrapping;
+        t.generateMipmaps = false;
+        t.minFilter = THREE.LinearFilter;
+        t.magFilter = THREE.LinearFilter;
         var ts = tileSize || 4;
         t.repeat.set(Math.max(0.5, sizeX / ts), Math.max(0.5, sizeZ / ts));
         return t;
@@ -6027,53 +6028,51 @@ function makeNormMat(opts) {
     catch (e) { return new THREE.MeshBasicMaterial(o); }
 }
 
+/** One material per texture+color key — reused across all walls/floors */
+function makeNormMatShared(kind, color, sizeX, sizeZ, tileSize) {
+    var tex = (_normTexCache && _normTexCache[kind]) || null;
+    var key = kind + "_" + (color || 0) + "_" + Math.round(sizeX || 0) + "x" + Math.round(sizeZ || 0) + "_" + (tileSize || 4);
+    if (_normMatPool[key]) return _normMatPool[key];
+    var map = tex ? normTexForSize(tex, sizeX || 4, sizeZ || 4, tileSize || 4) : null;
+    var mat = makeNormMat({ map: map, color: color != null ? color : 0xffffff });
+    _normMatPool[key] = mat;
+    return mat;
+}
+
 function buildNormCity(scene, tex) {
     _normWallColliders = [];
     _normFloorColliders = [];
+    _normMatPool = {};
     tex = tex || _normTexCache || {};
 
-    // Ground — grass (green tint if texture is gray)
+    // Ground — grass (shared material, green tint)
     var ground = new THREE.Mesh(
         new THREE.BoxGeometry(400, 1.2, 400),
-        makeNormMat({
-            map: normTexForSize(tex.grass, 400, 400, 8),
-            color: tex.grass ? 0x6fbf6a : 0x2f6b3c
-        })
+        makeNormMatShared("grass", tex.grass ? 0x6fbf6a : 0x2f6b3c, 400, 400, 10)
     );
     ground.position.y = -0.6;
     scene.add(ground);
 
-    // Roads — asphalt texture, tiled
+    // Roads — shared asphalt mats
     var roadX = new THREE.Mesh(
         new THREE.BoxGeometry(400, 0.15, 18),
-        makeNormMat({
-            map: normTexForSize(tex.road, 400, 18, 6),
-            color: tex.road ? 0xbbbbbb : 0x374151
-        })
+        makeNormMatShared("road", tex.road ? 0xbbbbbb : 0x374151, 400, 18, 8)
     );
     roadX.position.y = 0.02;
     scene.add(roadX);
     var roadZ = new THREE.Mesh(
         new THREE.BoxGeometry(18, 0.15, 400),
-        makeNormMat({
-            map: normTexForSize(tex.road, 18, 400, 6),
-            color: tex.road ? 0xbbbbbb : 0x374151
-        })
+        makeNormMatShared("road", tex.road ? 0xbbbbbb : 0x374151, 18, 400, 8)
     );
     roadZ.position.y = 0.025;
     scene.add(roadZ);
 
-    // Sidewalks — concrete
+    // Sidewalks — one shared concrete mat for all
+    var walkMat = makeNormMatShared("concrete", tex.concrete ? 0xc8c8c8 : 0x9ca3af, 40, 6, 5);
     [[0, 12], [0, -12], [12, 0], [-12, 0]].forEach(function (off) {
         var sx = off[0] === 0 ? 400 : 6;
         var sz = off[1] === 0 ? 400 : 6;
-        var w = new THREE.Mesh(
-            new THREE.BoxGeometry(sx, 0.12, sz),
-            makeNormMat({
-                map: normTexForSize(tex.concrete, sx, sz, 4),
-                color: tex.concrete ? 0xc8c8c8 : 0x9ca3af
-            })
-        );
+        var w = new THREE.Mesh(new THREE.BoxGeometry(sx, 0.12, sz), walkMat);
         w.position.set(off[0], 0.04, off[1]);
         scene.add(w);
     });
@@ -6086,20 +6085,19 @@ function buildNormCity(scene, tex) {
 
     function building(x, z, w, h, d, color) {
         var wallT = 0.55; // wall thickness
-        // Exterior walls = concrete; floors/stairs = wood
-        var mat = makeNormMat({
-            map: normTexForSize(tex.concrete, Math.max(w, d), h, 3.5),
-            color: color || 0x909090
-        });
+        // Shared mats per building size (not per wall) — big lag win
+        var mat = makeNormMatShared("concrete", color || 0x909090, Math.max(w, d), h, 4);
         var winMat = makeNormMat({ color: 0x93c5fd });
-        var floorMat = makeNormMat({
-            map: normTexForSize(tex.wood1 || tex.wood2, Math.max(1, w - 1), Math.max(1, d - 1), 3),
-            color: (tex.wood1 || tex.wood2) ? 0xe8d4b8 : 0x78716c
-        });
-        var stairMat = makeNormMat({
-            map: normTexForSize(tex.wood2 || tex.wood1, 3, 4, 2),
-            color: (tex.wood2 || tex.wood1) ? 0xd4b896 : 0x57534e
-        });
+        var floorMat = makeNormMatShared(
+            tex.wood1 ? "wood1" : "wood2",
+            (tex.wood1 || tex.wood2) ? 0xe8d4b8 : 0x78716c,
+            Math.max(1, w - 1), Math.max(1, d - 1), 3
+        );
+        var stairMat = makeNormMatShared(
+            tex.wood2 ? "wood2" : "wood1",
+            (tex.wood2 || tex.wood1) ? 0xd4b896 : 0x57534e,
+            3, 4, 2
+        );
         var doorW = Math.min(3.2, w * 0.35); // front door opening
         var floorStep = 3.2; // height between floors
 
@@ -6398,7 +6396,7 @@ function startNormGameWorld(def) {
     var chat = document.getElementById("normChatMessages");
     if (chat) {
         chat.innerHTML = "";
-        appendNormChat("System", "Welcome to " + def.title + " · v43 · textures · buildings · lights. Only real players who join appear here.", true);
+        appendNormChat("System", "Welcome to " + def.title + " · v44 · textures optimized · reset. Only real players who join appear here.", true);
         if (typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()) {
             appendNormChat("System", "Live multiplayer is on — you should see other players move in near real-time when they join this room.", true);
         } else {
@@ -6518,6 +6516,12 @@ function startNormGameWorld(def) {
     function animate() {
         _normAnim = requestAnimationFrame(animate);
         if (!_normLocalMesh || !_normRenderer || !_normCamera) return;
+
+        // During character-reset collapse, freeze controls
+        if (_normSession && _normSession.frozen) {
+            try { _normRenderer.render(_normScene, _normCamera); } catch (e) {}
+            return;
+        }
 
         var sp = 0.18;
         var turnSp = 0.045;
@@ -6935,6 +6939,152 @@ function leaveNormGame() {
     var conf = document.getElementById("normLeaveConfirm");
     if (conf) conf.style.display = "none";
 }
+
+
+// ============================================================
+// CHARACTER RESET — "Are you sure?" then fall-apart collapse
+// ============================================================
+var _normResetBusy = false;
+var _normDebris = [];
+
+function openNormResetConfirm() {
+    if (_normResetBusy) return;
+    var ov = document.getElementById("normResetConfirm");
+    if (ov) ov.style.display = "flex";
+}
+
+function closeNormResetConfirm() {
+    var ov = document.getElementById("normResetConfirm");
+    if (ov) ov.style.display = "none";
+}
+
+function confirmNormReset(yes) {
+    closeNormResetConfirm();
+    if (!yes) return;
+    startNormCharacterCollapse();
+}
+
+function startNormCharacterCollapse() {
+    if (_normResetBusy || !_normLocalMesh || !_normScene) return;
+    _normResetBusy = true;
+    if (_normSession) _normSession.frozen = true;
+
+    // Detach each limb into free-flying debris
+    var root = _normLocalMesh;
+    var worldPos = root.position.clone();
+    var parts = [];
+    root.traverse(function (ch) {
+        if (ch.isMesh) parts.push(ch);
+    });
+
+    // Hide original avatar
+    root.visible = false;
+
+    _normDebris = [];
+    parts.forEach(function (mesh, i) {
+        // World position of this limb
+        var wp = new THREE.Vector3();
+        mesh.getWorldPosition(wp);
+        var geo = mesh.geometry;
+        var mat = mesh.material.clone ? mesh.material.clone() : mesh.material;
+        var piece = new THREE.Mesh(geo, mat);
+        piece.position.copy(wp);
+        try {
+            var q = new THREE.Quaternion();
+            mesh.getWorldQuaternion(q);
+            piece.quaternion.copy(q);
+        } catch (e) {
+            piece.rotation.copy(mesh.rotation);
+        }
+        // Launch outward + up
+        var ang = (i / Math.max(1, parts.length)) * Math.PI * 2 + Math.random() * 0.4;
+        var speed = 2.5 + Math.random() * 3.5;
+        piece.userData.vx = Math.cos(ang) * speed;
+        piece.userData.vz = Math.sin(ang) * speed;
+        piece.userData.vy = 4 + Math.random() * 5;
+        piece.userData.spinX = (Math.random() - 0.5) * 10;
+        piece.userData.spinY = (Math.random() - 0.5) * 10;
+        piece.userData.spinZ = (Math.random() - 0.5) * 10;
+        _normScene.add(piece);
+        _normDebris.push(piece);
+    });
+
+    if (typeof appendNormChat === "function") {
+        appendNormChat("System", "Character reset — collapsing…", true);
+    }
+
+    var t0 = performance.now();
+    var duration = 2200;
+    function stepDebris(now) {
+        var dt = 1 / 60;
+        var elapsed = now - t0;
+        for (var i = 0; i < _normDebris.length; i++) {
+            var p = _normDebris[i];
+            p.userData.vy -= 18 * dt; // gravity
+            p.position.x += p.userData.vx * dt;
+            p.position.y += p.userData.vy * dt;
+            p.position.z += p.userData.vz * dt;
+            p.rotation.x += p.userData.spinX * dt;
+            p.rotation.y += p.userData.spinY * dt;
+            p.rotation.z += p.userData.spinZ * dt;
+            // Ground clamp
+            if (p.position.y < 0.2) {
+                p.position.y = 0.2;
+                p.userData.vy *= -0.25;
+                p.userData.vx *= 0.85;
+                p.userData.vz *= 0.85;
+                p.userData.spinX *= 0.8;
+                p.userData.spinY *= 0.8;
+                p.userData.spinZ *= 0.8;
+            }
+        }
+        if (elapsed < duration) {
+            requestAnimationFrame(stepDebris);
+        } else {
+            finishNormCharacterReset(worldPos);
+        }
+    }
+    requestAnimationFrame(stepDebris);
+}
+
+function finishNormCharacterReset(spawnPos) {
+    // Remove debris
+    if (_normDebris && _normScene) {
+        _normDebris.forEach(function (p) {
+            try { _normScene.remove(p); } catch (e) {}
+        });
+    }
+    _normDebris = [];
+
+    // Respawn fresh avatar at same XZ
+    try {
+        if (_normLocalMesh && _normScene) {
+            try { _normScene.remove(_normLocalMesh); } catch (e) {}
+        }
+        _normLocalMesh = makeNormAvatar(getNormAvatarColors());
+        var x = (spawnPos && spawnPos.x) || 0;
+        var z = (spawnPos && spawnPos.z) || 0;
+        placeNormAvatarOnGround(_normLocalMesh, x, z, 0);
+        _normScene.add(_normLocalMesh);
+    } catch (e) {
+        console.warn("[Azora] reset respawn", e);
+    }
+
+    if (_normSession) {
+        _normSession.frozen = false;
+        _normSession.velY = 0;
+        _normSession.onGround = true;
+    }
+    _normResetBusy = false;
+    if (typeof appendNormChat === "function") {
+        appendNormChat("System", "Character reset complete. You can move again.", true);
+    }
+}
+
+window.openNormResetConfirm = openNormResetConfirm;
+window.closeNormResetConfirm = closeNormResetConfirm;
+window.confirmNormReset = confirmNormReset;
+
 
 window.joinNormGame = joinNormGame;
 window.sendNormChat = sendNormChat;
