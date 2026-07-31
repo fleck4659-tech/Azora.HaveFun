@@ -1,8 +1,9 @@
-/* Azora main app service worker — v42 */
-var CACHE = "azora-app-v42-firebase-buildings";
+/* Azora main app service worker — v43 */
+var CACHE = "azora-app-v43-textures-wood";
 var ASSETS = [
   "./", "./index.html", "./style.css",
-  "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./Mossy.mp3"
+  "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./Mossy.mp3",
+  "./grass.jpg", "./road.jpg", "./concrete.jpg", "./wood1.jpg", "./wood2.jpg"
 ];
 self.addEventListener("install", function (e) {
   e.waitUntil(

@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v42 old-buildings + Firebase + balanced lights","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v43 buildings + textures (grass/road/concrete/wood) + Firebase + lights","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -5965,32 +5965,114 @@ function resolveNormWallCollisions(mesh) {
     mesh.position.z = pz;
 }
 
-function buildNormCity(scene) {
+
+// ============================================================
+// TEXTURES — grass / road / concrete / wood1 / wood2
+// ============================================================
+var _normTexCache = null;
+
+function loadNormTextures(done) {
+    done = done || function () {};
+    if (_normTexCache) { done(_normTexCache); return; }
+    if (typeof THREE === "undefined") {
+        done({ grass: null, road: null, concrete: null, wood1: null, wood2: null });
+        return;
+    }
+    var loader = new THREE.TextureLoader();
+    var out = { grass: null, road: null, concrete: null, wood1: null, wood2: null };
+    var left = 5;
+    function one(key, url) {
+        loader.load(url, function (tex) {
+            try {
+                tex.wrapS = THREE.RepeatWrapping;
+                tex.wrapT = THREE.RepeatWrapping;
+                tex.magFilter = THREE.LinearFilter;
+                tex.minFilter = THREE.LinearMipmapLinearFilter;
+            } catch (e) {}
+            out[key] = tex;
+            left -= 1;
+            if (left <= 0) { _normTexCache = out; done(out); }
+        }, undefined, function () {
+            out[key] = null;
+            left -= 1;
+            if (left <= 0) { _normTexCache = out; done(out); }
+        });
+    }
+    one("grass", "./grass.jpg");
+    one("road", "./road.jpg");
+    one("concrete", "./concrete.jpg");
+    one("wood1", "./wood1.jpg");
+    one("wood2", "./wood2.jpg");
+}
+
+/** Clone texture with UV repeat so large meshes tile instead of stretch */
+function normTexForSize(baseTex, sizeX, sizeZ, tileSize) {
+    if (!baseTex) return null;
+    try {
+        var t = baseTex.clone();
+        t.needsUpdate = true;
+        t.wrapS = THREE.RepeatWrapping;
+        t.wrapT = THREE.RepeatWrapping;
+        var ts = tileSize || 4;
+        t.repeat.set(Math.max(0.5, sizeX / ts), Math.max(0.5, sizeZ / ts));
+        return t;
+    } catch (e) { return baseTex; }
+}
+
+function makeNormMat(opts) {
+    opts = opts || {};
+    var o = { color: opts.color != null ? opts.color : 0xffffff };
+    if (opts.map) o.map = opts.map;
+    try { return new THREE.MeshLambertMaterial(o); }
+    catch (e) { return new THREE.MeshBasicMaterial(o); }
+}
+
+function buildNormCity(scene, tex) {
     _normWallColliders = [];
     _normFloorColliders = [];
-    // Large ground
+    tex = tex || _normTexCache || {};
+
+    // Ground — grass (green tint if texture is gray)
     var ground = new THREE.Mesh(
         new THREE.BoxGeometry(400, 1.2, 400),
-        new THREE.MeshLambertMaterial({ color: 0x2f6b3c })
+        makeNormMat({
+            map: normTexForSize(tex.grass, 400, 400, 8),
+            color: tex.grass ? 0x6fbf6a : 0x2f6b3c
+        })
     );
     ground.position.y = -0.6;
     scene.add(ground);
 
-    // Road cross
-    var roadMat = new THREE.MeshLambertMaterial({ color: 0x374151 });
-    var roadX = new THREE.Mesh(new THREE.BoxGeometry(400, 0.15, 18), roadMat);
+    // Roads — asphalt texture, tiled
+    var roadX = new THREE.Mesh(
+        new THREE.BoxGeometry(400, 0.15, 18),
+        makeNormMat({
+            map: normTexForSize(tex.road, 400, 18, 6),
+            color: tex.road ? 0xbbbbbb : 0x374151
+        })
+    );
     roadX.position.y = 0.02;
     scene.add(roadX);
-    var roadZ = new THREE.Mesh(new THREE.BoxGeometry(18, 0.15, 400), roadMat);
+    var roadZ = new THREE.Mesh(
+        new THREE.BoxGeometry(18, 0.15, 400),
+        makeNormMat({
+            map: normTexForSize(tex.road, 18, 400, 6),
+            color: tex.road ? 0xbbbbbb : 0x374151
+        })
+    );
     roadZ.position.y = 0.025;
     scene.add(roadZ);
 
-    // Sidewalks
-    var walkMat = new THREE.MeshLambertMaterial({ color: 0x9ca3af });
+    // Sidewalks — concrete
     [[0, 12], [0, -12], [12, 0], [-12, 0]].forEach(function (off) {
+        var sx = off[0] === 0 ? 400 : 6;
+        var sz = off[1] === 0 ? 400 : 6;
         var w = new THREE.Mesh(
-            new THREE.BoxGeometry(off[0] === 0 ? 400 : 6, 0.12, off[1] === 0 ? 400 : 6),
-            walkMat
+            new THREE.BoxGeometry(sx, 0.12, sz),
+            makeNormMat({
+                map: normTexForSize(tex.concrete, sx, sz, 4),
+                color: tex.concrete ? 0xc8c8c8 : 0x9ca3af
+            })
         );
         w.position.set(off[0], 0.04, off[1]);
         scene.add(w);
@@ -6004,10 +6086,20 @@ function buildNormCity(scene) {
 
     function building(x, z, w, h, d, color) {
         var wallT = 0.55; // wall thickness
-        var mat = new THREE.MeshLambertMaterial({ color: color });
-        var winMat = new THREE.MeshLambertMaterial({ color: 0x93c5fd });
-        var floorMat = new THREE.MeshLambertMaterial({ color: 0x78716c });
-        var stairMat = new THREE.MeshLambertMaterial({ color: 0x57534e });
+        // Exterior walls = concrete; floors/stairs = wood
+        var mat = makeNormMat({
+            map: normTexForSize(tex.concrete, Math.max(w, d), h, 3.5),
+            color: color || 0x909090
+        });
+        var winMat = makeNormMat({ color: 0x93c5fd });
+        var floorMat = makeNormMat({
+            map: normTexForSize(tex.wood1 || tex.wood2, Math.max(1, w - 1), Math.max(1, d - 1), 3),
+            color: (tex.wood1 || tex.wood2) ? 0xe8d4b8 : 0x78716c
+        });
+        var stairMat = makeNormMat({
+            map: normTexForSize(tex.wood2 || tex.wood1, 3, 4, 2),
+            color: (tex.wood2 || tex.wood1) ? 0xd4b896 : 0x57534e
+        });
         var doorW = Math.min(3.2, w * 0.35); // front door opening
         var floorStep = 3.2; // height between floors
 
@@ -6306,7 +6398,7 @@ function startNormGameWorld(def) {
     var chat = document.getElementById("normChatMessages");
     if (chat) {
         chat.innerHTML = "";
-        appendNormChat("System", "Welcome to " + def.title + " · v42 · buildings + balanced lights. Only real players who join appear here.", true);
+        appendNormChat("System", "Welcome to " + def.title + " · v43 · textures · buildings · lights. Only real players who join appear here.", true);
         if (typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()) {
             appendNormChat("System", "Live multiplayer is on — you should see other players move in near real-time when they join this room.", true);
         } else {
@@ -6352,7 +6444,16 @@ function startNormGameWorld(def) {
     var hemi = new THREE.HemisphereLight(0x9ec9f0, 0x5a8a5a, 0.28);
     _normScene.add(hemi);
 
-    buildNormCity(_normScene);
+    // Load textures then build city (solid colors if a file is missing)
+    var _cityBuilt = false;
+    function _doBuildCity(tex) {
+        if (_cityBuilt) return;
+        _cityBuilt = true;
+        try { buildNormCity(_normScene, tex || {}); } catch (e) { console.warn("[Azora] city", e); }
+    }
+    loadNormTextures(function (tex) { _doBuildCity(tex); });
+    setTimeout(function () { _doBuildCity(_normTexCache || {}); }, 1800);
+
 
     _normLocalMesh = makeNormAvatar(getNormAvatarColors());
     placeNormAvatarOnGround(_normLocalMesh, 0, 0, 0);
