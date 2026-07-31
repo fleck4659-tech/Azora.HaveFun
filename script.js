@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v41 Firebase LIVE","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v41.1 lights+buildings","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -6047,16 +6047,16 @@ function makeNormMat(opts) {
 }
 
 function addNormLights(scene) {
-    // Bright ambient so nothing is dark gray
-    var amb = new THREE.AmbientLight(0xffffff, 0.85);
+    // Balanced lighting — not dark, not blown-out white
+    var amb = new THREE.AmbientLight(0xffffff, 0.42);
     scene.add(amb);
-    var sun = new THREE.DirectionalLight(0xfff5e0, 0.9);
-    sun.position.set(40, 80, 30);
+    var sun = new THREE.DirectionalLight(0xfff2d6, 0.55);
+    sun.position.set(50, 70, 25);
     scene.add(sun);
-    var fill = new THREE.DirectionalLight(0xcfe8ff, 0.35);
-    fill.position.set(-30, 40, -20);
+    var fill = new THREE.DirectionalLight(0xb8d4f0, 0.22);
+    fill.position.set(-40, 30, -30);
     scene.add(fill);
-    var hemi = new THREE.HemisphereLight(0xb1d4ff, 0x7cb47c, 0.45);
+    var hemi = new THREE.HemisphereLight(0x9ec9f0, 0x5a8a5a, 0.28);
     scene.add(hemi);
 }
 
@@ -6066,14 +6066,11 @@ function buildNormCity(scene, tex) {
     _normFloorColliders = [];
     tex = tex || _normTexCache || {};
 
-    // Lights (once per world)
-    try { addNormLights(scene); } catch (e) {}
-
     // Ground — square tiles, not stretched
     var gW = 400, gD = 400;
     var groundMat = makeNormMat({
         map: normTexForSize(tex.grass, gW, gD, 6),
-        color: tex.grass ? 0xb8e0a0 : 0x5aad5a
+        color: tex.grass ? 0x7cb87c : 0x4a9a4a
     });
     groundMat.depthWrite = true;
     groundMat.polygonOffset = true;
@@ -6102,7 +6099,7 @@ function buildNormCity(scene, tex) {
     function makeWalk(sx, sz, px, pz) {
         var mat = makeNormMat({
             map: normTexForSize(tex.concrete, sx, sz, 3),
-            color: tex.concrete ? 0xe8e8e8 : 0xc0c0c0
+            color: tex.concrete ? 0xc8c8c8 : 0xa8a8a8
         });
         var m = new THREE.Mesh(new THREE.BoxGeometry(sx, 0.12, sz), mat);
         m.position.set(px, 0.18, pz);
@@ -6123,7 +6120,7 @@ function buildNormCity(scene, tex) {
         function wallMat(faceW, faceH) {
             return makeNormMat({
                 map: normTexForSize(tex.concrete, faceW, faceH, 3.5),
-                color: color || 0xd0d0d0
+                color: color || 0x909090
             });
         }
         var winMat = makeNormMat({ color: 0xa8d4ff });
@@ -6254,20 +6251,26 @@ function buildNormCity(scene, tex) {
 
     // Brighter building colors
     var layouts = [
-        [14, 10, 12, 11, 10, 0xd8d8d8],
-        [-16, 12, 14, 14, 11, 0xcfcfcf],
-        [0, 22, 16, 10, 12, 0xe0e0e0],
-        [24, 18, 10, 16, 10, 0xd0d0d0],
-        [-22, 20, 12, 12, 12, 0xc8c8c8],
-        [20, -20, 14, 13, 10, 0xd4d4d4],
-        [-18, -18, 11, 11, 11, 0xcacaca],
-        [10, -24, 10, 15, 9, 0xd6d6d6],
-        [-8, 8, 9, 9, 9, 0xd2d2d2],
-        [28, -8, 11, 12, 10, 0xcecece]
+        [14, 10, 12, 11, 10, 0x9a9a9a],
+        [-16, 12, 14, 14, 11, 0x8e8e8e],
+        [0, 22, 16, 10, 12, 0xa4a4a4],
+        [24, 18, 10, 16, 10, 0x949494],
+        [-22, 20, 12, 12, 12, 0x888888],
+        [20, -20, 14, 13, 10, 0x9e9e9e],
+        [-18, -18, 11, 11, 11, 0x858585],
+        [10, -24, 10, 15, 9, 0x969696],
+        [-8, 8, 9, 9, 9, 0x8c8c8c],
+        [28, -8, 11, 12, 10, 0x929292],
+        [-28, -6, 10, 13, 9, 0x8a8a8a],
+        [6, 30, 11, 12, 10, 0xa0a0a0]
     ];
     for (var bi = 0; bi < layouts.length; bi++) {
-        var L = layouts[bi];
-        building(L[0], L[1], L[2], L[3], L[4], L[5]);
+        try {
+            var L = layouts[bi];
+            building(L[0], L[1], L[2], L[3], L[4], L[5]);
+        } catch (bErr) {
+            console.warn("[Azora] building failed", bi, bErr);
+        }
     }
 
     // Street poles (simple, unchanged)
@@ -6369,7 +6372,7 @@ window.toggleNormMusicPause = toggleNormMusicPause;
 
 
 function startNormGameWorld(def) {
-    console.log("[Azora] Norm Game engine v40.1 bright+UV");
+    console.log("[Azora] Norm Game engine v41.1 balanced lights");
     try { disposeNormWorld(false); } catch (e) {}
     try { startNormMusic(); } catch (e) {}
 
@@ -6381,7 +6384,7 @@ function startNormGameWorld(def) {
     if (chat) {
         chat.innerHTML = "";
         try {
-            appendNormChat("System", "v40.1 · brighter + fixed textures · WASD · Space jump", true);
+            appendNormChat("System", "v41.1 · balanced lights · buildings · WASD · Space", true);
         } catch (e) {}
     }
 
@@ -6421,7 +6424,7 @@ function startNormGameWorld(def) {
         tex = tex || {};
         try {
             _normScene = new THREE.Scene();
-            _normScene.background = new THREE.Color(0x9ec9f0);
+            _normScene.background = new THREE.Color(0x7eb6e8);
             try { addNormLights(_normScene); } catch (eL) {}
 
             // Closer camera (like before the textures update)
@@ -6430,7 +6433,7 @@ function startNormGameWorld(def) {
             _normCamera.lookAt(0, 1.2, 0);
 
             _normRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-            _normRenderer.setClearColor(0x87b8e8, 1);
+            _normRenderer.setClearColor(0x7eb6e8, 1);
             _normRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
             _normRenderer.setSize(w, h, false);
             var canvasEl = _normRenderer.domElement;
