@@ -1,5 +1,5 @@
 /* Azora main app service worker */
-var CACHE = "azora-app-v39-textures";
+var CACHE = "azora-app-v39-1-textures-fix";
 var ASSETS = [
   "./", "./index.html", "./style.css", "./script.js",
   "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./Mossy.mp3",

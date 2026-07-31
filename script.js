@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v39 TEXTURES loaded","color:#1e60ff;font-weight:bold");
+console.log("%c[Azora] script.js v39.1 textures-only","color:#1e60ff;font-weight:bold");
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
 const rotationSpeed = 0.5; // Higher number = faster rotation
@@ -5987,9 +5987,13 @@ function loadNormTextures(done) {
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
         tex.repeat.set(repeatX, repeatY);
-        if (tex.anisotropy !== undefined && typeof _normRenderer !== "undefined" && _normRenderer) {
+        // Reduce shimmer while moving the camera
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = true;
+        if (tex.anisotropy !== undefined) {
             try {
-                tex.anisotropy = Math.min(8, _normRenderer.capabilities.getMaxAnisotropy());
+                tex.anisotropy = 4;
             } catch (e) {}
         }
         tex.needsUpdate = true;
@@ -6032,11 +6036,16 @@ function buildNormCity(scene, tex) {
         map: tex.grass || null,
         color: tex.grass ? 0x6bcf6b : 0x2f6b3c
     });
+    groundMat.depthWrite = true;
+    groundMat.polygonOffset = true;
+    groundMat.polygonOffsetFactor = 1;
+    groundMat.polygonOffsetUnits = 1;
     var ground = new THREE.Mesh(
         new THREE.BoxGeometry(400, 1.2, 400),
         groundMat
     );
     ground.position.y = -0.6;
+    ground.renderOrder = -1;
     scene.add(ground);
 
     // Road cross — asphalt texture
@@ -6045,10 +6054,10 @@ function buildNormCity(scene, tex) {
         color: tex.road ? 0xffffff : 0x374151
     });
     var roadX = new THREE.Mesh(new THREE.BoxGeometry(400, 0.15, 18), roadMat);
-    roadX.position.y = 0.02;
+    roadX.position.y = 0.12;
     scene.add(roadX);
     var roadZ = new THREE.Mesh(new THREE.BoxGeometry(18, 0.15, 400), roadMat.clone ? roadMat.clone() : roadMat);
-    roadZ.position.y = 0.025;
+    roadZ.position.y = 0.13;
     scene.add(roadZ);
 
     // Sidewalks — concrete texture
@@ -6061,7 +6070,7 @@ function buildNormCity(scene, tex) {
             new THREE.BoxGeometry(off[0] === 0 ? 400 : 6, 0.12, off[1] === 0 ? 400 : 6),
             walkMat
         );
-        w.position.set(off[0], 0.04, off[1]);
+        w.position.set(off[0], 0.18, off[1]);
         scene.add(w);
     });
 
@@ -6362,7 +6371,7 @@ window.toggleNormMusicPause = toggleNormMusicPause;
 
 
 function startNormGameWorld(def) {
-    console.log("[Azora] Norm Game engine v39 TEXTURES");
+    console.log("[Azora] Norm Game engine v39.1 textures-only");
     try { disposeNormWorld(false); } catch (e) {}
     try { startNormMusic(); } catch (e) {}
 
@@ -6374,7 +6383,7 @@ function startNormGameWorld(def) {
     if (chat) {
         chat.innerHTML = "";
         try {
-            appendNormChat("System", "Textures loaded · WASD move · Space jump · Leave or Esc to exit.", true);
+            appendNormChat("System", "Welcome! WASD move · Space jump · Leave or Esc to exit.", true);
         } catch (e) {}
     }
 
@@ -6410,75 +6419,41 @@ function startNormGameWorld(def) {
     var w = Math.max(container.clientWidth || 0, 640);
     var h = Math.max(container.clientHeight || 0, 420);
 
-    function buildWorldWithTextures(tex) {
+    function finishStart(tex) {
         tex = tex || {};
         try {
             _normScene = new THREE.Scene();
-            _normScene.background = new THREE.Color(0x5dade2);
+            _normScene.background = new THREE.Color(0x87b8e8);
 
-            _normCamera = new THREE.PerspectiveCamera(60, w / h, 0.1, 1000);
-            _normCamera.position.set(0, 6, 14);
-            _normCamera.lookAt(0, 1, 0);
+            // Closer camera (like before the textures update)
+            _normCamera = new THREE.PerspectiveCamera(55, w / h, 0.1, 800);
+            _normCamera.position.set(0, 4.5, 9);
+            _normCamera.lookAt(0, 1.2, 0);
 
             _normRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-            _normRenderer.setClearColor(0x5dade2, 1);
+            _normRenderer.setClearColor(0x87b8e8, 1);
             _normRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
             _normRenderer.setSize(w, h, false);
             var canvasEl = _normRenderer.domElement;
             canvasEl.style.cssText = "display:block!important;width:100%!important;height:100%!important;position:absolute;left:0;top:0;";
             container.appendChild(canvasEl);
 
-            // Re-apply anisotropy now that renderer exists
+            // Apply anisotropy once renderer exists
             ["grass", "road", "concrete"].forEach(function (k) {
                 if (tex[k] && _normRenderer.capabilities) {
                     try {
-                        tex[k].anisotropy = Math.min(8, _normRenderer.capabilities.getMaxAnisotropy());
+                        tex[k].anisotropy = Math.min(4, _normRenderer.capabilities.getMaxAnisotropy());
                         tex[k].needsUpdate = true;
                     } catch (e) {}
                 }
             });
 
-            // Ground — grass texture
-            var ground = new THREE.Mesh(
-                new THREE.BoxGeometry(200, 1, 200),
-                makeNormMat({ map: tex.grass || null, color: tex.grass ? 0x7dce6a : 0x2ecc71 })
-            );
-            ground.position.y = -0.5;
-            _normScene.add(ground);
-
-            // Road — asphalt texture
-            var road = new THREE.Mesh(
-                new THREE.BoxGeometry(200, 0.25, 12),
-                makeNormMat({ map: tex.road || null, color: tex.road ? 0xffffff : 0x566573 })
-            );
-            road.position.y = 0.05;
-            _normScene.add(road);
-
-            // Buildings — concrete texture
-            var bcols = [0xb0b0b0, 0x9a9a9a, 0xc4c4c4, 0x8e8e8e, 0xa8a8a8];
-            var spots = [
-                [12, 8, 10, 10, 8], [-14, 10, 12, 12, 9], [0, 18, 14, 8, 10],
-                [22, 16, 9, 14, 9], [-20, 18, 11, 10, 11], [18, -18, 12, 11, 8],
-                [-16, -16, 10, 9, 10], [8, -22, 8, 13, 8]
-            ];
-            for (var bi = 0; bi < spots.length; bi++) {
-                var s = spots[bi];
-                var bm = new THREE.Mesh(
-                    new THREE.BoxGeometry(s[2], s[3], s[4]),
-                    makeNormMat({ map: tex.concrete || null, color: tex.concrete ? bcols[bi % bcols.length] : bcols[bi % bcols.length] })
-                );
-                bm.position.set(s[0], s[3] / 2, s[1]);
-                _normScene.add(bm);
+            // ONLY the real city (no extra cubes / pads) — textures applied inside
+            if (typeof buildNormCity === "function") {
+                buildNormCity(_normScene, tex);
             }
 
-            // Yellow pad + red beacon
-            var pad = new THREE.Mesh(new THREE.BoxGeometry(4, 0.15, 4), new THREE.MeshBasicMaterial({ color: 0xf1c40f }));
-            pad.position.set(0, 0.1, 0);
-            _normScene.add(pad);
-            var beacon = new THREE.Mesh(new THREE.BoxGeometry(1.5, 4, 1.5), new THREE.MeshBasicMaterial({ color: 0xe74c3c }));
-            beacon.position.set(5, 2, 0);
-            _normScene.add(beacon);
-
+            // Avatar only
             try {
                 _normLocalMesh = makeNormAvatar(typeof getNormAvatarColors === "function" ? getNormAvatarColors() : null);
             } catch (e) { _normLocalMesh = null; }
@@ -6491,19 +6466,20 @@ function startNormGameWorld(def) {
                 head.position.y = 2.35;
                 _normLocalMesh.add(head);
             }
-            _normLocalMesh.position.set(0, 0.05, 0);
+            try {
+                if (typeof placeNormAvatarOnGround === "function") {
+                    placeNormAvatarOnGround(_normLocalMesh, 0, 0, 0);
+                } else {
+                    _normLocalMesh.position.set(0, 0.05, 0);
+                }
+            } catch (e) {
+                _normLocalMesh.position.set(0, 0.05, 0);
+            }
             _normScene.add(_normLocalMesh);
             _normRemoteMeshes = {};
 
-            try {
-                if (typeof buildNormCity === "function") buildNormCity(_normScene, tex);
-            } catch (cityErr) {
-                console.warn("[Azora] buildNormCity skipped", cityErr);
-            }
-
-            console.log("[Azora] TEXTURES scene children:", _normScene.children.length,
-                "grass:", !!tex.grass, "road:", !!tex.road, "concrete:", !!tex.concrete);
             _normRenderer.render(_normScene, _normCamera);
+            console.log("[Azora] textures applied, children:", _normScene.children.length);
         } catch (err) {
             console.error("[Azora] 3D start failed:", err);
             container.innerHTML = "<p style='color:#fff;padding:20px;text-align:center;'>3D failed: " +
@@ -6513,9 +6489,10 @@ function startNormGameWorld(def) {
         }
 
         _normKeys = {};
+        // Closer follow camera
         _normSession.charYaw = 0;
-        _normSession.camDist = 10;
-        _normSession.camHeight = 4;
+        _normSession.camDist = 7;
+        _normSession.camHeight = 3.2;
         _normSession.moveX = 0;
         _normSession.moveZ = 0;
         _normSession.velY = 0;
@@ -6604,15 +6581,15 @@ function startNormGameWorld(def) {
                     _normSession.onGround = false;
                 }
 
-                var dist = _normSession.camDist || 10;
-                var height = _normSession.camHeight || 4;
+                var dist = _normSession.camDist || 7;
+                var height = _normSession.camHeight || 3.2;
                 var idealX = _normLocalMesh.position.x - Math.sin(yaw) * dist;
                 var idealZ = _normLocalMesh.position.z - Math.cos(yaw) * dist;
                 var idealY = _normLocalMesh.position.y + height;
-                _normCamera.position.x += (idealX - _normCamera.position.x) * 0.2;
-                _normCamera.position.y += (idealY - _normCamera.position.y) * 0.2;
-                _normCamera.position.z += (idealZ - _normCamera.position.z) * 0.2;
-                _normCamera.lookAt(_normLocalMesh.position.x, _normLocalMesh.position.y + 1.5, _normLocalMesh.position.z);
+                _normCamera.position.x += (idealX - _normCamera.position.x) * 0.22;
+                _normCamera.position.y += (idealY - _normCamera.position.y) * 0.22;
+                _normCamera.position.z += (idealZ - _normCamera.position.z) * 0.22;
+                _normCamera.lookAt(_normLocalMesh.position.x, _normLocalMesh.position.y + 1.4, _normLocalMesh.position.z);
 
                 if (_normSession._smoothRemotes) try { _normSession._smoothRemotes(); } catch (e) {}
                 _normRenderer.render(_normScene, _normCamera);
@@ -6646,11 +6623,11 @@ function startNormGameWorld(def) {
         try { startNormPresence(def); } catch (e) {}
     }
 
-    // Load textures first, then build (falls back to solid colors if load fails)
     loadNormTextures(function (tex) {
-        buildWorldWithTextures(tex || {});
+        finishStart(tex || {});
     });
 }
+
 
 
 
