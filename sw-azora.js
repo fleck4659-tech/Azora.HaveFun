@@ -1,9 +1,8 @@
-/* Azora main app service worker — v40 */
-var CACHE = "azora-app-v41-1-lights";
+/* Azora main app service worker — v42 */
+var CACHE = "azora-app-v42-firebase-buildings";
 var ASSETS = [
   "./", "./index.html", "./style.css",
-  "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./Mossy.mp3",
-  "./grass.jpg", "./road.jpg", "./concrete.jpg"
+  "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./Mossy.mp3"
 ];
 self.addEventListener("install", function (e) {
   e.waitUntil(
@@ -28,7 +27,6 @@ self.addEventListener("fetch", function (e) {
   if (e.request.url.indexOf("servers.html") !== -1) return;
   if (e.request.url.indexOf("creator.html") !== -1) return;
   var url = e.request.url;
-  // Always network-first for JS/CSS so updates actually arrive
   if (url.indexOf("script.js") !== -1 || url.indexOf("style.css") !== -1 || url.indexOf("sw-azora.js") !== -1) {
     e.respondWith(
       fetch(e.request, { cache: "no-store" }).then(function (res) {

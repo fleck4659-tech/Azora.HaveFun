@@ -1,5 +1,5 @@
-console.log("%c[Azora] script.js v41.1 lights+buildings","color:#1e60ff;font-weight:bold;font-size:14px");
-try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady()); } catch (e) {}
+console.log("%c[Azora] script.js v42 old-buildings + Firebase + balanced lights","color:#1e60ff;font-weight:bold;font-size:14px");
+try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
 const rotationSpeed = 0.5; // Higher number = faster rotation
@@ -71,9 +71,8 @@ window.handleDisabledFeatureClick = handleDisabledFeatureClick;
 // Setup: see servers.html staff note once unlocked.
 // ============================================================
 var AZORA_CLOUD = {
-    // Azora-Offical-app Firebase (Realtime Database)
+    // Azora-Offical-app Firebase Realtime Database
     firebaseUrl: "https://azora-offical-app-default-rtdb.firebaseio.com",
-    // Full web config (kept for reference / future Auth/Analytics)
     firebaseConfig: {
         apiKey: "AIzaSyCRoVnKDO3UVCg-bcxcb63mDcqH6mD3R3s",
         authDomain: "azora-offical-app.firebaseapp.com",
@@ -5698,27 +5697,27 @@ function attachNormFaceDecal(avatarGroup, headMesh) {
 
 
 function requestLeaveNormGame() {
-    try {
-        var conf = document.getElementById("normLeaveConfirm");
-        if (conf) {
-            conf.style.display = "flex";
-            conf.style.zIndex = "2147483646";
-            conf.style.pointerEvents = "auto";
-            conf.style.visibility = "visible";
-            conf.style.opacity = "1";
-            try { document.body.appendChild(conf); } catch (e) {}
-            return;
+    var c = document.getElementById("normLeaveConfirm");
+    if (!c) {
+        // Fallback if confirm UI missing
+        if (window.confirm("Are you sure?\n\nLeave this Norm Game?")) {
+            leaveNormGame();
         }
-    } catch (e) {}
-    if (typeof leaveNormGame === "function") leaveNormGame();
+        return;
+    }
+    // Must sit above the game overlay (azafn z-index ~20000)
+    c.style.zIndex = "2147483000";
+    c.style.display = "flex";
 }
 
 function confirmLeaveNormGame(yes) {
-    try {
-        var c = document.getElementById("normLeaveConfirm");
-        if (c) c.style.display = "none";
-    } catch (e) {}
-    if (yes && typeof leaveNormGame === "function") leaveNormGame();
+    var c = document.getElementById("normLeaveConfirm");
+    if (c) {
+        c.style.display = "none";
+    }
+    if (yes) {
+        leaveNormGame();
+    }
 }
 
 
@@ -5966,236 +5965,121 @@ function resolveNormWallCollisions(mesh) {
     mesh.position.z = pz;
 }
 
-
-
-// ============================================================
-// TEXTURES v40.1 — correct UV scale + brighter lighting
-// ============================================================
-var _normTexCache = null;
-
-function loadNormTextures(done) {
-    done = done || function () {};
-    if (_normTexCache) {
-        done(_normTexCache);
-        return;
-    }
-    if (typeof THREE === "undefined" || !THREE.TextureLoader) {
-        _normTexCache = {};
-        done(_normTexCache);
-        return;
-    }
-    var loader = new THREE.TextureLoader();
-    var out = { grass: null, road: null, concrete: null };
-    var left = 3;
-    function finishOne() {
-        left -= 1;
-        if (left <= 0) {
-            _normTexCache = out;
-            done(out);
-        }
-    }
-    function loadOne(key, url) {
-        loader.load(
-            url,
-            function (tex) {
-                tex.wrapS = THREE.RepeatWrapping;
-                tex.wrapT = THREE.RepeatWrapping;
-                tex.minFilter = THREE.LinearMipmapLinearFilter;
-                tex.magFilter = THREE.LinearFilter;
-                tex.generateMipmaps = true;
-                tex.anisotropy = 4;
-                tex.needsUpdate = true;
-                out[key] = tex;
-                finishOne();
-            },
-            undefined,
-            function () {
-                console.warn("[Azora Textures] failed", url);
-                out[key] = null;
-                finishOne();
-            }
-        );
-    }
-    loadOne("grass", "grass.jpg");
-    loadOne("road", "road.jpg");
-    loadOne("concrete", "concrete.jpg");
-}
-
-/** Clone a base texture with world-space tile size (units per tile). */
-function normTexForSize(baseTex, sizeX, sizeZ, tileSize) {
-    if (!baseTex) return null;
-    tileSize = tileSize || 4;
-    var t = baseTex.clone();
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(Math.max(0.5, sizeX / tileSize), Math.max(0.5, sizeZ / tileSize));
-    t.needsUpdate = true;
-    return t;
-}
-
-function makeNormMat(opts) {
-    opts = opts || {};
-    var conf = {
-        color: opts.color != null ? opts.color : 0xffffff
-    };
-    if (opts.map) conf.map = opts.map;
-    // Lambert responds to lights (brighter scene)
-    if (typeof THREE.MeshLambertMaterial !== "undefined") {
-        return new THREE.MeshLambertMaterial(conf);
-    }
-    return new THREE.MeshBasicMaterial(conf);
-}
-
-function addNormLights(scene) {
-    // Balanced lighting — not dark, not blown-out white
-    var amb = new THREE.AmbientLight(0xffffff, 0.42);
-    scene.add(amb);
-    var sun = new THREE.DirectionalLight(0xfff2d6, 0.55);
-    sun.position.set(50, 70, 25);
-    scene.add(sun);
-    var fill = new THREE.DirectionalLight(0xb8d4f0, 0.22);
-    fill.position.set(-40, 30, -30);
-    scene.add(fill);
-    var hemi = new THREE.HemisphereLight(0x9ec9f0, 0x5a8a5a, 0.28);
-    scene.add(hemi);
-}
-
-
-function buildNormCity(scene, tex) {
+function buildNormCity(scene) {
     _normWallColliders = [];
     _normFloorColliders = [];
-    tex = tex || _normTexCache || {};
-
-    // Ground — square tiles, not stretched
-    var gW = 400, gD = 400;
-    var groundMat = makeNormMat({
-        map: normTexForSize(tex.grass, gW, gD, 6),
-        color: tex.grass ? 0x7cb87c : 0x4a9a4a
-    });
-    groundMat.depthWrite = true;
-    groundMat.polygonOffset = true;
-    groundMat.polygonOffsetFactor = 1;
-    groundMat.polygonOffsetUnits = 1;
-    var ground = new THREE.Mesh(new THREE.BoxGeometry(gW, 1.2, gD), groundMat);
+    // Large ground
+    var ground = new THREE.Mesh(
+        new THREE.BoxGeometry(400, 1.2, 400),
+        new THREE.MeshLambertMaterial({ color: 0x2f6b3c })
+    );
     ground.position.y = -0.6;
-    ground.renderOrder = -1;
     scene.add(ground);
 
-    // Roads — separate texture clones so length/width don't stretch
-    function makeRoad(sx, sz, y) {
-        var mat = makeNormMat({
-            map: normTexForSize(tex.road, sx, sz, 5),
-            color: tex.road ? 0xffffff : 0x555555
-        });
-        var m = new THREE.Mesh(new THREE.BoxGeometry(sx, 0.16, sz), mat);
-        m.position.y = y;
-        scene.add(m);
-        return m;
-    }
-    makeRoad(400, 18, 0.12);
-    makeRoad(18, 400, 0.13);
+    // Road cross
+    var roadMat = new THREE.MeshLambertMaterial({ color: 0x374151 });
+    var roadX = new THREE.Mesh(new THREE.BoxGeometry(400, 0.15, 18), roadMat);
+    roadX.position.y = 0.02;
+    scene.add(roadX);
+    var roadZ = new THREE.Mesh(new THREE.BoxGeometry(18, 0.15, 400), roadMat);
+    roadZ.position.y = 0.025;
+    scene.add(roadZ);
 
-    // Sidewalks — tile scale matches long strips
-    function makeWalk(sx, sz, px, pz) {
-        var mat = makeNormMat({
-            map: normTexForSize(tex.concrete, sx, sz, 3),
-            color: tex.concrete ? 0xc8c8c8 : 0xa8a8a8
-        });
-        var m = new THREE.Mesh(new THREE.BoxGeometry(sx, 0.12, sz), mat);
-        m.position.set(px, 0.18, pz);
-        scene.add(m);
-    }
-    makeWalk(400, 6, 0, 12);
-    makeWalk(400, 6, 0, -12);
-    makeWalk(6, 400, 12, 0);
-    makeWalk(6, 400, -12, 0);
+    // Sidewalks
+    var walkMat = new THREE.MeshLambertMaterial({ color: 0x9ca3af });
+    [[0, 12], [0, -12], [12, 0], [-12, 0]].forEach(function (off) {
+        var w = new THREE.Mesh(
+            new THREE.BoxGeometry(off[0] === 0 ? 400 : 6, 0.12, off[1] === 0 ? 400 : 6),
+            walkMat
+        );
+        w.position.set(off[0], 0.04, off[1]);
+        scene.add(w);
+    });
 
+    // Hollow building: 4 separate exterior walls (not a solid cube).
+    // Optional door gap on the front so interiors are reachable.
     function addWallCollider(minX, maxX, minZ, maxZ) {
         _normWallColliders.push({ minX: minX, maxX: maxX, minZ: minZ, maxZ: maxZ });
     }
 
     function building(x, z, w, h, d, color) {
-        var wallT = 0.55;
-        // Wall material: scale UV to wall face size so concrete doesn't stretch
-        function wallMat(faceW, faceH) {
-            return makeNormMat({
-                map: normTexForSize(tex.concrete, faceW, faceH, 3.5),
-                color: color || 0x909090
-            });
-        }
-        var winMat = makeNormMat({ color: 0xa8d4ff });
-        var floorMat = makeNormMat({
-            map: normTexForSize(tex.concrete, Math.max(1, w - 1), Math.max(1, d - 1), 4),
-            color: 0xc4b8a8
-        });
-        var stairMat = makeNormMat({
-            map: normTexForSize(tex.concrete, 3, 4, 2.5),
-            color: 0xb0a898
-        });
-        var doorW = Math.min(3.2, w * 0.35);
-        var floorStep = 3.2;
+        var wallT = 0.55; // wall thickness
+        var mat = new THREE.MeshLambertMaterial({ color: color });
+        var winMat = new THREE.MeshLambertMaterial({ color: 0x93c5fd });
+        var floorMat = new THREE.MeshLambertMaterial({ color: 0x78716c });
+        var stairMat = new THREE.MeshLambertMaterial({ color: 0x57534e });
+        var doorW = Math.min(3.2, w * 0.35); // front door opening
+        var floorStep = 3.2; // height between floors
 
-        function wallBox(ww, hh, dd, px, py, pz, mat) {
-            var m = new THREE.Mesh(new THREE.BoxGeometry(ww, hh, dd), mat || wallMat(Math.max(ww, dd), hh));
+        function wallBox(ww, hh, dd, px, py, pz) {
+            var m = new THREE.Mesh(new THREE.BoxGeometry(ww, hh, dd), mat);
             m.position.set(px, py, pz);
             scene.add(m);
             return m;
         }
 
-        // 4 exterior walls
-        wallBox(wallT, h, d, x - w / 2 + wallT / 2, h / 2, z, wallMat(d, h));
+        // --- 4 walls (hollow interior) ---
+        wallBox(wallT, h, d, x - w / 2 + wallT / 2, h / 2, z);
         addWallCollider(x - w / 2, x - w / 2 + wallT, z - d / 2, z + d / 2);
 
-        wallBox(wallT, h, d, x + w / 2 - wallT / 2, h / 2, z, wallMat(d, h));
+        wallBox(wallT, h, d, x + w / 2 - wallT / 2, h / 2, z);
         addWallCollider(x + w / 2 - wallT, x + w / 2, z - d / 2, z + d / 2);
 
-        // Back wall
-        wallBox(w, h, wallT, x, h / 2, z - d / 2 + wallT / 2, wallMat(w, h));
+        wallBox(w, h, wallT, x, h / 2, z - d / 2 + wallT / 2);
         addWallCollider(x - w / 2, x + w / 2, z - d / 2, z - d / 2 + wallT);
 
-        // Front wall with door gap
+        var doorH = Math.min(3.2, Math.max(2.4, h * 0.22));
+        var sideSpan = (w - doorW) / 2;
         var frontZ = z + d / 2 - wallT / 2;
         var colZ0 = z + d / 2 - wallT;
         var colZ1 = z + d / 2;
-        var doorH = Math.min(2.6, h * 0.45);
-        var sideSpan = (w - doorW) / 2;
+
         if (sideSpan > 0.4) {
-            wallBox(sideSpan, h, wallT, x - w / 2 + sideSpan / 2, h / 2, frontZ, wallMat(sideSpan, h));
+            wallBox(sideSpan, h, wallT, x - w / 2 + sideSpan / 2, h / 2, frontZ);
             addWallCollider(x - w / 2, x - w / 2 + sideSpan, colZ0, colZ1);
-            wallBox(sideSpan, h, wallT, x + w / 2 - sideSpan / 2, h / 2, frontZ, wallMat(sideSpan, h));
+            wallBox(sideSpan, h, wallT, x + w / 2 - sideSpan / 2, h / 2, frontZ);
             addWallCollider(x + w / 2 - sideSpan, x + w / 2, colZ0, colZ1);
         } else {
-            wallBox(w, h, wallT, x, h / 2, frontZ, wallMat(w, h));
+            wallBox(w, h, wallT, x, h / 2, frontZ);
             addWallCollider(x - w / 2, x + w / 2, colZ0, colZ1);
         }
+
         var aboveH = h - doorH;
         if (aboveH > 0.3) {
-            wallBox(doorW, aboveH, wallT, x, doorH + aboveH / 2, frontZ, wallMat(doorW, aboveH));
+            wallBox(doorW, aboveH, wallT, x, doorH + aboveH / 2, frontZ);
             addWallCollider(x - doorW / 2, x + doorW / 2, colZ0, colZ1);
             _normWallColliders[_normWallColliders.length - 1].minY = doorH;
             _normWallColliders[_normWallColliders.length - 1].maxY = h;
             var lintel = new THREE.Mesh(
                 new THREE.BoxGeometry(doorW + 0.15, 0.25, wallT + 0.08),
-                makeNormMat({ color: 0x4a5568 })
+                new THREE.MeshLambertMaterial({ color: 0x1f2937 })
             );
             lintel.position.set(x, doorH + 0.1, frontZ);
             scene.add(lintel);
         }
 
+        // Interior bounds (inside the walls)
         var ix0 = x - w / 2 + wallT;
         var ix1 = x + w / 2 - wallT;
         var iz0 = z - d / 2 + wallT;
         var iz1 = z + d / 2 - wallT;
         var iW = ix1 - ix0;
         var iD = iz1 - iz0;
+
+        // Stair strip along left interior (simple ramp cubes)
         var stairW = Math.min(2.6, iW * 0.32);
         var stairX0 = ix0 + 0.05;
+        var stairX1 = stairX0 + stairW;
 
+        // --- FLOORS + RAMPS ---
+        // Full solid floor (no hole) + ramp that meets the floor at the top
         var floorCount = Math.max(1, Math.floor((h - 1.2) / floorStep));
         for (var fi = 1; fi <= floorCount; fi++) {
             var floorY = fi * floorStep;
             if (floorY >= h - 0.5) break;
+
             var slabH = 0.32;
+            // SOLID full interior floor — no cutout (fixes falling at 1st floor landing)
             var floorMesh = new THREE.Mesh(
                 new THREE.BoxGeometry(Math.max(0.5, iW - 0.15), slabH, Math.max(0.5, iD - 0.15)),
                 floorMat
@@ -6211,83 +6095,117 @@ function buildNormCity(scene, tex) {
                 maxZ: iz1 - 0.05
             });
 
-            // Simple ramp stairs
-            var rampLen = Math.min(6, iD * 0.55);
+            // Ramp from previous level up to this floor (meets solid floor at top)
+            var yBottom = (fi - 1) * floorStep;
+            var yTop = floorY;
+            var rise = yTop - yBottom;
+            var run = Math.max(3.5, Math.min(iD - 0.5, rise * 1.4));
+            var rampLen = Math.sqrt(run * run + rise * rise);
+            var rampAngle = Math.atan2(rise, run);
+            var rampZ0 = iz0 + 0.2;
+            var rampZ1 = rampZ0 + run;
+            if (rampZ1 > iz1 - 0.2) {
+                rampZ1 = iz1 - 0.2;
+                run = Math.max(1.5, rampZ1 - rampZ0);
+                rampLen = Math.sqrt(run * run + rise * rise);
+                rampAngle = Math.atan2(rise, run);
+            }
+
             var ramp = new THREE.Mesh(
-                new THREE.BoxGeometry(stairW, 0.28, rampLen),
+                new THREE.BoxGeometry(Math.max(0.8, stairW - 0.05), 0.28, rampLen),
                 stairMat
             );
-            ramp.position.set(stairX0 + stairW / 2, floorY - floorStep / 2, iz0 + rampLen / 2 + 0.3);
-            ramp.rotation.x = -Math.atan2(floorStep, rampLen);
+            ramp.position.set(
+                (stairX0 + stairX1) / 2,
+                (yBottom + yTop) / 2,
+                (rampZ0 + rampZ1) / 2
+            );
+            ramp.rotation.x = -rampAngle;
             scene.add(ramp);
+
             _normFloorColliders.push({
                 type: "ramp",
-                y0: floorY - floorStep,
-                y1: floorY,
-                minX: stairX0,
-                maxX: stairX0 + stairW,
-                minZ: iz0 + 0.2,
-                maxZ: iz0 + rampLen + 0.4,
-                len: rampLen
+                minX: stairX0 - 0.05,
+                maxX: stairX1 + 0.05,
+                minZ: rampZ0 - 0.05,
+                maxZ: rampZ1 + 0.05,
+                yAtMinZ: yBottom,
+                yAtMaxZ: yTop
             });
         }
 
-        // Simple windows (dark panels)
-        var floorsVis = Math.max(1, Math.floor(h / 3.2));
-        for (var wi = 0; wi < floorsVis; wi++) {
-            var wy = 1.4 + wi * 3.2;
-            if (wy > h - 0.8) break;
-            [-1, 1].forEach(function (side) {
-                var wx = x + side * (w / 2 - wallT / 2);
-                for (var wj = -1; wj <= 1; wj++) {
-                    var wz = z + wj * (d * 0.28);
-                    var win = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 1.1), winMat);
-                    win.position.set(wx, wy, wz);
+        // Roof (walkable top surface too)
+        var roof = new THREE.Mesh(
+            new THREE.BoxGeometry(w + 0.4, 0.35, d + 0.4),
+            new THREE.MeshLambertMaterial({ color: 0x1f2937 })
+        );
+        roof.position.set(x, h + 0.12, z);
+        scene.add(roof);
+        _normFloorColliders.push({
+            type: "flat",
+            y: h + 0.3,
+            minX: x - w / 2 + 0.2,
+            maxX: x + w / 2 - 0.2,
+            minZ: z - d / 2 + 0.2,
+            maxZ: z + d / 2 - 0.2
+        });
+
+        // Windows on left/right outer faces
+        var floors = Math.max(2, Math.floor(h / 3.2));
+        for (var f = 0; f < floors; f++) {
+            for (var side = 0; side < 2; side++) {
+                var wx = side === 0 ? x - w / 2 - 0.06 : x + w / 2 + 0.06;
+                for (var col = -1; col <= 1; col++) {
+                    var win = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.0, 1.0), winMat);
+                    win.position.set(wx, 1.3 + f * 3.0, z + col * Math.min(2.0, d * 0.25));
                     scene.add(win);
                 }
-            });
+            }
         }
     }
 
-    // Brighter building colors
-    var layouts = [
-        [14, 10, 12, 11, 10, 0x9a9a9a],
-        [-16, 12, 14, 14, 11, 0x8e8e8e],
-        [0, 22, 16, 10, 12, 0xa4a4a4],
-        [24, 18, 10, 16, 10, 0x949494],
-        [-22, 20, 12, 12, 12, 0x888888],
-        [20, -20, 14, 13, 10, 0x9e9e9e],
-        [-18, -18, 11, 11, 11, 0x858585],
-        [10, -24, 10, 15, 9, 0x969696],
-        [-8, 8, 9, 9, 9, 0x8c8c8c],
-        [28, -8, 11, 12, 10, 0x929292],
-        [-28, -6, 10, 13, 9, 0x8a8a8a],
-        [6, 30, 11, 12, 10, 0xa0a0a0]
+    // Realistic-scale city blocks (much larger than before)
+    var palette = [0x64748b, 0x475569, 0x94a3b8, 0x334155, 0x1e3a5f, 0x4b5563, 0x6b7280];
+    var plots = [
+        [28, 28, 18, 22, 16], [50, 30, 14, 36, 14], [70, 45, 20, 18, 18],
+        [35, 55, 16, 28, 14], [55, 70, 22, 40, 18], [80, 25, 12, 50, 12],
+        [-30, 28, 16, 24, 14], [-55, 40, 18, 32, 16], [-75, 55, 14, 20, 14],
+        [-40, 70, 20, 26, 18], [-60, 20, 12, 44, 12],
+        [30, -30, 18, 20, 16], [55, -45, 16, 34, 14], [75, -25, 20, 28, 18],
+        [40, -65, 14, 22, 14], [65, -70, 18, 38, 16],
+        [-28, -32, 16, 24, 14], [-50, -50, 20, 30, 18], [-72, -30, 14, 42, 12],
+        [-45, -70, 18, 18, 16], [-65, -65, 12, 26, 12],
+        [100, 40, 24, 48, 20], [-100, 35, 22, 36, 18], [95, -40, 20, 30, 16],
+        [-95, -45, 18, 34, 18], [20, 100, 16, 22, 16], [-25, 105, 18, 28, 14],
+        [30, -100, 20, 26, 18], [-35, -105, 16, 32, 14]
     ];
-    for (var bi = 0; bi < layouts.length; bi++) {
-        try {
-            var L = layouts[bi];
-            building(L[0], L[1], L[2], L[3], L[4], L[5]);
-        } catch (bErr) {
-            console.warn("[Azora] building failed", bi, bErr);
-        }
-    }
+    plots.forEach(function (p, i) {
+        building(p[0], p[1], p[2], p[3], p[4], palette[i % palette.length]);
+    });
 
-    // Street poles (simple, unchanged)
-    function pole(px, pz) {
-        var p = new THREE.Mesh(
-            new THREE.BoxGeometry(0.28, 5.5, 0.28),
-            makeNormMat({ color: 0x2a2a2a })
-        );
-        p.position.set(px, 2.75, pz);
-        scene.add(p);
-    }
-    var poleSpots = [[8, 8], [-8, 8], [8, -8], [-8, -8], [18, 0], [-18, 0], [0, 18], [0, -18]];
-    for (var pi = 0; pi < poleSpots.length; pi++) {
-        pole(poleSpots[pi][0], poleSpots[pi][1]);
+    // Plaza center low walls
+    var plaza = new THREE.Mesh(
+        new THREE.BoxGeometry(24, 0.3, 24),
+        new THREE.MeshLambertMaterial({ color: 0xd1d5db })
+    );
+    plaza.position.y = 0.1;
+    scene.add(plaza);
+
+    // Street lights
+    for (var s = -120; s <= 120; s += 40) {
+        [1, -1].forEach(function (side) {
+            var pole = new THREE.Mesh(
+                new THREE.BoxGeometry(0.35, 8, 0.35),
+                new THREE.MeshLambertMaterial({ color: 0x111827 })
+            );
+            pole.position.set(s, 4, side * 14);
+            scene.add(pole);
+            var lamp = new THREE.PointLight(0xfff3c4, 0.55, 35);
+            lamp.position.set(s, 7.5, side * 14);
+            scene.add(lamp);
+        });
     }
 }
-
 
 
 /* ===== Roleplay music (Mossy.mp3) ===== */
@@ -6372,266 +6290,251 @@ window.toggleNormMusicPause = toggleNormMusicPause;
 
 
 function startNormGameWorld(def) {
-    console.log("[Azora] Norm Game engine v41.1 balanced lights");
-    try { disposeNormWorld(false); } catch (e) {}
-    try { startNormMusic(); } catch (e) {}
+    disposeNormWorld(false);
+    startNormMusic();
 
-    var meName = (typeof getNormDisplayName === "function") ? getNormDisplayName() : "You";
-    _normPlayers = [{ id: "me", name: meName, isMe: true, isGuest: (typeof isNormGuest === "function" && isNormGuest()) }];
-    try { renderNormPlayerList(); } catch (e) {}
+    // Only YOU at start — other rows come from live presence
+    var meName = getNormDisplayName();
+    _normPlayers = [{
+        id: "me",
+        name: meName,
+        isMe: true,
+        isGuest: isNormGuest()
+    }];
+    renderNormPlayerList();
 
     var chat = document.getElementById("normChatMessages");
     if (chat) {
         chat.innerHTML = "";
-        try {
-            appendNormChat("System", "v41.1 · balanced lights · buildings · WASD · Space", true);
-        } catch (e) {}
-    }
-
-    if (!_normSession) {
-        _normSession = {
-            id: (def && def.id) || "azora-roleplay",
-            title: (def && def.title) || "Azora Roleplay",
-            roomPath: (def && def.roomPath) || "",
-            startedAt: Date.now()
-        };
+        appendNormChat("System", "Welcome to " + def.title + " · v42 · buildings + balanced lights. Only real players who join appear here.", true);
+        if (typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()) {
+            appendNormChat("System", "Live multiplayer is on — you should see other players move in near real-time when they join this room.", true);
+        } else {
+            appendNormChat("System", "Cloud not linked yet — you are the only live player here until Firebase is set up on the site.", true);
+        }
     }
 
     var container = document.getElementById("normGameCanvas");
-    if (!container) {
-        try { startNormPresence(def); } catch (e) {}
+    if (!container || typeof THREE === "undefined") {
+        if (container) {
+            container.innerHTML = "<p style='color:#fff;padding:20px;text-align:center;'>3D needs Three.js. Chat and the player list still work.</p>";
+        }
+        startNormPresence(def);
         return;
     }
-    if (typeof THREE === "undefined") {
-        container.innerHTML = "<p style='color:#fff;padding:24px;text-align:center;font-weight:bold;'>Three.js failed to load. Refresh with internet, then Join again.</p>";
-        try { startNormPresence(def); } catch (e) {}
-        return;
-    }
-
     while (container.firstChild) container.removeChild(container.firstChild);
 
-    container.style.cssText = "position:relative;display:block;width:100%;height:420px;min-height:420px;background:#5dade2;border-radius:12px;overflow:hidden;border:3px solid #1e60ff;";
-    var playEl = document.getElementById("normGamePlay");
-    if (playEl) {
-        playEl.style.display = "flex";
-        playEl.style.minHeight = "480px";
-    }
+    // Size after layout
+    var w = Math.max(container.clientWidth, 320);
+    var h = Math.max(container.clientHeight, 240);
 
-    var w = Math.max(container.clientWidth || 0, 640);
-    var h = Math.max(container.clientHeight || 0, 420);
+    _normScene = new THREE.Scene();
+    _normScene.background = new THREE.Color(0x7eb6e8);
+    _normScene.fog = new THREE.Fog(0x7eb6e8, 80, 220);
 
-    function finishStart(tex) {
-        tex = tex || {};
-        try {
-            _normScene = new THREE.Scene();
-            _normScene.background = new THREE.Color(0x7eb6e8);
-            try { addNormLights(_normScene); } catch (eL) {}
+    // Closer camera → avatar feels larger
+    _normCamera = new THREE.PerspectiveCamera(55, w / h, 0.1, 500);
+    _normCamera.position.set(0, 2.4, 4.2);
 
-            // Closer camera (like before the textures update)
-            _normCamera = new THREE.PerspectiveCamera(55, w / h, 0.1, 800);
-            _normCamera.position.set(0, 4.5, 9);
-            _normCamera.lookAt(0, 1.2, 0);
+    _normRenderer = new THREE.WebGLRenderer({ antialias: true });
+    _normRenderer.setSize(w, h);
+    _normRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    container.appendChild(_normRenderer.domElement);
 
-            _normRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-            _normRenderer.setClearColor(0x7eb6e8, 1);
-            _normRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-            _normRenderer.setSize(w, h, false);
-            var canvasEl = _normRenderer.domElement;
-            canvasEl.style.cssText = "display:block!important;width:100%!important;height:100%!important;position:absolute;left:0;top:0;";
-            container.appendChild(canvasEl);
+    // Balanced lights — readable, not washed out
+    _normScene.add(new THREE.AmbientLight(0xffffff, 0.42));
+    var sun = new THREE.DirectionalLight(0xfff2d6, 0.55);
+    sun.position.set(50, 70, 25);
+    _normScene.add(sun);
+    var fill = new THREE.DirectionalLight(0xb8d4f0, 0.22);
+    fill.position.set(-40, 30, -30);
+    _normScene.add(fill);
+    var hemi = new THREE.HemisphereLight(0x9ec9f0, 0x5a8a5a, 0.28);
+    _normScene.add(hemi);
 
-            // Apply anisotropy once renderer exists
-            ["grass", "road", "concrete"].forEach(function (k) {
-                if (tex[k] && _normRenderer.capabilities) {
-                    try {
-                        tex[k].anisotropy = Math.min(4, _normRenderer.capabilities.getMaxAnisotropy());
-                        tex[k].needsUpdate = true;
-                    } catch (e) {}
-                }
-            });
+    buildNormCity(_normScene);
 
-            // ONLY the real city (no extra cubes / pads) — textures applied inside
-            if (typeof buildNormCity === "function") {
-                buildNormCity(_normScene, tex);
+    _normLocalMesh = makeNormAvatar(getNormAvatarColors());
+    placeNormAvatarOnGround(_normLocalMesh, 0, 0, 0);
+    _normScene.add(_normLocalMesh);
+    _normRemoteMeshes = {};
+
+    // ---- Controls (orbit TEMPORARILY DISABLED) ----
+    // W = forward, S = reverse, A = turn left, D = turn right
+    // Camera locked behind character, slightly above
+    _normKeys = {};
+    _normSession.charYaw = 0;
+    _normSession.camYaw = 0;
+    _normSession.camPitch = 0.42;
+    _normSession.camDist = 5.0;
+    _normSession.camHeight = 2.6;
+    _normSession.moveX = 0;
+    _normSession.moveZ = 0;
+    _normSession.orbitX = 0;
+    _normSession.orbitY = 0;
+    _normSession.orbitEnabled = false;
+    _normSession.velY = 0;
+    _normSession.onGround = true;
+    _normSession.jumpQueued = false;
+
+    // Prevent Space from activating focused buttons (was reloading/rejoining the game)
+    try {
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    } catch (e) {}
+
+    function onKey(e, down) {
+        var k = (e.key || "").toLowerCase();
+        var code = e.code || "";
+
+        // Always eat Space while in Norm Game — stops page scroll + button "click" reload bug
+        if (k === " " || k === "spacebar" || code === "Space") {
+            if (e.preventDefault) e.preventDefault();
+            if (e.stopPropagation) e.stopPropagation();
+            if (down) {
+                _normSession.jumpQueued = true;
             }
-
-            // Avatar only
-            try {
-                _normLocalMesh = makeNormAvatar(typeof getNormAvatarColors === "function" ? getNormAvatarColors() : null);
-            } catch (e) { _normLocalMesh = null; }
-            if (!_normLocalMesh) {
-                _normLocalMesh = new THREE.Group();
-                var body = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.6), new THREE.MeshBasicMaterial({ color: 0x1e60ff }));
-                body.position.y = 1;
-                _normLocalMesh.add(body);
-                var head = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), new THREE.MeshBasicMaterial({ color: 0xffcc00 }));
-                head.position.y = 2.35;
-                _normLocalMesh.add(head);
-            }
-            try {
-                if (typeof placeNormAvatarOnGround === "function") {
-                    placeNormAvatarOnGround(_normLocalMesh, 0, 0, 0);
-                } else {
-                    _normLocalMesh.position.set(0, 0.05, 0);
-                }
-            } catch (e) {
-                _normLocalMesh.position.set(0, 0.05, 0);
-            }
-            _normScene.add(_normLocalMesh);
-            _normRemoteMeshes = {};
-
-            _normRenderer.render(_normScene, _normCamera);
-            console.log("[Azora] textures applied, children:", _normScene.children.length);
-        } catch (err) {
-            console.error("[Azora] 3D start failed:", err);
-            container.innerHTML = "<p style='color:#fff;padding:20px;text-align:center;'>3D failed: " +
-                String((err && err.message) || err) + "<br>You can still Leave.</p>";
-            try { startNormPresence(def); } catch (e) {}
             return;
         }
 
-        _normKeys = {};
-        // Closer follow camera
-        _normSession.charYaw = 0;
-        _normSession.camDist = 7;
-        _normSession.camHeight = 3.2;
-        _normSession.moveX = 0;
-        _normSession.moveZ = 0;
-        _normSession.velY = 0;
-        _normSession.onGround = true;
-        _normSession.jumpQueued = false;
-
-        function onKeyDown(e) {
-            if (!_normSession) return;
-            var k = (e.key || "").toLowerCase();
-            if (k === "escape") {
-                e.preventDefault();
-                requestLeaveNormGame();
-                return;
-            }
-            if (k === " " || e.code === "Space") {
-                e.preventDefault();
-                _normSession.jumpQueued = true;
-                return;
-            }
-            if (k === "w" || k === "a" || k === "s" || k === "d" || k === "p") {
-                _normKeys[k] = true;
-                e.preventDefault();
-            }
+        if (["w", "a", "s", "d", "p"].indexOf(k) !== -1) {
+            _normKeys[k] = down;
+            if (e.preventDefault) e.preventDefault();
         }
-        function onKeyUp(e) {
-            var k = (e.key || "").toLowerCase();
-            if (k === "w" || k === "a" || k === "s" || k === "d" || k === "p") _normKeys[k] = false;
+        if (down && e.key === "Escape") {
+            requestLeaveNormGame();
         }
-        window.addEventListener("keydown", onKeyDown, true);
-        window.addEventListener("keyup", onKeyUp, true);
-        _normSession._kd = onKeyDown;
-        _normSession._ku = onKeyUp;
-
-        try { setupNormJoysticks(); } catch (e) {}
-        try { setupNormJumpButton(); } catch (e) {}
-
-        function animate() {
-            _normAnim = requestAnimationFrame(animate);
-            if (!_normLocalMesh || !_normRenderer || !_normCamera || !_normSession) return;
-            try {
-                if (!_normKeys) _normKeys = {};
-                var sp = 0.2, turnSp = 0.05;
-                if (_normKeys["a"]) _normSession.charYaw += turnSp;
-                if (_normKeys["d"]) _normSession.charYaw -= turnSp;
-                _normSession.charYaw -= (_normSession.moveX || 0) * 0.05;
-                _normLocalMesh.rotation.y = _normSession.charYaw;
-
-                var yaw = _normSession.charYaw || 0;
-                var fwdX = Math.sin(yaw), fwdZ = Math.cos(yaw);
-                var throttle = 0;
-                if (_normKeys["w"] || _normKeys["p"]) throttle += 1;
-                if (_normKeys["s"]) throttle -= 1;
-                throttle += (_normSession.moveZ || 0);
-                if (throttle > 1) throttle = 1;
-                if (throttle < -1) throttle = -1;
-                if (Math.abs(throttle) > 0.001) {
-                    _normLocalMesh.position.x += fwdX * throttle * sp;
-                    _normLocalMesh.position.z += fwdZ * throttle * sp;
-                }
-                if (typeof resolveNormWallCollisions === "function") {
-                    try { resolveNormWallCollisions(_normLocalMesh); } catch (e) {}
-                }
-                _normLocalMesh.position.x = Math.max(-90, Math.min(90, _normLocalMesh.position.x));
-                _normLocalMesh.position.z = Math.max(-90, Math.min(90, _normLocalMesh.position.z));
-
-                if (_normSession.jumpQueued) {
-                    _normSession.jumpQueued = false;
-                    if (_normSession.onGround) {
-                        _normSession.velY = 0.34;
-                        _normSession.onGround = false;
-                    }
-                }
-                _normSession.velY = (_normSession.velY || 0) - 0.018;
-                _normLocalMesh.position.y += _normSession.velY;
-                var supportY = 0.05;
-                if (typeof getNormSupportY === "function") {
-                    try {
-                        supportY = getNormSupportY(_normLocalMesh.position.x, _normLocalMesh.position.z, _normLocalMesh.position.y);
-                    } catch (e) {}
-                }
-                if (_normLocalMesh.position.y <= supportY) {
-                    _normLocalMesh.position.y = supportY;
-                    _normSession.velY = 0;
-                    _normSession.onGround = true;
-                } else {
-                    _normSession.onGround = false;
-                }
-
-                var dist = _normSession.camDist || 7;
-                var height = _normSession.camHeight || 3.2;
-                var idealX = _normLocalMesh.position.x - Math.sin(yaw) * dist;
-                var idealZ = _normLocalMesh.position.z - Math.cos(yaw) * dist;
-                var idealY = _normLocalMesh.position.y + height;
-                _normCamera.position.x += (idealX - _normCamera.position.x) * 0.22;
-                _normCamera.position.y += (idealY - _normCamera.position.y) * 0.22;
-                _normCamera.position.z += (idealZ - _normCamera.position.z) * 0.22;
-                _normCamera.lookAt(_normLocalMesh.position.x, _normLocalMesh.position.y + 1.4, _normLocalMesh.position.z);
-
-                if (_normSession._smoothRemotes) try { _normSession._smoothRemotes(); } catch (e) {}
-                _normRenderer.render(_normScene, _normCamera);
-            } catch (animErr) {
-                console.error("[Azora] animate error", animErr);
-            }
-        }
-        animate();
-
-        function fitNormCanvas() {
-            if (!_normRenderer || !_normCamera || !container) return;
-            var rw = Math.max(container.clientWidth || 0, 320);
-            var rh = Math.max(container.clientHeight || 0, 280);
-            if (rh < 200) {
-                rh = 420;
-                container.style.height = "420px";
-            }
-            _normCamera.aspect = rw / rh;
-            _normCamera.updateProjectionMatrix();
-            _normRenderer.setSize(rw, rh, false);
-            _normRenderer.domElement.style.width = "100%";
-            _normRenderer.domElement.style.height = "100%";
-            _normRenderer.render(_normScene, _normCamera);
-        }
-        setTimeout(fitNormCanvas, 50);
-        setTimeout(fitNormCanvas, 250);
-        window.addEventListener("resize", fitNormCanvas);
-        _normSession._onResize = fitNormCanvas;
-
-        try { updateNormHudCount(); } catch (e) {}
-        try { startNormPresence(def); } catch (e) {}
     }
+    _normSession._kd = function (e) { onKey(e, true); };
+    _normSession._ku = function (e) { onKey(e, false); };
+    // capture:true so we beat buttons/links that would fire on Space
+    window.addEventListener("keydown", _normSession._kd, true);
+    window.addEventListener("keyup", _normSession._ku, true);
 
-    loadNormTextures(function (tex) {
-        finishStart(tex || {});
-    });
+    // Joysticks + mobile jump
+    setupNormJoysticks();
+    setupNormJumpButton();
+
+    function animate() {
+        _normAnim = requestAnimationFrame(animate);
+        if (!_normLocalMesh || !_normRenderer || !_normCamera) return;
+
+        var sp = 0.18;
+        var turnSp = 0.045;
+
+        // --- Turn: A left, D right (also left stick X) ---
+        if (_normKeys["a"]) _normSession.charYaw += turnSp;
+        if (_normKeys["d"]) _normSession.charYaw -= turnSp;
+        _normSession.charYaw -= (_normSession.moveX || 0) * 0.05;
+
+        // Character faces charYaw (mesh forward matches movement)
+        _normLocalMesh.rotation.y = _normSession.charYaw;
+
+        // Forward along facing: in our convention rotation.y with atan2(dx,dz)
+        // local forward on XZ = (sin(yaw), cos(yaw))
+        var yaw = _normSession.charYaw || 0;
+        var fwdX = Math.sin(yaw);
+        var fwdZ = Math.cos(yaw);
+
+        // --- Move: W forward, S reverse (also left stick Y) ---
+        var throttle = 0;
+        if (_normKeys["w"] || _normKeys["p"]) throttle += 1;
+        if (_normKeys["s"]) throttle -= 1;
+        throttle += (_normSession.moveZ || 0);
+        if (throttle > 1) throttle = 1;
+        if (throttle < -1) throttle = -1;
+
+        if (Math.abs(throttle) > 0.001) {
+            _normLocalMesh.position.x += fwdX * throttle * sp;
+            _normLocalMesh.position.z += fwdZ * throttle * sp;
+        }
+
+        // Can't walk through building walls (hollow shells, solid walls)
+        if (typeof resolveNormWallCollisions === "function") {
+            resolveNormWallCollisions(_normLocalMesh);
+        }
+
+        _normLocalMesh.position.x = Math.max(-180, Math.min(180, _normLocalMesh.position.x));
+        _normLocalMesh.position.z = Math.max(-180, Math.min(180, _normLocalMesh.position.z));
+
+        // --- Jump + floors/ramps ---
+        var gravity = 0.018;
+        var jumpPower = 0.32;
+        if (_normSession.jumpQueued) {
+            _normSession.jumpQueued = false;
+            if (_normSession.onGround) {
+                _normSession.velY = jumpPower;
+                _normSession.onGround = false;
+            }
+        }
+        _normSession.velY = (_normSession.velY || 0) - gravity;
+        _normLocalMesh.position.y += _normSession.velY;
+
+        var supportY = getNormSupportY(
+            _normLocalMesh.position.x,
+            _normLocalMesh.position.z,
+            _normLocalMesh.position.y
+        );
+        // Stick to ramp while walking (even if vel small)
+        if (_normLocalMesh.position.y <= supportY + 0.08 && _normSession.velY <= 0.02) {
+            _normLocalMesh.position.y = supportY;
+            _normSession.velY = 0;
+            _normSession.onGround = true;
+        } else if (_normLocalMesh.position.y < supportY - 0.01 && _normSession.velY <= 0) {
+            _normLocalMesh.position.y = supportY;
+            _normSession.velY = 0;
+            _normSession.onGround = true;
+        } else {
+            _normSession.onGround = false;
+        }
+
+        // --- Camera LOCKED behind character, slightly above (orbit off) ---
+        var target = _normLocalMesh.position;
+        var dist = _normSession.camDist || 5.0;
+        var height = _normSession.camHeight || 2.6;
+        // Behind = opposite of facing
+        var idealX = target.x - fwdX * dist;
+        var idealZ = target.z - fwdZ * dist;
+        var idealY = target.y + height;
+
+        var lerp = 0.18;
+        _normCamera.position.x += (idealX - _normCamera.position.x) * lerp;
+        _normCamera.position.y += (idealY - _normCamera.position.y) * lerp;
+        _normCamera.position.z += (idealZ - _normCamera.position.z) * lerp;
+        _normCamera.lookAt(target.x, target.y + 1.5, target.z);
+
+        // Live multiplayer: ease other players toward their latest positions
+        if (_normSession && typeof _normSession._smoothRemotes === "function") {
+            _normSession._smoothRemotes();
+        }
+        // Keep publishing while we move so others see us in near real-time
+        if (typeof publishSelf !== "function") { /* local */ }
+        try {
+            if (_normSession && Math.abs((_normKeys && (_normKeys.w || _normKeys.s || _normKeys.a || _normKeys.d)) ? 1 : 0)) {
+                /* interval handles publish */
+            }
+        } catch (e) {}
+
+        _normRenderer.render(_normScene, _normCamera);
+    }
+    animate();
+
+    // Resize observer
+    try {
+        _normSession._onResize = function () {
+            if (!_normRenderer || !_normCamera || !container) return;
+            var ww = Math.max(container.clientWidth, 1);
+            var hh = Math.max(container.clientHeight, 1);
+            _normCamera.aspect = ww / hh;
+            _normCamera.updateProjectionMatrix();
+            _normRenderer.setSize(ww, hh);
+        };
+        window.addEventListener("resize", _normSession._onResize);
+        setTimeout(_normSession._onResize, 100);
+    } catch (e) {}
+
+    updateNormHudCount();
+    startNormPresence(def);
 }
-
-
-
 
 function updateNormHudCount() {
     var hud = document.getElementById("normHudPlayers");
@@ -6910,30 +6813,26 @@ function disposeNormWorld(keepSession) {
 }
 
 function leaveNormGame() {
-    try { stopNormMusic(); } catch (e) {}
+    stopNormMusic();
     try {
         var st = document.querySelector(".norm-game-stage");
         if (st) st.classList.remove("show-joysticks");
         var layer = document.getElementById("normJoystickLayer");
         if (layer) layer.style.display = "none";
     } catch (e) {}
-    try { disposeNormWorld(false); } catch (e) {}
+    disposeNormWorld(false);
     _normSession = null;
     _normPlayers = [];
-    _normKeys = {};
-    try {
-        var ov = document.getElementById("normGameOverlay");
-        if (ov) { ov.style.display = "none"; ov.style.visibility = "hidden"; }
-        var play = document.getElementById("normGamePlay");
-        if (play) play.style.display = "none";
-        var loading = document.getElementById("normGameLoading");
-        if (loading) loading.style.display = "flex";
-        var fill = document.getElementById("normLoadFill");
-        if (fill) fill.style.width = "0%";
-        var confEl = document.getElementById("normLeaveConfirm");
-        if (confEl) confEl.style.display = "none";
-    } catch (e) {}
-    console.log("[Azora] Left Norm Game");
+    var ov = document.getElementById("normGameOverlay");
+    if (ov) ov.style.display = "none";
+    var play = document.getElementById("normGamePlay");
+    if (play) play.style.display = "none";
+    var loading = document.getElementById("normGameLoading");
+    if (loading) loading.style.display = "flex";
+    var fill = document.getElementById("normLoadFill");
+    if (fill) fill.style.width = "0%";
+    var conf = document.getElementById("normLeaveConfirm");
+    if (conf) conf.style.display = "none";
 }
 
 window.joinNormGame = joinNormGame;
