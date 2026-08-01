@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v55.1 materials wood3 + leaf","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v55.2 roleplay trees leaf+wood1/3","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -7811,6 +7811,141 @@ function buildNormCity(scene, tex) {
             scene.add(lamp);
         });
     }
+
+    // ---- Trees (Roleplay only) ----
+    // Ground only. Never on roads, sidewalks, spawn/plaza, buildings, or floating in the air.
+    // Trunk: wood1 or wood3 only (not wood2). Foliage: leaf.jpg
+    (function plantRoleplayTrees() {
+        var ROAD_HALF = 10;       // road is 18 wide → keep clear of ±9 + margin
+        var WALK_HALF = 16;       // sidewalks sit ~12 from center, ~6 wide → clear ±15ish
+        var SPAWN_HALF = 16;      // plaza 24×24 + margin — no trees on spawn
+        var BUILD_MARGIN = 4;     // keep clear of building walls
+        var TREE_RADIUS = 2.2;    // foliage footprint
+
+        function onRoadOrWalk(x, z) {
+            // Cross roads along X and Z
+            if (Math.abs(z) < ROAD_HALF) return true;
+            if (Math.abs(x) < ROAD_HALF) return true;
+            // Sidewalk strips parallel to roads
+            if (Math.abs(z) >= 9 && Math.abs(z) <= WALK_HALF && Math.abs(x) > ROAD_HALF) return true;
+            if (Math.abs(x) >= 9 && Math.abs(x) <= WALK_HALF && Math.abs(z) > ROAD_HALF) return true;
+            return false;
+        }
+
+        function onSpawn(x, z) {
+            return Math.abs(x) < SPAWN_HALF && Math.abs(z) < SPAWN_HALF;
+        }
+
+        function hitsBuilding(x, z) {
+            for (var i = 0; i < plots.length; i++) {
+                var p = plots[i];
+                var bx = p[0], bz = p[1], bw = p[2], bd = p[4];
+                var halfW = bw / 2 + BUILD_MARGIN + TREE_RADIUS;
+                var halfD = bd / 2 + BUILD_MARGIN + TREE_RADIUS;
+                if (Math.abs(x - bx) < halfW && Math.abs(z - bz) < halfD) return true;
+            }
+            return false;
+        }
+
+        function isValidTreeSpot(x, z) {
+            if (onSpawn(x, z)) return false;
+            if (onRoadOrWalk(x, z)) return false;
+            if (hitsBuilding(x, z)) return false;
+            // Stay on the ground plate
+            if (Math.abs(x) > 180 || Math.abs(z) > 180) return false;
+            return true;
+        }
+
+        // Trunk material: wood1 preferred, else wood3 — never wood2
+        var trunkMat;
+        try {
+            var trunkKey = tex.wood1 ? "wood1" : (tex.wood3 ? "wood3" : null);
+            if (trunkKey) {
+                trunkMat = makeNormMatShared(trunkKey, 0xc4a574, 2, 8, 1);
+            } else {
+                trunkMat = new THREE.MeshLambertMaterial({ color: 0x6b4226 });
+            }
+        } catch (e) {
+            trunkMat = new THREE.MeshLambertMaterial({ color: 0x6b4226 });
+        }
+
+        // Leaf canopy material
+        var leafMat;
+        try {
+            if (tex.leaf) {
+                var lt = tex.leaf;
+                try {
+                    if (lt.clone) lt = lt.clone();
+                    lt.wrapS = lt.wrapT = THREE.RepeatWrapping;
+                    lt.repeat.set(2, 2);
+                } catch (eL) {}
+                leafMat = new THREE.MeshLambertMaterial({ map: lt, color: 0xc8e6b8 });
+            } else {
+                leafMat = new THREE.MeshLambertMaterial({ color: 0x2ecc71 });
+            }
+        } catch (e) {
+            leafMat = new THREE.MeshLambertMaterial({ color: 0x2ecc71 });
+        }
+
+        function addTree(x, z, scale) {
+            scale = scale || 1;
+            var group = new THREE.Group();
+            group.name = "roleplayTree";
+
+            // Trunk sits on the ground (y = 0 foot)
+            var trunkH = 4.2 * scale;
+            var trunkW = 0.55 * scale;
+            var trunk = new THREE.Mesh(
+                new THREE.BoxGeometry(trunkW, trunkH, trunkW),
+                trunkMat
+            );
+            trunk.position.y = trunkH / 2; // feet on ground — never floating
+            group.add(trunk);
+
+            // Leaf canopy — several blocks for fuller look, still on top of trunk
+            var canopyY = trunkH + 0.8 * scale;
+            var sizes = [
+                [2.4, 2.0, 2.4],
+                [1.8, 1.6, 1.8],
+                [1.5, 1.4, 1.5]
+            ];
+            var offsets = [
+                [0, 0, 0],
+                [0.6 * scale, 0.5 * scale, 0.3 * scale],
+                [-0.5 * scale, 0.35 * scale, -0.4 * scale]
+            ];
+            for (var c = 0; c < sizes.length; c++) {
+                var leaf = new THREE.Mesh(
+                    new THREE.BoxGeometry(sizes[c][0] * scale, sizes[c][1] * scale, sizes[c][2] * scale),
+                    leafMat
+                );
+                leaf.position.set(offsets[c][0], canopyY + offsets[c][1], offsets[c][2]);
+                group.add(leaf);
+            }
+
+            group.position.set(x, 0, z); // planted in the ground
+            scene.add(group);
+        }
+
+        // Candidate spots on a staggered grid (deterministic, no random floaters)
+        var planted = 0;
+        var target = 48;
+        var spacing = 18;
+        for (var gz = -160; gz <= 160 && planted < target; gz += spacing) {
+            for (var gx = -160; gx <= 160 && planted < target; gx += spacing) {
+                // Stagger every other row
+                var ox = gx + ((Math.floor(gz / spacing) % 2) ? spacing * 0.5 : 0);
+                // Small deterministic offset so it doesn't look like a perfect grid
+                var jx = ox + ((Math.abs(gz * 3 + gx * 7) % 7) - 3) * 0.6;
+                var jz = gz + ((Math.abs(gx * 5 + gz * 2) % 5) - 2) * 0.6;
+                if (!isValidTreeSpot(jx, jz)) continue;
+                // Extra spacing check vs already placed (simple skip if too close to previous in same pass)
+                var sc = 0.85 + ((Math.abs(Math.floor(jx) + Math.floor(jz)) % 5) * 0.08);
+                addTree(jx, jz, sc);
+                planted++;
+            }
+        }
+    })();
 }
 
 /** Alternate Norm Game worlds (park, parkour, cafe, islands) */
