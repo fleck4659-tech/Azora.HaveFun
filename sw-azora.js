@@ -1,8 +1,8 @@
 /* Azora main app service worker — v48.1 */
-var CACHE = "azora-app-v52-avatar-colors";
+var CACHE = "azora-app-v53-gender";
 var ASSETS = [
   "./", "./index.html", "./style.css",
-  "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./Mossy.mp3",
+  "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./female_smile.png", "./Mossy.mp3",
   "./grass.jpg", "./road.jpg", "./concrete.jpg", "./wood1.jpg", "./wood2.jpg", "./walking.mp3", "./jumping.mp3", "./character_reset.mp3", "./notifcation.mp3", "./click_buttons.mp3"
 ];
 self.addEventListener("install", function (e) {

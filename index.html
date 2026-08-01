@@ -86,6 +86,22 @@
         <input id="password" type="password" placeholder="Password">
         <input id="confirmPassword" type="password" placeholder="Confirm Password">
         <input id="email" type="email" placeholder="Email (strongly recommended)">
+        
+        <div class="gender-picker" id="signupGenderPicker" role="group" aria-label="Avatar gender">
+            <span class="gender-picker-label">Avatar style</span>
+            <div class="gender-picker-row">
+                <label class="gender-option">
+                    <input type="radio" name="azoraGender" value="boy" checked>
+                    <span class="gender-chip">👦 Boy</span>
+                </label>
+                <label class="gender-option">
+                    <input type="radio" name="azoraGender" value="girl">
+                    <span class="gender-chip">👧 Girl</span>
+                </label>
+            </div>
+            <small class="gender-hint">Girls get hair, a different face, and a pink-style torso. You can still recolor limbs later.</small>
+        </div>
+
         <label class="checkbox">
           <input type="checkbox" id="tosCheckbox">
           I agree to the <a href="#" onclick="openTOS(event)" style="color:#1e60ff;text-decoration:underline;">Terms of Service</a>
@@ -296,6 +312,21 @@
     <div id="avatar3d-canvas"></div>
     <div class="customizer-controls">
         <h3>My Avatar</h3>
+
+        <div class="gender-picker customizer-gender" id="customizerGenderPicker">
+            <span class="gender-picker-label">Gender</span>
+            <div class="gender-picker-row">
+                <label class="gender-option">
+                    <input type="radio" name="avatarGenderCustom" value="boy" onchange="onCustomizerGenderChange()">
+                    <span class="gender-chip">👦 Boy</span>
+                </label>
+                <label class="gender-option">
+                    <input type="radio" name="avatarGenderCustom" value="girl" onchange="onCustomizerGenderChange()">
+                    <span class="gender-chip">👧 Girl</span>
+                </label>
+            </div>
+        </div>
+
         <label>Head:</label>
         <input type="color" id="colorHead" value="#ffcc00" oninput="updateAvatarColors()" onchange="updateAvatarColors()">
         <label>Torso:</label>
@@ -687,7 +718,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=52"></script>
+<script src="script.js?v=53"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {

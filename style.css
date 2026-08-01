@@ -2823,3 +2823,86 @@ button.azora-temp-disabled:hover{transform:none!important;box-shadow:none!import
     display: none !important;
     pointer-events: none !important;
 }
+
+
+/* Avatar gender picker */
+.gender-picker {
+    text-align: left;
+    margin: 10px 0 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 2px solid rgba(30, 96, 255, 0.35);
+    background: rgba(30, 96, 255, 0.06);
+}
+.gender-picker-label {
+    display: block;
+    font-size: 13px;
+    font-weight: bold;
+    color: #1e60ff !important;
+    margin-bottom: 6px;
+}
+.gender-picker-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.gender-option {
+    flex: 1;
+    min-width: 110px;
+    cursor: pointer;
+    margin: 0 !important;
+}
+.gender-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    width: 0;
+    height: 0;
+}
+.gender-chip {
+    display: block;
+    text-align: center;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 2px solid #cbd5e1;
+    background: #fff;
+    color: #334155 !important;
+    font-weight: bold;
+    font-size: 14px;
+    transition: 0.15s ease;
+}
+.gender-option input:checked + .gender-chip {
+    border-color: #1e60ff;
+    background: linear-gradient(180deg, #dbeafe, #bfdbfe);
+    color: #1e40af !important;
+    box-shadow: 0 0 0 2px rgba(30, 96, 255, 0.25);
+}
+.gender-hint {
+    display: block;
+    margin-top: 8px;
+    font-size: 11px;
+    color: #64748b !important;
+    line-height: 1.35;
+}
+.customizer-gender {
+    margin: 0 0 10px;
+    padding: 8px;
+}
+.customizer-gender .gender-chip {
+    font-size: 12px;
+    padding: 8px;
+}
+html[data-theme="dark"] .gender-picker {
+    background: rgba(96, 165, 250, 0.08);
+    border-color: #475569;
+}
+html[data-theme="dark"] .gender-chip {
+    background: #1e2937;
+    border-color: #475569;
+    color: #e2e8f0 !important;
+}
+html[data-theme="dark"] .gender-option input:checked + .gender-chip {
+    background: #1e3a5f;
+    border-color: #60a5fa;
+    color: #fff !important;
+}

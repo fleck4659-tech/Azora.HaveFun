@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v52 avatar color fix","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v53 avatar gender","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -26,6 +26,63 @@ const database = {
 let currentSearchTab = "users";
 
 var AZORA_TEMP_DISABLE_CREATE = true;
+
+// ============================================================
+// AVATAR GENDER — boy (default) / girl (hair + face + torso style)
+// ============================================================
+function getSelectedSignupGender() {
+    var el = document.querySelector('input[name="azoraGender"]:checked');
+    if (el && (el.value === "girl" || el.value === "female")) return "girl";
+    return "boy";
+}
+
+function defaultAvatarForGender(gender) {
+    gender = (gender === "girl" || gender === "female") ? "girl" : "boy";
+    if (gender === "girl") {
+        return {
+            gender: "girl",
+            head: "#ffcc99",
+            torso: "#ff6eb4",
+            leftArm: "#ffcc99",
+            rightArm: "#ffcc99",
+            leftLeg: "#c084fc",
+            rightLeg: "#c084fc",
+            hair: "#4a3728",
+            face: "female"
+        };
+    }
+    return {
+        gender: "boy",
+        head: "#ffcc00",
+        torso: "#1e60ff",
+        leftArm: "#ffcc00",
+        rightArm: "#ffcc00",
+        leftLeg: "#00ebd4",
+        rightLeg: "#00ebd4",
+        hair: "#3b2f2f",
+        face: "male"
+    };
+}
+
+function getAvatarGender() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc && acc.avatar && (acc.avatar.gender === "girl" || acc.avatar.gender === "female")) return "girl";
+        if (acc && (acc.gender === "girl" || acc.gender === "female")) return "girl";
+    } catch (e) {}
+    return "boy";
+}
+
+function faceTextureUrlForGender(gender) {
+    return (gender === "girl" || gender === "female") ? "female_smile.png" : "Smile.png";
+}
+
+window.getSelectedSignupGender = getSelectedSignupGender;
+window.defaultAvatarForGender = defaultAvatarForGender;
+window.getAvatarGender = getAvatarGender;
+window.faceTextureUrlForGender = faceTextureUrlForGender;
+
+
 var AZORA_TEMP_DISABLE_AZAFN = true;
 function showDisabledFeatureTip(event, btnEl) {
     var tip = document.getElementById("azoraDisabledTip");
@@ -872,21 +929,26 @@ function continueAsGuest() {
     // Guests also get a public User ID — never Aza: 0 (reserved for owner Azora)
     var userId = (typeof allocateNextUserId === "function") ? allocateNextUserId() : "Aza: 1";
 
-    var account = {
-        isGuest: true,
-        username: "",
-        displayName: "Guest",
-        guestId: sessionId,
-        userId: userId,
-        avatar: {
+    var gender = (typeof getSelectedSignupGender === "function") ? getSelectedSignupGender() : "boy";
+    var avatar = (typeof defaultAvatarForGender === "function") ? defaultAvatarForGender(gender) : {
             head: "#ffcc00",
             torso: "#1e60ff",
             leftArm: "#ffcc00",
             rightArm: "#ffcc00",
             leftLeg: "#00ebd4",
             rightLeg: "#00ebd4",
-            face: "default"
-        }
+            face: "default",
+            gender: "boy"
+        };
+
+    var account = {
+        isGuest: true,
+        username: "",
+        displayName: "Guest",
+        guestId: sessionId,
+        userId: userId,
+        gender: gender,
+        avatar: avatar
     };
 
     registry.push({
@@ -1045,21 +1107,25 @@ function setLoggedInAccount(account) {
 function finishCreateAccount(username, password, userId, email) {
     migrateLegacyAccount();
     var map = getSavedAccounts();
-    var account = {
-        username: username,
-        password: password,
-        userId: userId,
-        email: email ? String(email).trim().toLowerCase() : "",
-        isGuest: false,
-        avatar: {
+    var gender = (typeof getSelectedSignupGender === "function") ? getSelectedSignupGender() : "boy";
+    var avatar = (typeof defaultAvatarForGender === "function") ? defaultAvatarForGender(gender) : {
             head: "#ffcc00",
             torso: "#1e60ff",
             leftArm: "#ffcc00",
             rightArm: "#ffcc00",
             leftLeg: "#00ebd4",
             rightLeg: "#00ebd4",
-            face: "default"
-        },
+            face: "default",
+            gender: "boy"
+        };
+    var account = {
+        username: username,
+        password: password,
+        userId: userId,
+        email: email ? String(email).trim().toLowerCase() : "",
+        isGuest: false,
+        gender: gender,
+        avatar: avatar,
         createdAt: Date.now()
     };
     map[username] = account;
@@ -1785,11 +1851,16 @@ function makeBox(w, h, d, color) {
     );
 }
 
-function buildAvatarFace(headColor) {
-    // Flat 2D face only — Smile.png decal (no 3D eyes/mouth).
-    // Smile.png is a transparent PNG (black smile only). Plane stays hidden until texture loads.
+function buildAvatarFace(headColor, gender) {
+    // Flat 2D face decal — Smile.png (boy) or female_smile.png (girl).
+    // Transparent PNG. Plane stays hidden until texture loads.
+    gender = gender || (typeof getAvatarGender === "function" ? getAvatarGender() : "boy");
+    var faceUrl = (typeof faceTextureUrlForGender === "function")
+        ? faceTextureUrlForGender(gender)
+        : ((gender === "girl" || gender === "female") ? "female_smile.png" : "Smile.png");
     var face = new THREE.Group();
     face.name = "face";
+    face.userData.gender = gender;
 
     var mat = new THREE.MeshBasicMaterial({
         color: 0xffffff,
@@ -1884,9 +1955,9 @@ function buildAvatarFace(headColor) {
         }
     }
 
-    loadWithThree("Smile.png", function () {
+    loadWithThree(faceUrl, function () {
         loadWithThree("./Smile.png", function () {
-            loadWithImage("Smile.png", function () {
+            loadWithImage(faceUrl, function () {
                 loadWithImage("./Smile.png", function () {
                     console.warn("[Azora] Smile.png missing — face left blank (no white square)");
                 });
@@ -1896,6 +1967,74 @@ function buildAvatarFace(headColor) {
 
     return face;
 }
+
+
+/** Blocky hair for girl avatars — sits on top of the head */
+function makeAvatarHair(hairColor, headY, headSize) {
+    if (typeof THREE === "undefined") return null;
+    hairColor = hairColor || "#4a3728";
+    headY = (typeof headY === "number") ? headY : 1.12;
+    headSize = headSize || 0.65;
+    var group = new THREE.Group();
+    group.name = "hair";
+    var mat = new THREE.MeshLambertMaterial({ color: hairColor });
+    // Main hair cap
+    var cap = new THREE.Mesh(new THREE.BoxGeometry(headSize * 1.15, headSize * 0.45, headSize * 1.1), mat);
+    cap.position.set(0, headY + headSize * 0.28, -0.02);
+    cap.name = "hairCap";
+    group.add(cap);
+    // Side puffs
+    var sideL = new THREE.Mesh(new THREE.BoxGeometry(headSize * 0.28, headSize * 0.55, headSize * 0.28), mat.clone());
+    sideL.position.set(-headSize * 0.55, headY + headSize * 0.05, 0);
+    sideL.name = "hairSideL";
+    group.add(sideL);
+    var sideR = new THREE.Mesh(new THREE.BoxGeometry(headSize * 0.28, headSize * 0.55, headSize * 0.28), mat.clone());
+    sideR.position.set(headSize * 0.55, headY + headSize * 0.05, 0);
+    sideR.name = "hairSideR";
+    group.add(sideR);
+    // Bangs in front
+    var bangs = new THREE.Mesh(new THREE.BoxGeometry(headSize * 0.95, headSize * 0.22, headSize * 0.2), mat.clone());
+    bangs.position.set(0, headY + headSize * 0.18, headSize * 0.42);
+    bangs.name = "hairBangs";
+    group.add(bangs);
+    return group;
+}
+
+function removeAvatarHair(parent) {
+    if (!parent) return;
+    var existing = parent.getObjectByName("hair");
+    if (existing) parent.remove(existing);
+}
+
+function applyGenderVisualsToCustomizer(gender, colors) {
+    if (!avatarCharacterGroup) return;
+    gender = gender || getAvatarGender();
+    colors = colors || {};
+    removeAvatarHair(avatarCharacterGroup);
+    if (gender === "girl" || gender === "female") {
+        var hair = makeAvatarHair(colors.hair || "#4a3728", headMesh ? headMesh.position.y : 1.12, 0.65);
+        if (hair) avatarCharacterGroup.add(hair);
+        // Slightly wider hips / dress silhouette on torso
+        if (torsoMesh) {
+            torsoMesh.scale.set(1.05, 1.05, 1.08);
+        }
+    } else {
+        if (torsoMesh) torsoMesh.scale.set(1, 1, 1);
+    }
+    // Rebuild face decal for gender
+    try {
+        if (faceGroup && avatarCharacterGroup) {
+            avatarCharacterGroup.remove(faceGroup);
+        }
+        faceGroup = buildAvatarFace(colors.head || "#ffcc00", gender);
+        faceGroup.position.y = headMesh ? headMesh.position.y : 1.12;
+        avatarCharacterGroup.add(faceGroup);
+    } catch (e) {}
+}
+
+window.makeAvatarHair = makeAvatarHair;
+window.applyGenderVisualsToCustomizer = applyGenderVisualsToCustomizer;
+
 
 function init3DAvatar() {
     const container = document.getElementById("avatar3d-canvas");
@@ -1931,7 +2070,7 @@ function init3DAvatar() {
     characterGroup.add(headMesh);
 
     // Simple face on front
-    faceGroup = buildAvatarFace(0xffcc00);
+    faceGroup = buildAvatarFace(0xffcc00, (typeof getAvatarGender === "function" ? getAvatarGender() : "boy"));
     faceGroup.position.y = 1.12;
     characterGroup.add(faceGroup);
 
@@ -1989,9 +2128,27 @@ function init3DAvatar() {
             else if (localStorage.getItem("loggedIn") === "true" && typeof updateAvatarColors === "function") {
                 updateAvatarColors();
             }
+            try {
+                var g = (typeof getAvatarGender === "function") ? getAvatarGender() : "boy";
+                var cols = {};
+                try {
+                    var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+                    if (acc && acc.avatar) cols = acc.avatar;
+                } catch (e2) {}
+                if (typeof applyGenderVisualsToCustomizer === "function") applyGenderVisualsToCustomizer(g, cols);
+            } catch (e3) {}
         }, 50);
         setTimeout(function () {
             if (typeof loadAvatarFromStorage === "function") loadAvatarFromStorage();
+            try {
+                var g2 = (typeof getAvatarGender === "function") ? getAvatarGender() : "boy";
+                var cols2 = {};
+                try {
+                    var acc2 = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
+                    if (acc2 && acc2.avatar) cols2 = acc2.avatar;
+                } catch (e4) {}
+                if (typeof applyGenderVisualsToCustomizer === "function") applyGenderVisualsToCustomizer(g2, cols2);
+            } catch (e5) {}
         }, 300);
     } catch (e) {}
 }
@@ -2241,6 +2398,14 @@ function updateAvatarColors() {
         if (warning) {
             warning.style.display = (validated && validated.wasModerated) ? "block" : "none";
         }
+        try {
+            var g = getAvatarGender();
+            var gEl = document.querySelector('input[name="avatarGenderCustom"]:checked');
+            if (gEl) g = gEl.value === "girl" ? "girl" : "boy";
+            if (typeof applyGenderVisualsToCustomizer === "function") {
+                applyGenderVisualsToCustomizer(g, validated);
+            }
+        } catch (eG) {}
     } catch (e) {
         console.warn("[Azora] updateAvatarColors failed", e);
     }
@@ -2279,6 +2444,13 @@ function saveAvatar() {
         if (warning) warning.style.display = "block";
     }
 
+    var genderNow = "boy";
+    try {
+        var gEl = document.querySelector('input[name="avatarGenderCustom"]:checked');
+        if (gEl) genderNow = gEl.value === "girl" ? "girl" : "boy";
+        else genderNow = (account.avatar && account.avatar.gender) || account.gender || getAvatarGender();
+    } catch (eG) { genderNow = getAvatarGender(); }
+    account.gender = genderNow;
     account.avatar = {
         head: validated.head,
         torso: validated.torso,
@@ -2286,8 +2458,15 @@ function saveAvatar() {
         rightArm: validated.rightArm,
         leftLeg: validated.leftLeg,
         rightLeg: validated.rightLeg,
-        face: "default"
+        hair: (account.avatar && account.avatar.hair) || (genderNow === "girl" ? "#4a3728" : "#3b2f2f"),
+        gender: genderNow,
+        face: genderNow === "girl" ? "female" : "male"
     };
+    try {
+        if (typeof applyGenderVisualsToCustomizer === "function") {
+            applyGenderVisualsToCustomizer(genderNow, account.avatar);
+        }
+    } catch (eV) {}
 
     try {
         localStorage.setItem("azoraAccount", JSON.stringify(account));
@@ -2335,6 +2514,7 @@ function loadAvatarFromStorage() {
         }
         if (avatar) {
             setAvatarColorInputs(avatar);
+            try { if (typeof syncCustomizerGenderUI === "function") syncCustomizerGenderUI(); } catch (eS) {}
             if (localStorage.getItem("loggedIn") === "true") {
                 var validated = moderateCharacterColors(
                     avatar.head, avatar.torso, avatar.leftArm, avatar.rightArm, avatar.leftLeg, avatar.rightLeg
@@ -6534,7 +6714,7 @@ function isNormGuest() {
 }
 
 function getNormAvatarColors() {
-    var av = { head: "#ffcc00", torso: "#1e60ff", leftArm: "#ffcc00", rightArm: "#ffcc00", leftLeg: "#00ebd4", rightLeg: "#00ebd4" };
+    var av = { head: "#ffcc00", torso: "#1e60ff", leftArm: "#ffcc00", rightArm: "#ffcc00", leftLeg: "#00ebd4", rightLeg: "#00ebd4", gender: "boy", hair: "#3b2f2f", face: "male" };
     try {
         var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
         if (acc && acc.avatar) {
@@ -6544,6 +6724,11 @@ function getNormAvatarColors() {
             av.rightArm = acc.avatar.rightArm || av.rightArm;
             av.leftLeg = acc.avatar.leftLeg || av.leftLeg;
             av.rightLeg = acc.avatar.rightLeg || av.rightLeg;
+            av.gender = acc.avatar.gender || acc.gender || av.gender;
+            av.hair = acc.avatar.hair || av.hair;
+            av.face = acc.avatar.face || av.face;
+        } else if (acc && acc.gender) {
+            av.gender = acc.gender;
         }
     } catch (e) {}
     return av;
@@ -6597,11 +6782,23 @@ function makeNormAvatar(colors) {
     g.add(rightArm);
     g.add(head);
 
-    // Smile.png face on front of head
-    attachNormFaceDecal(g, head);
+    // Girl: slightly dress-like torso + blocky hair
+    var gender = colors.gender || "boy";
+    if (gender === "girl" || gender === "female") {
+        torso.scale.set(1.08, 1.05, 1.1);
+        try {
+            var hairY = legH + torsoH + headS / 2;
+            var hair = makeAvatarHair(colors.hair || "#4a3728", hairY, headS);
+            if (hair) g.add(hair);
+        } catch (eH) {}
+    }
+
+    // Face decal (boy Smile.png / girl female_smile.png)
+    attachNormFaceDecal(g, head, gender);
 
     // Mark foot height for placement helpers
     g.userData.footOffset = 0; // feet already at y=0 in local space
+    g.userData.gender = gender;
     return g;
 }
 
@@ -6618,9 +6815,13 @@ function placeNormAvatarOnGround(mesh, x, z, surfaceY) {
 }
 
 /** Flat Smile.png on front of head — hidden until texture loads (no white square) */
-function attachNormFaceDecal(avatarGroup, headMesh) {
+function attachNormFaceDecal(avatarGroup, headMesh, gender) {
     if (typeof THREE === "undefined" || !headMesh) return;
     try {
+        gender = gender || (typeof getAvatarGender === "function" ? getAvatarGender() : "boy");
+        var faceUrl = (typeof faceTextureUrlForGender === "function")
+            ? faceTextureUrlForGender(gender)
+            : ((gender === "girl" || gender === "female") ? "female_smile.png" : "Smile.png");
         var mat = new THREE.MeshBasicMaterial({
             color: 0xffffff,
             transparent: true,
@@ -6699,10 +6900,10 @@ function attachNormFaceDecal(avatarGroup, headMesh) {
             } catch (e) { if (onFail) onFail(); }
         }
 
-        loadThree("Smile.png", function () {
-            loadThree("./Smile.png", function () {
-                loadImage("Smile.png", function () {
-                    loadImage("./Smile.png", function () {});
+        loadThree(faceUrl, function () {
+            loadThree("./" + faceUrl.replace(/^\.\//, ""), function () {
+                loadImage(faceUrl, function () {
+                    loadImage("./" + faceUrl.replace(/^\.\//, ""), function () {});
                 });
             });
         });
@@ -8602,3 +8803,42 @@ window.closeAIImageGenerator = closeAIImageGenerator;
 window.startAIImageGenerate = startAIImageGenerate;
 window.moderateAIImagePrompt = moderateAIImagePrompt;
 window.steerAIImagePrompt = steerAIImagePrompt;
+
+
+function onCustomizerGenderChange() {
+    var el = document.querySelector('input[name="avatarGenderCustom"]:checked');
+    var gender = el && el.value === "girl" ? "girl" : "boy";
+    // If switching to girl and colors still look like boy defaults, offer girl palette
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null") || {};
+        acc.gender = gender;
+        if (!acc.avatar) acc.avatar = {};
+        acc.avatar.gender = gender;
+        acc.avatar.face = gender === "girl" ? "female" : "male";
+        if (gender === "girl" && (!acc.avatar.hair)) acc.avatar.hair = "#4a3728";
+        // Live preview colors from pickers
+        var raw = typeof readAvatarColorInputs === "function" ? readAvatarColorInputs() : {};
+        var cols = Object.assign({}, acc.avatar, raw, { gender: gender });
+        if (typeof applyGenderVisualsToCustomizer === "function") applyGenderVisualsToCustomizer(gender, cols);
+        if (typeof applyColorsToMeshes === "function" && typeof moderateCharacterColors === "function") {
+            var v = moderateCharacterColors(cols.head, cols.torso, cols.leftArm, cols.rightArm, cols.leftLeg, cols.rightLeg);
+            applyColorsToMeshes(v);
+        }
+        // Persist gender choice for logged-in users (colors still need Save Avatar)
+        if (localStorage.getItem("loggedIn") === "true" && !acc.isGuest) {
+            try { localStorage.setItem("azoraAccount", JSON.stringify(acc)); } catch (e) {}
+        }
+    } catch (e) {
+        console.warn("[Azora] gender change", e);
+    }
+}
+window.onCustomizerGenderChange = onCustomizerGenderChange;
+
+/** Sync customizer gender radios from saved account */
+function syncCustomizerGenderUI() {
+    var g = (typeof getAvatarGender === "function") ? getAvatarGender() : "boy";
+    document.querySelectorAll('input[name="avatarGenderCustom"]').forEach(function (r) {
+        r.checked = (r.value === g) || (g === "female" && r.value === "girl");
+    });
+}
+window.syncCustomizerGenderUI = syncCustomizerGenderUI;
