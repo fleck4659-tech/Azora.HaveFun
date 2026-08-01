@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v55.3 green trees (not black)","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v55.4 REAL_603blox memorial","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -7964,6 +7964,160 @@ function buildNormCity(scene, tex) {
             }
         }
     })();
+
+    // ============================================================
+    // REAL_603blox Memorial — peaceful sanctuary gravestone
+    // Placed on grass only (not road / sidewalk / spawn / buildings)
+    // ============================================================
+    (function buildReal603bloxMemorial() {
+        // Quiet corner of the map, on grass away from roads & plaza
+        var mx = -48;
+        var mz = 88;
+
+        // Sanity: keep off roads/plaza if values ever change
+        if (Math.abs(mx) < 20 && Math.abs(mz) < 20) {
+            mx = -48; mz = 88;
+        }
+
+        var group = new THREE.Group();
+        group.name = "real603bloxMemorial";
+        group.position.set(mx, 0, mz);
+
+        // Stone materials (quiet gray, slightly warm)
+        var stoneMat = new THREE.MeshLambertMaterial({ color: 0x8b9099, emissive: 0x1a1c20 });
+        var baseMat = new THREE.MeshLambertMaterial({ color: 0x6b7280, emissive: 0x111318 });
+        var plaqueMat;
+
+        // Canvas inscription (readable up close)
+        try {
+            var c = document.createElement("canvas");
+            c.width = 512;
+            c.height = 640;
+            var ctx = c.getContext("2d");
+            // Stone-like background
+            ctx.fillStyle = "#9ca3af";
+            ctx.fillRect(0, 0, 512, 640);
+            // Soft vignette
+            var g = ctx.createRadialGradient(256, 320, 40, 256, 320, 420);
+            g.addColorStop(0, "rgba(255,255,255,0.08)");
+            g.addColorStop(1, "rgba(0,0,0,0.18)");
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, 512, 640);
+
+            ctx.fillStyle = "#1f2937";
+            ctx.textAlign = "center";
+            ctx.font = "bold 28px Georgia, serif";
+            ctx.fillText("REAL_603blox Memorial", 256, 48);
+
+            ctx.font = "italic 16px Georgia, serif";
+            ctx.fillStyle = "#374151";
+            ctx.fillText("September 17, 2025", 256, 78);
+
+            ctx.strokeStyle = "#4b5563";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(64, 96);
+            ctx.lineTo(448, 96);
+            ctx.stroke();
+
+            var lines = [
+                "On this day, September 17, 2025,",
+                "REAL_603blox was wiped by a",
+                "false termination.",
+                "",
+                "This monument stands as a peaceful",
+                "sanctuary to remember the account",
+                "itself — the years of hard-earned",
+                "progress, the original games, and",
+                "the beautiful history that built",
+                "our very foundation.",
+                "",
+                "The machine took the data, but the",
+                "spirit of what was created here",
+                "will never be forgotten."
+            ];
+            ctx.font = "18px Georgia, serif";
+            ctx.fillStyle = "#111827";
+            var y = 128;
+            for (var li = 0; li < lines.length; li++) {
+                ctx.fillText(lines[li], 256, y);
+                y += 28;
+            }
+
+            ctx.font = "italic 15px Georgia, serif";
+            ctx.fillStyle = "#4b5563";
+            ctx.fillText("— remembered in Azora Roleplay —", 256, 600);
+
+            var tex = new THREE.CanvasTexture(c);
+            tex.needsUpdate = true;
+            plaqueMat = new THREE.MeshLambertMaterial({
+                map: tex,
+                color: 0xffffff,
+                emissive: 0x22262e
+            });
+        } catch (eTex) {
+            plaqueMat = new THREE.MeshLambertMaterial({ color: 0xa8a29e, emissive: 0x1a1c20 });
+        }
+
+        // Base plinth
+        var base = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.45, 2.4), baseMat);
+        base.position.y = 0.225;
+        group.add(base);
+
+        // Second step
+        var step = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.28, 1.8), stoneMat);
+        step.position.y = 0.45 + 0.14;
+        group.add(step);
+
+        // Main upright stone (slightly arched top via stacked boxes)
+        var body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 3.4, 0.55), stoneMat);
+        body.position.y = 0.59 + 1.7;
+        group.add(body);
+
+        // Rounded top (simple)
+        var top = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.55, 0.5), stoneMat);
+        top.position.y = 0.59 + 3.4 + 0.2;
+        group.add(top);
+        var cap = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.35, 0.45), stoneMat);
+        cap.position.y = 0.59 + 3.4 + 0.55;
+        group.add(cap);
+
+        // Inscription plaque on the front face
+        var plaque = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.8, 0.06), plaqueMat);
+        plaque.position.set(0, 0.59 + 1.55, 0.32);
+        group.add(plaque);
+
+        // Small flower / tribute cubes at the base (peaceful color)
+        var flowerColors = [0xf472b6, 0xfbbf24, 0x34d399];
+        for (var f = 0; f < 3; f++) {
+            var stem = new THREE.Mesh(
+                new THREE.BoxGeometry(0.08, 0.45, 0.08),
+                new THREE.MeshLambertMaterial({ color: 0x4ade80 })
+            );
+            stem.position.set(-1.2 + f * 1.2, 0.45 + 0.22, 1.0);
+            group.add(stem);
+            var bloom = new THREE.Mesh(
+                new THREE.BoxGeometry(0.28, 0.22, 0.28),
+                new THREE.MeshLambertMaterial({ color: flowerColors[f], emissive: flowerColors[f] })
+            );
+            bloom.position.set(-1.2 + f * 1.2, 0.45 + 0.5, 1.0);
+            group.add(bloom);
+        }
+
+        // Soft point light so the stone is readable at dusk
+        try {
+            var soft = new THREE.PointLight(0xfef3c7, 0.35, 18);
+            soft.position.set(0, 2.5, 2.5);
+            group.add(soft);
+        } catch (eL) {}
+
+        scene.add(group);
+
+        // Store for proximity message (optional HUD)
+        try {
+            window._azoraMemorialPos = { x: mx, z: mz, name: "REAL_603blox Memorial" };
+        } catch (eW) {}
+    })();
 }
 
 /** Alternate Norm Game worlds (park, parkour, cafe, islands) */
@@ -8487,6 +8641,21 @@ function startNormGameWorld(def) {
         if (_normSession && typeof _normSession.tickRemoteMeshes === "function") {
             _normSession.tickRemoteMeshes();
         }
+
+        // REAL_603blox Memorial proximity (quiet one-time note)
+        try {
+            if (window._azoraMemorialPos && _normLocalMesh && !_normSession._memorialNoted) {
+                var mp = window._azoraMemorialPos;
+                var dxm = _normLocalMesh.position.x - mp.x;
+                var dzm = _normLocalMesh.position.z - mp.z;
+                if (dxm * dxm + dzm * dzm < 100) { // ~10 units
+                    _normSession._memorialNoted = true;
+                    if (typeof showAzoraToast === "function") {
+                        showAzoraToast("✝ REAL_603blox Memorial — rest in peace");
+                    }
+                }
+            }
+        } catch (eMem) {}
 
         var sp = 0.18;
         var turnSp = 0.045;
