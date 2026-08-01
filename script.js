@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v55 more norm games + cat simulator","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v55.1 materials wood3 + leaf","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -7459,12 +7459,12 @@ function loadNormTextures(done) {
     done = done || function () {};
     if (_normTexCache) { done(_normTexCache); return; }
     if (typeof THREE === "undefined") {
-        done({ grass: null, road: null, concrete: null, wood1: null, wood2: null });
+        done({ grass: null, road: null, concrete: null, wood1: null, wood2: null, wood3: null, leaf: null });
         return;
     }
     var loader = new THREE.TextureLoader();
-    var out = { grass: null, road: null, concrete: null, wood1: null, wood2: null };
-    var left = 5;
+    var out = { grass: null, road: null, concrete: null, wood1: null, wood2: null, wood3: null, leaf: null };
+    var left = 7;
     // Cap resolution + lighter filters = less GPU lag (textures stay, just cheaper)
     var MAX_TEX = 256;
     function optimizeTex(tex) {
@@ -7505,6 +7505,8 @@ function loadNormTextures(done) {
     one("concrete", "./concrete.jpg");
     one("wood1", "./wood1.jpg");
     one("wood2", "./wood2.jpg");
+    one("wood3", "./wood3.jpg");
+    one("leaf", "./leaf.jpg");
 }
 
 /**
@@ -7603,13 +7605,13 @@ function buildNormCity(scene, tex) {
         var mat = makeNormMatShared("concrete", color || 0x909090, Math.max(w, d), h, 1.5);
         var winMat = makeNormMat({ color: 0x93c5fd });
         var floorMat = makeNormMatShared(
-            tex.wood1 ? "wood1" : "wood2",
-            (tex.wood1 || tex.wood2) ? 0xe8d4b8 : 0x78716c,
+            tex.wood3 ? "wood3" : (tex.wood1 ? "wood1" : "wood2"),
+            (tex.wood3 || tex.wood1 || tex.wood2) ? 0xe8d4b8 : 0x78716c,
             Math.max(1, w - 1), Math.max(1, d - 1), 1.5
         );
         var stairMat = makeNormMatShared(
-            tex.wood2 ? "wood2" : "wood1",
-            (tex.wood2 || tex.wood1) ? 0xd4b896 : 0x57534e,
+            tex.wood2 ? "wood2" : (tex.wood1 ? "wood1" : "wood3"),
+            (tex.wood2 || tex.wood1 || tex.wood3) ? 0xd4b896 : 0x57534e,
             3, 4, 1.5
         );
         var doorW = Math.min(3.2, w * 0.35); // front door opening
@@ -7848,9 +7850,20 @@ function buildNormWorldByType(scene, tex, worldType) {
             );
             trunk.position.set(x, 1.1, z);
             scene.add(trunk);
+            var leafMat = new THREE.MeshLambertMaterial({ color: 0x2ecc71 });
+            try {
+                if (tex.leaf) {
+                    var lt = tex.leaf.clone ? tex.leaf.clone() : tex.leaf;
+                    try {
+                        lt.wrapS = lt.wrapT = THREE.RepeatWrapping;
+                        lt.repeat.set(2, 2);
+                    } catch (eL) {}
+                    leafMat = new THREE.MeshLambertMaterial({ map: lt, color: 0xb8e0a8 });
+                }
+            } catch (e) {}
             var leaves = new THREE.Mesh(
                 new THREE.BoxGeometry(2.2, 2.0, 2.2),
-                new THREE.MeshLambertMaterial({ color: 0x2ecc71 })
+                leafMat
             );
             leaves.position.set(x, 2.8, z);
             scene.add(leaves);
@@ -7906,9 +7919,19 @@ function buildNormWorldByType(scene, tex, worldType) {
         counter.position.set(0, 0.6, -6);
         scene.add(counter);
         for (var t = 0; t < 4; t++) {
+            var tableMat = new THREE.MeshLambertMaterial({ color: 0x8B5A2B });
+            try {
+                if (tex.wood3) {
+                    var wt = tex.wood3.clone ? tex.wood3.clone() : tex.wood3;
+                    try { wt.wrapS = wt.wrapT = THREE.RepeatWrapping; wt.repeat.set(1, 1); } catch (eW) {}
+                    tableMat = new THREE.MeshLambertMaterial({ map: wt, color: 0xffffff });
+                } else if (tex.wood1) {
+                    tableMat = new THREE.MeshLambertMaterial({ map: tex.wood1, color: 0xffffff });
+                }
+            } catch (e) {}
             var table = new THREE.Mesh(
                 new THREE.BoxGeometry(1.6, 0.15, 1.6),
-                new THREE.MeshLambertMaterial({ color: 0x8B5A2B })
+                tableMat
             );
             table.position.set((t % 2) * 5 - 2.5, 0.75, Math.floor(t / 2) * 4 - 1);
             scene.add(table);
