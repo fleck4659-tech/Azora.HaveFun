@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v55.2 roleplay trees leaf+wood1/3","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v55.3 green trees (not black)","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -7859,32 +7859,50 @@ function buildNormCity(scene, tex) {
         // Trunk material: wood1 preferred, else wood3 — never wood2
         var trunkMat;
         try {
-            var trunkKey = tex.wood1 ? "wood1" : (tex.wood3 ? "wood3" : null);
+            var trunkKey = (tex && tex.wood1) ? "wood1" : ((tex && tex.wood3) ? "wood3" : null);
             if (trunkKey) {
-                trunkMat = makeNormMatShared(trunkKey, 0xc4a574, 2, 8, 1);
+                trunkMat = makeNormMatShared(trunkKey, 0xd4a574, 2, 8, 1);
+                // Extra warmth so trunks read as brown wood, not black
+                try {
+                    if (trunkMat && trunkMat.emissive) trunkMat.emissive.setHex(0x2a1810);
+                } catch (eEm) {}
             } else {
-                trunkMat = new THREE.MeshLambertMaterial({ color: 0x6b4226 });
+                trunkMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b, emissive: 0x2a1810 });
             }
         } catch (e) {
-            trunkMat = new THREE.MeshLambertMaterial({ color: 0x6b4226 });
+            trunkMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b, emissive: 0x2a1810 });
         }
 
-        // Leaf canopy material
+        // Leaf canopy material — always green (never black)
+        // MeshLambert + low ambient can make dark maps look black; force vivid green + emissive.
         var leafMat;
         try {
-            if (tex.leaf) {
+            var leafOpts = {
+                color: 0x3dcf5a,
+                emissive: 0x145a28,
+                side: THREE.DoubleSide
+            };
+            // Only attach leaf.jpg if the image is fully loaded (avoids black map)
+            if (tex && tex.leaf && tex.leaf.image && (tex.leaf.image.complete !== false) &&
+                (tex.leaf.image.naturalWidth || tex.leaf.image.width)) {
                 var lt = tex.leaf;
                 try {
                     if (lt.clone) lt = lt.clone();
                     lt.wrapS = lt.wrapT = THREE.RepeatWrapping;
                     lt.repeat.set(2, 2);
+                    lt.needsUpdate = true;
                 } catch (eL) {}
-                leafMat = new THREE.MeshLambertMaterial({ map: lt, color: 0xc8e6b8 });
-            } else {
-                leafMat = new THREE.MeshLambertMaterial({ color: 0x2ecc71 });
+                leafOpts.map = lt;
+                // Bright multiply so texture detail shows without crushing to black
+                leafOpts.color = 0xb8f0a8;
             }
+            leafMat = new THREE.MeshLambertMaterial(leafOpts);
         } catch (e) {
-            leafMat = new THREE.MeshLambertMaterial({ color: 0x2ecc71 });
+            leafMat = new THREE.MeshLambertMaterial({
+                color: 0x3dcf5a,
+                emissive: 0x145a28,
+                side: THREE.DoubleSide
+            });
         }
 
         function addTree(x, z, scale) {
@@ -8367,7 +8385,7 @@ function startNormGameWorld(def) {
     container.appendChild(_normRenderer.domElement);
 
     // Balanced lights — readable, not washed out
-    _normScene.add(new THREE.AmbientLight(0xffffff, 0.42));
+    _normScene.add(new THREE.AmbientLight(0xffffff, 0.62));
     var sun = new THREE.DirectionalLight(0xfff2d6, 0.55);
     sun.position.set(50, 70, 25);
     _normScene.add(sun);
