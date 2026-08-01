@@ -1,5 +1,5 @@
 /* Azora main app service worker — v48.1 */
-var CACHE = "azora-app-v51-click-sfx";
+var CACHE = "azora-app-v52-avatar-colors";
 var ASSETS = [
   "./", "./index.html", "./style.css",
   "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./Mossy.mp3",

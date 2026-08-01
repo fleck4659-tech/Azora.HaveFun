@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v51 click button SFX","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v52 avatar color fix","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -2022,31 +2022,57 @@ function syncAvatarExtraColors(head, torso, leftArm, rightArm) {
     if (neckMesh && head) neckMesh.material.color.set(head);
 }
 
+/* Restricted full-body color combos (all six limbs match a banned set) */
+var RESTRICTED_COLORS = {
+    pureBlack: ["#000000", "#000"],
+    pureWhite: ["#ffffff", "#fff"]
+};
+
 function moderateCharacterColors(head, torso, leftArm, rightArm, leftLeg, rightLeg) {
-    const cHead = head.toLowerCase();
-    const cTorso = torso.toLowerCase();
-    const cLeftArm = leftArm.toLowerCase();
-    const cRightArm = rightArm.toLowerCase();
-    const cLeftLeg = leftLeg.toLowerCase();
-    const cRightLeg = rightLeg.toLowerCase();
-
-    let safeTorso = cTorso;
-    let moderated = false;
-
-    for (const colorGroup in RESTRICTED_COLORS) {
-        const restrictedList = RESTRICTED_COLORS[colorGroup];
-        if (
-            restrictedList.includes(cHead) && 
-            restrictedList.includes(cTorso) && 
-            restrictedList.includes(cLeftArm) &&
-            restrictedList.includes(cRightArm) &&
-            restrictedList.includes(cLeftLeg) &&
-            restrictedList.includes(cRightLeg)
-        ) {
-            safeTorso = "#1e293b"; 
-            moderated = true;
-            break;
+    function norm(c, fallback) {
+        try {
+            var s = String(c == null ? fallback : c).trim().toLowerCase();
+            if (!s || s.charAt(0) !== "#") s = fallback;
+            // expand #rgb → #rrggbb
+            if (s.length === 4) {
+                s = "#" + s.charAt(1) + s.charAt(1) + s.charAt(2) + s.charAt(2) + s.charAt(3) + s.charAt(3);
+            }
+            return s;
+        } catch (e) {
+            return fallback;
         }
+    }
+    var cHead = norm(head, "#ffcc00");
+    var cTorso = norm(torso, "#1e60ff");
+    var cLeftArm = norm(leftArm, "#ffcc00");
+    var cRightArm = norm(rightArm, "#ffcc00");
+    var cLeftLeg = norm(leftLeg, "#00ebd4");
+    var cRightLeg = norm(rightLeg, "#00ebd4");
+
+    var safeTorso = cTorso;
+    var moderated = false;
+
+    try {
+        if (typeof RESTRICTED_COLORS === "object" && RESTRICTED_COLORS) {
+            for (var colorGroup in RESTRICTED_COLORS) {
+                if (!Object.prototype.hasOwnProperty.call(RESTRICTED_COLORS, colorGroup)) continue;
+                var restrictedList = RESTRICTED_COLORS[colorGroup] || [];
+                if (
+                    restrictedList.indexOf(cHead) !== -1 &&
+                    restrictedList.indexOf(cTorso) !== -1 &&
+                    restrictedList.indexOf(cLeftArm) !== -1 &&
+                    restrictedList.indexOf(cRightArm) !== -1 &&
+                    restrictedList.indexOf(cLeftLeg) !== -1 &&
+                    restrictedList.indexOf(cRightLeg) !== -1
+                ) {
+                    safeTorso = "#1e293b";
+                    moderated = true;
+                    break;
+                }
+            }
+        }
+    } catch (e) {
+        moderated = false;
     }
 
     return {
@@ -2136,9 +2162,24 @@ function applyColorsToMeshes(validated) {
     }
     try {
         function paint(mesh, hex) {
-            if (!mesh || !mesh.material) return;
-            mesh.material.color.set(hex);
-            mesh.material.needsUpdate = true;
+            if (!mesh) return;
+            var mat = mesh.material;
+            // If material is shared or missing, give this limb its own material
+            if (!mat || (mat && mat.userData && mat.userData._azoraShared)) {
+                mat = new THREE.MeshLambertMaterial({ color: hex });
+                mesh.material = mat;
+            }
+            if (Array.isArray(mat)) {
+                mat.forEach(function (m) {
+                    if (!m) return;
+                    if (m.color) m.color.set(hex);
+                    m.needsUpdate = true;
+                });
+            } else {
+                if (mat.color) mat.color.set(hex);
+                else mat.color = new THREE.Color(hex);
+                mat.needsUpdate = true;
+            }
         }
         paint(headMesh, validated.head);
         paint(torsoMesh, validated.torso);
@@ -2149,6 +2190,10 @@ function applyColorsToMeshes(validated) {
         if (typeof syncAvatarExtraColors === "function") {
             syncAvatarExtraColors(validated.head, validated.torso, validated.leftArm, validated.rightArm);
         }
+        // Force a frame so the color change is visible immediately
+        try {
+            if (renderer && scene && camera) renderer.render(scene, camera);
+        } catch (e2) {}
         return true;
     } catch (e) {
         console.warn("[Azora] applyColorsToMeshes failed", e);
@@ -2161,34 +2206,43 @@ function updateAvatarColors() {
     if (localStorage.getItem("loggedIn") !== "true") {
         return;
     }
-    var raw = readAvatarColorInputs();
-    var validated = moderateCharacterColors(
-        raw.head, raw.torso, raw.leftArm, raw.rightArm, raw.leftLeg, raw.rightLeg
-    );
+    try {
+        var raw = readAvatarColorInputs();
+        var validated = moderateCharacterColors(
+            raw.head, raw.torso, raw.leftArm, raw.rightArm, raw.leftLeg, raw.rightLeg
+        );
 
-    // If 3D not ready yet, retry shortly
-    if (!applyColorsToMeshes(validated)) {
-        setTimeout(function () {
-            if (localStorage.getItem("loggedIn") === "true") {
-                applyColorsToMeshes(validated);
-            }
-        }, 120);
-        setTimeout(function () {
-            if (localStorage.getItem("loggedIn") === "true") {
-                applyColorsToMeshes(validated);
-            }
-        }, 400);
-    }
+        // If 3D not ready yet, retry shortly
+        if (!applyColorsToMeshes(validated)) {
+            setTimeout(function () {
+                if (localStorage.getItem("loggedIn") === "true") {
+                    applyColorsToMeshes(validated);
+                }
+            }, 120);
+            setTimeout(function () {
+                if (localStorage.getItem("loggedIn") === "true") {
+                    applyColorsToMeshes(validated);
+                }
+            }, 400);
+            setTimeout(function () {
+                if (localStorage.getItem("loggedIn") === "true") {
+                    applyColorsToMeshes(validated);
+                }
+            }, 900);
+        }
 
-    // Keep torso picker in sync if moderation changed it
-    if (validated.wasModerated) {
-        var torsoEl = document.getElementById("colorTorso");
-        if (torsoEl) torsoEl.value = validated.torso;
-    }
+        // Keep torso picker in sync if moderation changed it
+        if (validated && validated.wasModerated) {
+            var torsoEl = document.getElementById("colorTorso");
+            if (torsoEl) torsoEl.value = validated.torso;
+        }
 
-    var warning = document.getElementById("modWarning");
-    if (warning) {
-        warning.style.display = validated.wasModerated ? "block" : "none";
+        var warning = document.getElementById("modWarning");
+        if (warning) {
+            warning.style.display = (validated && validated.wasModerated) ? "block" : "none";
+        }
+    } catch (e) {
+        console.warn("[Azora] updateAvatarColors failed", e);
     }
 }
 
@@ -2237,6 +2291,8 @@ function saveAvatar() {
 
     try {
         localStorage.setItem("azoraAccount", JSON.stringify(account));
+        // Permanent backup so colors survive even if account object is rewritten
+        localStorage.setItem("azoraAvatar", JSON.stringify(account.avatar));
     } catch (e) {
         alert("Could not save avatar (storage full or blocked).");
         return;
@@ -2251,12 +2307,14 @@ function saveAvatar() {
         }
     } catch (e) {}
 
-    // Confirm by re-reading storage
+    // Confirm by re-reading storage + re-paint so UI matches saved state
     try {
         var check = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
         if (!check.avatar || check.avatar.head !== validated.head) {
             console.warn("[Azora] Avatar save verification mismatch", check.avatar);
         }
+        applyColorsToMeshes(validated);
+        setAvatarColorInputs(validated);
     } catch (e) {}
 
     alert("3D Avatar saved successfully to your Azora account!");
@@ -2266,10 +2324,27 @@ function saveAvatar() {
 function loadAvatarFromStorage() {
     try {
         var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        var avatar = null;
         if (acc && acc.avatar) {
-            setAvatarColorInputs(acc.avatar);
+            avatar = acc.avatar;
+        } else {
+            // backup key used by saveAvatar
+            try {
+                avatar = JSON.parse(localStorage.getItem("azoraAvatar") || "null");
+            } catch (e2) { avatar = null; }
         }
-    } catch (e) {}
+        if (avatar) {
+            setAvatarColorInputs(avatar);
+            if (localStorage.getItem("loggedIn") === "true") {
+                var validated = moderateCharacterColors(
+                    avatar.head, avatar.torso, avatar.leftArm, avatar.rightArm, avatar.leftLeg, avatar.rightLeg
+                );
+                applyColorsToMeshes(validated);
+            }
+        }
+    } catch (e) {
+        console.warn("[Azora] loadAvatarFromStorage", e);
+    }
     if (localStorage.getItem("loggedIn") === "true") {
         updateAvatarColors();
     } else if (typeof paintAvatarDefaults === "function") {
