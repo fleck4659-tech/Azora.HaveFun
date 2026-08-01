@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v53 avatar gender","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v53.1 long blocky hair + click-stop spin","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -1978,25 +1978,50 @@ function makeAvatarHair(hairColor, headY, headSize) {
     var group = new THREE.Group();
     group.name = "hair";
     var mat = new THREE.MeshLambertMaterial({ color: hairColor });
-    // Main hair cap
-    var cap = new THREE.Mesh(new THREE.BoxGeometry(headSize * 1.15, headSize * 0.45, headSize * 1.1), mat);
-    cap.position.set(0, headY + headSize * 0.28, -0.02);
-    cap.name = "hairCap";
-    group.add(cap);
-    // Side puffs
-    var sideL = new THREE.Mesh(new THREE.BoxGeometry(headSize * 0.28, headSize * 0.55, headSize * 0.28), mat.clone());
-    sideL.position.set(-headSize * 0.55, headY + headSize * 0.05, 0);
-    sideL.name = "hairSideL";
-    group.add(sideL);
-    var sideR = new THREE.Mesh(new THREE.BoxGeometry(headSize * 0.28, headSize * 0.55, headSize * 0.28), mat.clone());
-    sideR.position.set(headSize * 0.55, headY + headSize * 0.05, 0);
-    sideR.name = "hairSideR";
-    group.add(sideR);
-    // Bangs in front
-    var bangs = new THREE.Mesh(new THREE.BoxGeometry(headSize * 0.95, headSize * 0.22, headSize * 0.2), mat.clone());
-    bangs.position.set(0, headY + headSize * 0.18, headSize * 0.42);
-    bangs.name = "hairBangs";
-    group.add(bangs);
+
+    function addStrand(name, x, y, z, w, h, d, rotZ) {
+        var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat.clone());
+        m.position.set(x, y, z);
+        if (rotZ) m.rotation.z = rotZ;
+        m.name = name;
+        group.add(m);
+    }
+
+    // Crown / top cap
+    addStrand("hairCap", 0, headY + headSize * 0.32, -0.02, headSize * 1.2, headSize * 0.42, headSize * 1.15, 0);
+
+    // Volume behind the head
+    addStrand("hairBack", 0, headY + headSize * 0.05, -headSize * 0.45, headSize * 1.05, headSize * 0.7, headSize * 0.45, 0);
+
+    // Front bangs
+    addStrand("hairBangs", 0, headY + headSize * 0.2, headSize * 0.42, headSize * 1.0, headSize * 0.22, headSize * 0.22, 0);
+
+    // Length tiers — long past shoulders and mid-torso
+    var shoulderY = headY - headSize * 0.9;
+    var chestY = headY - headSize * 1.7;
+    var midTorsoY = headY - headSize * 2.5;
+    var lowY = headY - headSize * 3.3;
+
+    // Left long strands
+    addStrand("hairL1", -headSize * 0.58, shoulderY, 0.02, headSize * 0.28, headSize * 1.15, headSize * 0.28, 0.12);
+    addStrand("hairL2", -headSize * 0.64, chestY, 0.0, headSize * 0.26, headSize * 1.4, headSize * 0.26, 0.16);
+    addStrand("hairL3", -headSize * 0.70, midTorsoY, -0.02, headSize * 0.24, headSize * 1.6, headSize * 0.24, 0.2);
+    addStrand("hairL4", -headSize * 0.74, lowY, -0.04, headSize * 0.22, headSize * 1.5, headSize * 0.22, 0.22);
+    addStrand("hairLFront", -headSize * 0.48, chestY + headSize * 0.1, headSize * 0.22, headSize * 0.2, headSize * 1.5, headSize * 0.2, 0.1);
+
+    // Right long strands
+    addStrand("hairR1", headSize * 0.58, shoulderY, 0.02, headSize * 0.28, headSize * 1.15, headSize * 0.28, -0.12);
+    addStrand("hairR2", headSize * 0.64, chestY, 0.0, headSize * 0.26, headSize * 1.4, headSize * 0.26, -0.16);
+    addStrand("hairR3", headSize * 0.70, midTorsoY, -0.02, headSize * 0.24, headSize * 1.6, headSize * 0.24, -0.2);
+    addStrand("hairR4", headSize * 0.74, lowY, -0.04, headSize * 0.22, headSize * 1.5, headSize * 0.22, -0.22);
+    addStrand("hairRFront", headSize * 0.48, chestY + headSize * 0.1, headSize * 0.22, headSize * 0.2, headSize * 1.5, headSize * 0.2, -0.1);
+
+    // Long back strands
+    addStrand("hairBack1", -headSize * 0.28, chestY, -headSize * 0.42, headSize * 0.32, headSize * 1.7, headSize * 0.26, 0.05);
+    addStrand("hairBack2", headSize * 0.28, chestY, -headSize * 0.42, headSize * 0.32, headSize * 1.7, headSize * 0.26, -0.05);
+    addStrand("hairBackMid", 0, midTorsoY, -headSize * 0.5, headSize * 0.36, headSize * 2.0, headSize * 0.3, 0);
+    addStrand("hairBackLow", 0, lowY, -headSize * 0.48, headSize * 0.3, headSize * 1.6, headSize * 0.28, 0);
+
     return group;
 }
 
@@ -2099,12 +2124,32 @@ function init3DAvatar() {
 
     scene.add(characterGroup);
 
+    // Spin until user clicks the avatar canvas; stays stopped until page/app is reopened
+    if (typeof window._avatarSpinEnabled === "undefined") {
+        window._avatarSpinEnabled = (sessionStorage.getItem("azoraAvatarSpinStopped") !== "1");
+    }
     function animate() {
         requestAnimationFrame(animate);
-        if (avatarCharacterGroup) avatarCharacterGroup.rotation.y += 0.008;
+        if (avatarCharacterGroup && window._avatarSpinEnabled) {
+            avatarCharacterGroup.rotation.y += 0.008;
+        }
         if (renderer && scene && camera) renderer.render(scene, camera);
     }
     animate();
+
+    // Click avatar canvas (not color controls) to stop spinning for this session
+    try {
+        var canvasEl = container.querySelector("canvas") || container;
+        if (canvasEl && !canvasEl._azoraSpinClickBound) {
+            canvasEl._azoraSpinClickBound = true;
+            canvasEl.style.cursor = "pointer";
+            canvasEl.title = "Click to stop spinning";
+            canvasEl.addEventListener("click", function () {
+                window._avatarSpinEnabled = false;
+                try { sessionStorage.setItem("azoraAvatarSpinStopped", "1"); } catch (err) {}
+            });
+        }
+    } catch (e) {}
 
     // Resize canvas when container size is known
     try {
