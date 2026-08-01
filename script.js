@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v53.1 long blocky hair + click-stop spin","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v53.2 shorter blocky girl hair","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -1979,48 +1979,32 @@ function makeAvatarHair(hairColor, headY, headSize) {
     group.name = "hair";
     var mat = new THREE.MeshLambertMaterial({ color: hairColor });
 
-    function addStrand(name, x, y, z, w, h, d, rotZ) {
+    function addPart(name, x, y, z, w, h, d) {
         var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat.clone());
         m.position.set(x, y, z);
-        if (rotZ) m.rotation.z = rotZ;
         m.name = name;
         group.add(m);
     }
 
-    // Crown / top cap
-    addStrand("hairCap", 0, headY + headSize * 0.32, -0.02, headSize * 1.2, headSize * 0.42, headSize * 1.15, 0);
+    // Crown / top of head
+    addPart("hairCap", 0, headY + headSize * 0.38, -0.02, headSize * 1.18, headSize * 0.38, headSize * 1.12);
 
-    // Volume behind the head
-    addStrand("hairBack", 0, headY + headSize * 0.05, -headSize * 0.45, headSize * 1.05, headSize * 0.7, headSize * 0.45, 0);
+    // Back of head volume
+    addPart("hairBack", 0, headY + headSize * 0.05, -headSize * 0.42, headSize * 1.05, headSize * 0.7, headSize * 0.4);
 
-    // Front bangs
-    addStrand("hairBangs", 0, headY + headSize * 0.2, headSize * 0.42, headSize * 1.0, headSize * 0.22, headSize * 0.22, 0);
+    // Soft front bangs
+    addPart("hairBangs", 0, headY + headSize * 0.22, headSize * 0.4, headSize * 0.95, headSize * 0.2, headSize * 0.2);
 
-    // Length tiers — long past shoulders and mid-torso
-    var shoulderY = headY - headSize * 0.9;
-    var chestY = headY - headSize * 1.7;
-    var midTorsoY = headY - headSize * 2.5;
-    var lowY = headY - headSize * 3.3;
+    // Side pieces — end around the shoulders, not down the whole body
+    var sideY = headY - headSize * 0.35;
+    var sideH = headSize * 1.15;
+    addPart("hairSideL", -headSize * 0.58, sideY, 0.02, headSize * 0.28, sideH, headSize * 0.3);
+    addPart("hairSideR", headSize * 0.58, sideY, 0.02, headSize * 0.28, sideH, headSize * 0.3);
 
-    // Left long strands
-    addStrand("hairL1", -headSize * 0.58, shoulderY, 0.02, headSize * 0.28, headSize * 1.15, headSize * 0.28, 0.12);
-    addStrand("hairL2", -headSize * 0.64, chestY, 0.0, headSize * 0.26, headSize * 1.4, headSize * 0.26, 0.16);
-    addStrand("hairL3", -headSize * 0.70, midTorsoY, -0.02, headSize * 0.24, headSize * 1.6, headSize * 0.24, 0.2);
-    addStrand("hairL4", -headSize * 0.74, lowY, -0.04, headSize * 0.22, headSize * 1.5, headSize * 0.22, 0.22);
-    addStrand("hairLFront", -headSize * 0.48, chestY + headSize * 0.1, headSize * 0.22, headSize * 0.2, headSize * 1.5, headSize * 0.2, 0.1);
-
-    // Right long strands
-    addStrand("hairR1", headSize * 0.58, shoulderY, 0.02, headSize * 0.28, headSize * 1.15, headSize * 0.28, -0.12);
-    addStrand("hairR2", headSize * 0.64, chestY, 0.0, headSize * 0.26, headSize * 1.4, headSize * 0.26, -0.16);
-    addStrand("hairR3", headSize * 0.70, midTorsoY, -0.02, headSize * 0.24, headSize * 1.6, headSize * 0.24, -0.2);
-    addStrand("hairR4", headSize * 0.74, lowY, -0.04, headSize * 0.22, headSize * 1.5, headSize * 0.22, -0.22);
-    addStrand("hairRFront", headSize * 0.48, chestY + headSize * 0.1, headSize * 0.22, headSize * 0.2, headSize * 1.5, headSize * 0.2, -0.1);
-
-    // Long back strands
-    addStrand("hairBack1", -headSize * 0.28, chestY, -headSize * 0.42, headSize * 0.32, headSize * 1.7, headSize * 0.26, 0.05);
-    addStrand("hairBack2", headSize * 0.28, chestY, -headSize * 0.42, headSize * 0.32, headSize * 1.7, headSize * 0.26, -0.05);
-    addStrand("hairBackMid", 0, midTorsoY, -headSize * 0.5, headSize * 0.36, headSize * 2.0, headSize * 0.3, 0);
-    addStrand("hairBackLow", 0, lowY, -headSize * 0.48, headSize * 0.3, headSize * 1.6, headSize * 0.28, 0);
+    // Short back length — just past the neck / top of shoulders
+    var backY = headY - headSize * 0.55;
+    var backH = headSize * 1.0;
+    addPart("hairBackMid", 0, backY, -headSize * 0.4, headSize * 0.9, backH, headSize * 0.28);
 
     return group;
 }
