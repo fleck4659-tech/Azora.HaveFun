@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v55.4 REAL_603blox memorial","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v55.5 memorial lag fix","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -7920,26 +7920,14 @@ function buildNormCity(scene, tex) {
             trunk.position.y = trunkH / 2; // feet on ground — never floating
             group.add(trunk);
 
-            // Leaf canopy — several blocks for fuller look, still on top of trunk
-            var canopyY = trunkH + 0.8 * scale;
-            var sizes = [
-                [2.4, 2.0, 2.4],
-                [1.8, 1.6, 1.8],
-                [1.5, 1.4, 1.5]
-            ];
-            var offsets = [
-                [0, 0, 0],
-                [0.6 * scale, 0.5 * scale, 0.3 * scale],
-                [-0.5 * scale, 0.35 * scale, -0.4 * scale]
-            ];
-            for (var c = 0; c < sizes.length; c++) {
-                var leaf = new THREE.Mesh(
-                    new THREE.BoxGeometry(sizes[c][0] * scale, sizes[c][1] * scale, sizes[c][2] * scale),
-                    leafMat
-                );
-                leaf.position.set(offsets[c][0], canopyY + offsets[c][1], offsets[c][2]);
-                group.add(leaf);
-            }
+            // Single leaf canopy block (faster than 3)
+            var canopyY = trunkH + 0.9 * scale;
+            var leaf = new THREE.Mesh(
+                new THREE.BoxGeometry(2.6 * scale, 2.0 * scale, 2.6 * scale),
+                leafMat
+            );
+            leaf.position.set(0, canopyY, 0);
+            group.add(leaf);
 
             group.position.set(x, 0, z); // planted in the ground
             scene.add(group);
@@ -7947,7 +7935,7 @@ function buildNormCity(scene, tex) {
 
         // Candidate spots on a staggered grid (deterministic, no random floaters)
         var planted = 0;
-        var target = 48;
+        var target = 28;
         var spacing = 18;
         for (var gz = -160; gz <= 160 && planted < target; gz += spacing) {
             for (var gx = -160; gx <= 160 && planted < target; gx += spacing) {
@@ -7966,60 +7954,39 @@ function buildNormCity(scene, tex) {
     })();
 
     // ============================================================
-    // REAL_603blox Memorial — peaceful sanctuary gravestone
-    // Placed on grass only (not road / sidewalk / spawn / buildings)
+    // REAL_603blox Memorial — lightweight (no lag)
     // ============================================================
     (function buildReal603bloxMemorial() {
-        // Quiet corner of the map, on grass away from roads & plaza
-        var mx = -48;
-        var mz = 88;
-
-        // Sanity: keep off roads/plaza if values ever change
-        if (Math.abs(mx) < 20 && Math.abs(mz) < 20) {
-            mx = -48; mz = 88;
-        }
-
+        var mx = -48, mz = 88;
         var group = new THREE.Group();
         group.name = "real603bloxMemorial";
         group.position.set(mx, 0, mz);
 
-        // Stone materials (quiet gray, slightly warm)
-        var stoneMat = new THREE.MeshLambertMaterial({ color: 0x8b9099, emissive: 0x1a1c20 });
-        var baseMat = new THREE.MeshLambertMaterial({ color: 0x6b7280, emissive: 0x111318 });
-        var plaqueMat;
+        // One shared stone material — no emissive, no extra lights
+        var stoneMat = new THREE.MeshLambertMaterial({ color: 0x8b9099 });
+        var baseMat = new THREE.MeshLambertMaterial({ color: 0x6b7280 });
 
-        // Canvas inscription (readable up close)
+        // Small canvas plaque (256×320 — was 512×640, much cheaper)
+        var plaqueMat;
         try {
             var c = document.createElement("canvas");
-            c.width = 512;
-            c.height = 640;
+            c.width = 256;
+            c.height = 320;
             var ctx = c.getContext("2d");
-            // Stone-like background
             ctx.fillStyle = "#9ca3af";
-            ctx.fillRect(0, 0, 512, 640);
-            // Soft vignette
-            var g = ctx.createRadialGradient(256, 320, 40, 256, 320, 420);
-            g.addColorStop(0, "rgba(255,255,255,0.08)");
-            g.addColorStop(1, "rgba(0,0,0,0.18)");
-            ctx.fillStyle = g;
-            ctx.fillRect(0, 0, 512, 640);
-
+            ctx.fillRect(0, 0, 256, 320);
             ctx.fillStyle = "#1f2937";
             ctx.textAlign = "center";
-            ctx.font = "bold 28px Georgia, serif";
-            ctx.fillText("REAL_603blox Memorial", 256, 48);
-
-            ctx.font = "italic 16px Georgia, serif";
+            ctx.font = "bold 14px Georgia, serif";
+            ctx.fillText("REAL_603blox Memorial", 128, 22);
+            ctx.font = "italic 11px Georgia, serif";
             ctx.fillStyle = "#374151";
-            ctx.fillText("September 17, 2025", 256, 78);
-
+            ctx.fillText("September 17, 2025", 128, 40);
             ctx.strokeStyle = "#4b5563";
-            ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(64, 96);
-            ctx.lineTo(448, 96);
+            ctx.moveTo(24, 48);
+            ctx.lineTo(232, 48);
             ctx.stroke();
-
             var lines = [
                 "On this day, September 17, 2025,",
                 "REAL_603blox was wiped by a",
@@ -8036,84 +8003,57 @@ function buildNormCity(scene, tex) {
                 "spirit of what was created here",
                 "will never be forgotten."
             ];
-            ctx.font = "18px Georgia, serif";
+            ctx.font = "11px Georgia, serif";
             ctx.fillStyle = "#111827";
-            var y = 128;
+            var y = 64;
             for (var li = 0; li < lines.length; li++) {
-                ctx.fillText(lines[li], 256, y);
-                y += 28;
+                ctx.fillText(lines[li], 128, y);
+                y += 16;
             }
-
-            ctx.font = "italic 15px Georgia, serif";
+            ctx.font = "italic 10px Georgia, serif";
             ctx.fillStyle = "#4b5563";
-            ctx.fillText("— remembered in Azora Roleplay —", 256, 600);
-
+            ctx.fillText("— remembered in Azora Roleplay —", 128, 300);
             var tex = new THREE.CanvasTexture(c);
+            tex.minFilter = THREE.LinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            tex.generateMipmaps = false;
             tex.needsUpdate = true;
-            plaqueMat = new THREE.MeshLambertMaterial({
-                map: tex,
-                color: 0xffffff,
-                emissive: 0x22262e
-            });
+            // MeshBasicMaterial = no lighting cost, stays readable
+            plaqueMat = new THREE.MeshBasicMaterial({ map: tex });
         } catch (eTex) {
-            plaqueMat = new THREE.MeshLambertMaterial({ color: 0xa8a29e, emissive: 0x1a1c20 });
+            plaqueMat = new THREE.MeshLambertMaterial({ color: 0xa8a29e });
         }
 
-        // Base plinth
-        var base = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.45, 2.4), baseMat);
-        base.position.y = 0.225;
+        // 3 meshes only: base, stone, plaque (was 10+)
+        var base = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.4, 2.0), baseMat);
+        base.position.y = 0.2;
         group.add(base);
 
-        // Second step
-        var step = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.28, 1.8), stoneMat);
-        step.position.y = 0.45 + 0.14;
-        group.add(step);
-
-        // Main upright stone (slightly arched top via stacked boxes)
-        var body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 3.4, 0.55), stoneMat);
-        body.position.y = 0.59 + 1.7;
+        var body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.2, 0.5), stoneMat);
+        body.position.y = 0.4 + 1.6;
         group.add(body);
 
-        // Rounded top (simple)
-        var top = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.55, 0.5), stoneMat);
-        top.position.y = 0.59 + 3.4 + 0.2;
-        group.add(top);
-        var cap = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.35, 0.45), stoneMat);
-        cap.position.y = 0.59 + 3.4 + 0.55;
-        group.add(cap);
-
-        // Inscription plaque on the front face
-        var plaque = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.8, 0.06), plaqueMat);
-        plaque.position.set(0, 0.59 + 1.55, 0.32);
+        var plaque = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.6, 0.05), plaqueMat);
+        plaque.position.set(0, 0.4 + 1.5, 0.28);
         group.add(plaque);
 
-        // Small flower / tribute cubes at the base (peaceful color)
-        var flowerColors = [0xf472b6, 0xfbbf24, 0x34d399];
-        for (var f = 0; f < 3; f++) {
-            var stem = new THREE.Mesh(
-                new THREE.BoxGeometry(0.08, 0.45, 0.08),
-                new THREE.MeshLambertMaterial({ color: 0x4ade80 })
-            );
-            stem.position.set(-1.2 + f * 1.2, 0.45 + 0.22, 1.0);
-            group.add(stem);
-            var bloom = new THREE.Mesh(
-                new THREE.BoxGeometry(0.28, 0.22, 0.28),
-                new THREE.MeshLambertMaterial({ color: flowerColors[f], emissive: flowerColors[f] })
-            );
-            bloom.position.set(-1.2 + f * 1.2, 0.45 + 0.5, 1.0);
-            group.add(bloom);
-        }
+        // One small flower (was 6 meshes)
+        var stem = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08, 0.4, 0.08),
+            new THREE.MeshLambertMaterial({ color: 0x4ade80 })
+        );
+        stem.position.set(0, 0.55, 1.0);
+        group.add(stem);
+        var bloom = new THREE.Mesh(
+            new THREE.BoxGeometry(0.25, 0.2, 0.25),
+            new THREE.MeshLambertMaterial({ color: 0xf472b6 })
+        );
+        bloom.position.set(0, 0.8, 1.0);
+        group.add(bloom);
 
-        // Soft point light so the stone is readable at dusk
-        try {
-            var soft = new THREE.PointLight(0xfef3c7, 0.35, 18);
-            soft.position.set(0, 2.5, 2.5);
-            group.add(soft);
-        } catch (eL) {}
+        // NO PointLight — that was a major lag source
 
         scene.add(group);
-
-        // Store for proximity message (optional HUD)
         try {
             window._azoraMemorialPos = { x: mx, z: mz, name: "REAL_603blox Memorial" };
         } catch (eW) {}
