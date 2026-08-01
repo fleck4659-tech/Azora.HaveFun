@@ -1956,9 +1956,9 @@ function buildAvatarFace(headColor, gender) {
     }
 
     loadWithThree(faceUrl, function () {
-        loadWithThree("./Smile.png", function () {
+        loadWithThree((faceUrl.charAt(0)==="."?faceUrl:("./"+faceUrl)), function () {
             loadWithImage(faceUrl, function () {
-                loadWithImage("./Smile.png", function () {
+                loadWithImage((faceUrl.charAt(0)==="."?faceUrl:("./"+faceUrl)), function () {
                     console.warn("[Azora] Smile.png missing — face left blank (no white square)");
                 });
             });
