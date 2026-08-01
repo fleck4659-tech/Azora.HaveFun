@@ -1,5 +1,5 @@
 /* Azora main app service worker — v48.1 */
-var CACHE = "azora-app-v50-tiles-sfx";
+var CACHE = "azora-app-v50-1-walk-vol";
 var ASSETS = [
   "./", "./index.html", "./style.css",
   "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./Mossy.mp3",

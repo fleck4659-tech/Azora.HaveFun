@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v50 tiled textures + named SFX","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v50.1 louder walking SFX","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -7296,13 +7296,13 @@ function getAzoraSfx(kind) {
             a.preload = "auto";
             if (kind === "walking") {
                 a.loop = true;
-                a.volume = 0.35;
+                a.volume = 1.0; // max — was 0.35 and inaudible at normal device volume
             } else if (kind === "jumping") {
-                a.volume = 0.55;
+                a.volume = 0.85;
             } else if (kind === "character_reset") {
-                a.volume = 0.6;
+                a.volume = 0.9;
             } else {
-                a.volume = 0.5;
+                a.volume = 0.8;
             }
             _azoraSfx[kind] = a;
         } catch (e) {
@@ -7331,6 +7331,7 @@ function startWalkSfx() {
     _walkSfxPlaying = true;
     try {
         a.loop = true;
+        a.volume = 1.0; // always full so footsteps are heard at low device volume
         var p = a.play();
         if (p && p.catch) p.catch(function () { _walkSfxPlaying = false; });
     } catch (e) { _walkSfxPlaying = false; }
