@@ -283,6 +283,8 @@
     <div class="topbar-right">
         <span id="azoraPlayModeBadge" class="azora-play-mode-badge online" title="Connection status">Play Azora Online</span>
         <div class="currency-display">🪙 AzoraCoins: <span id="bucks">0</span></div>
+        <button type="button" id="marketplaceBtn" class="topbar-shop-btn" onclick="openMarketplace()" title="Marketplace">🛒 Shop</button>
+        <button type="button" id="inventoryBtn" class="topbar-shop-btn" onclick="openInventory()" title="Inventory">🎒 Bag</button>
     </div>
     <button id="publicFeedButton" onclick="openPublicFeed()" style="margin:0;">🎮 Feed</button>
     <button type="button" id="installAppBtn" class="install-app-btn" onclick="installAzoraApp()" title="Install Azora app">📲 Get the App</button>
@@ -718,7 +720,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=53.2"></script>
+<script src="script.js?v=54"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {
@@ -727,5 +729,35 @@ if ("serviceWorker" in navigator) {
   });
 }
 </script>
+
+<!-- Marketplace -->
+<div id="marketplaceOverlay" class="overlay" style="display:none;">
+    <div class="popup market-popup" style="max-width:min(420px,calc(100vw - 16px));text-align:left;">
+        <h2 style="text-align:center;margin:0 0 8px;">🛒 Marketplace</h2>
+        <p style="text-align:center;margin:0 0 12px;opacity:0.85;font-size:0.9rem;">Your balance: <strong id="marketCoinBalance">0</strong> 🪙</p>
+        <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;flex-wrap:wrap;">
+            <label style="font-size:0.85rem;">Filter:
+                <select id="marketGenderFilter" onchange="renderMarketplace()">
+                    <option value="all">All</option>
+                    <option value="girl">Girl hair</option>
+                    <option value="boy">Boy hair</option>
+                </select>
+            </label>
+        </div>
+        <div id="marketplaceList" class="market-list"></div>
+        <button type="button" onclick="closeMarketplace()" style="width:100%;margin-top:12px;">Close</button>
+    </div>
+</div>
+
+<!-- Inventory -->
+<div id="inventoryOverlay" class="overlay" style="display:none;">
+    <div class="popup market-popup" style="max-width:min(420px,calc(100vw - 16px));text-align:left;">
+        <h2 style="text-align:center;margin:0 0 8px;">🎒 Inventory</h2>
+        <p style="text-align:center;margin:0 0 12px;opacity:0.85;font-size:0.85rem;">Equip items, then <strong>Save Avatar</strong> to keep them forever.</p>
+        <div id="inventoryList" class="market-list"></div>
+        <button type="button" onclick="closeInventory()" style="width:100%;margin-top:12px;">Close</button>
+    </div>
+</div>
+
 </body>
 </html>

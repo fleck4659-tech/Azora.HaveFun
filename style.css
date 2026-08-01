@@ -2906,3 +2906,111 @@ html[data-theme="dark"] .gender-option input:checked + .gender-chip {
     border-color: #60a5fa;
     color: #fff !important;
 }
+
+
+/* Marketplace / Inventory */
+.topbar-shop-btn {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: #fff;
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.topbar-shop-btn:hover { background: rgba(255,255,255,0.22); }
+
+.market-popup {
+    max-height: min(85vh, 640px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.market-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+    max-height: min(55vh, 420px);
+    padding: 4px 2px 8px;
+}
+.market-card {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 12px;
+    padding: 10px 12px;
+}
+.market-card.owned { opacity: 0.85; }
+.market-card.equipped {
+    border-color: #4ade80;
+    box-shadow: 0 0 0 1px rgba(74,222,128,0.35);
+}
+.market-card-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+.market-card-meta {
+    font-size: 0.75rem;
+    opacity: 0.75;
+    margin-top: 2px;
+}
+.market-card-desc {
+    font-size: 0.8rem;
+    opacity: 0.85;
+    margin: 6px 0 8px;
+}
+.market-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.market-price {
+    font-weight: 700;
+    color: #fbbf24;
+}
+.market-btn {
+    background: #3b82f6;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.market-btn:hover { background: #2563eb; }
+.market-btn.disabled, .market-btn:disabled {
+    background: #64748b;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+.market-btn.owned-btn {
+    background: #475569;
+}
+
+/* Daily reward toast */
+.azora-toast {
+    position: fixed;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: rgba(15, 23, 42, 0.95);
+    color: #fff;
+    border: 1px solid rgba(251, 191, 36, 0.5);
+    border-radius: 12px;
+    padding: 12px 18px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    z-index: 99999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s, transform 0.3s;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    max-width: min(90vw, 360px);
+    text-align: center;
+}
+.azora-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}

@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v53.2 shorter blocky girl hair","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v54 marketplace inventory daily coins","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -1054,6 +1054,7 @@ function runPlatformAccountWipeOnce() {
                 cur.isOwner = true;
                 localStorage.setItem("azoraAccount", JSON.stringify(cur));
                 localStorage.setItem("loggedIn", "true");
+    try { if (typeof updateCoinsUI === "function") updateCoinsUI(); if (typeof checkDailyLoginReward === "function") checkDailyLoginReward(); if (typeof grantDefaultHairForGender === "function") grantDefaultHairForGender(); } catch (eMkt) {}
             }
         } catch (e) {
             localStorage.removeItem("azoraAccount");
@@ -1097,6 +1098,7 @@ function setLoggedInAccount(account) {
     // Persist full account + session flag so topbar switches after reload
     localStorage.setItem("azoraAccount", JSON.stringify(account));
     localStorage.setItem("loggedIn", "true");
+    try { if (typeof updateCoinsUI === "function") updateCoinsUI(); if (typeof checkDailyLoginReward === "function") checkDailyLoginReward(); if (typeof grantDefaultHairForGender === "function") grantDefaultHairForGender(); } catch (eMkt) {}
     try {
         if (typeof refreshCloudSocial === "function") setTimeout(function () { refreshCloudSocial(); }, 500);
         if (typeof startCloudSocialPolling === "function") startCloudSocialPolling();
@@ -1970,13 +1972,20 @@ function buildAvatarFace(headColor, gender) {
 
 
 /** Blocky hair for girl avatars — sits on top of the head */
-function makeAvatarHair(hairColor, headY, headSize) {
+function makeAvatarHair(hairColor, headY, headSize, styleId) {
     if (typeof THREE === "undefined") return null;
     hairColor = hairColor || "#4a3728";
     headY = (typeof headY === "number") ? headY : 1.12;
     headSize = headSize || 0.65;
+    styleId = styleId || "hair_girl_default";
+
+    // No hair style
+    if (styleId === "hair_boy_none" || styleId === "none") return null;
+
     var group = new THREE.Group();
     group.name = "hair";
+    group.userData = group.userData || {};
+    group.userData.hairStyle = styleId;
     var mat = new THREE.MeshLambertMaterial({ color: hairColor });
 
     function addPart(name, x, y, z, w, h, d) {
@@ -1986,28 +1995,82 @@ function makeAvatarHair(hairColor, headY, headSize) {
         group.add(m);
     }
 
-    // Crown / top of head
-    addPart("hairCap", 0, headY + headSize * 0.38, -0.02, headSize * 1.18, headSize * 0.38, headSize * 1.12);
-
-    // Back of head volume
-    addPart("hairBack", 0, headY + headSize * 0.05, -headSize * 0.42, headSize * 1.05, headSize * 0.7, headSize * 0.4);
-
-    // Soft front bangs
-    addPart("hairBangs", 0, headY + headSize * 0.22, headSize * 0.4, headSize * 0.95, headSize * 0.2, headSize * 0.2);
-
-    // Side pieces — end around the shoulders, not down the whole body
-    var sideY = headY - headSize * 0.35;
-    var sideH = headSize * 1.15;
-    addPart("hairSideL", -headSize * 0.58, sideY, 0.02, headSize * 0.28, sideH, headSize * 0.3);
-    addPart("hairSideR", headSize * 0.58, sideY, 0.02, headSize * 0.28, sideH, headSize * 0.3);
-
-    // Short back length — just past the neck / top of shoulders
-    var backY = headY - headSize * 0.55;
-    var backH = headSize * 1.0;
-    addPart("hairBackMid", 0, backY, -headSize * 0.4, headSize * 0.9, backH, headSize * 0.28);
+    // ---- Girl styles ----
+    if (styleId === "hair_girl_default") {
+        addPart("hairCap", 0, headY + headSize * 0.38, -0.02, headSize * 1.18, headSize * 0.38, headSize * 1.12);
+        addPart("hairBack", 0, headY + headSize * 0.05, -headSize * 0.42, headSize * 1.05, headSize * 0.7, headSize * 0.4);
+        addPart("hairBangs", 0, headY + headSize * 0.22, headSize * 0.4, headSize * 0.95, headSize * 0.2, headSize * 0.2);
+        addPart("hairSideL", -headSize * 0.58, headY - headSize * 0.35, 0.02, headSize * 0.28, headSize * 1.15, headSize * 0.3);
+        addPart("hairSideR", headSize * 0.58, headY - headSize * 0.35, 0.02, headSize * 0.28, headSize * 1.15, headSize * 0.3);
+        addPart("hairBackMid", 0, headY - headSize * 0.55, -headSize * 0.4, headSize * 0.9, headSize * 1.0, headSize * 0.28);
+    } else if (styleId === "hair_girl_bob") {
+        addPart("hairCap", 0, headY + headSize * 0.36, -0.02, headSize * 1.22, headSize * 0.36, headSize * 1.15);
+        addPart("hairBack", 0, headY - headSize * 0.15, -headSize * 0.45, headSize * 1.1, headSize * 0.85, headSize * 0.42);
+        addPart("hairBangs", 0, headY + headSize * 0.18, headSize * 0.42, headSize * 1.0, headSize * 0.18, headSize * 0.22);
+        addPart("hairSideL", -headSize * 0.6, headY - headSize * 0.25, 0.05, headSize * 0.32, headSize * 0.95, headSize * 0.32);
+        addPart("hairSideR", headSize * 0.6, headY - headSize * 0.25, 0.05, headSize * 0.32, headSize * 0.95, headSize * 0.32);
+    } else if (styleId === "hair_girl_ponytail") {
+        addPart("hairCap", 0, headY + headSize * 0.36, -0.02, headSize * 1.15, headSize * 0.36, headSize * 1.1);
+        addPart("hairBangs", 0, headY + headSize * 0.2, headSize * 0.4, headSize * 0.9, headSize * 0.18, headSize * 0.18);
+        addPart("hairSideL", -headSize * 0.55, headY - headSize * 0.15, 0.02, headSize * 0.24, headSize * 0.7, headSize * 0.24);
+        addPart("hairSideR", headSize * 0.55, headY - headSize * 0.15, 0.02, headSize * 0.24, headSize * 0.7, headSize * 0.24);
+        // Ponytail bun + long tail behind
+        addPart("hairBun", 0, headY + headSize * 0.15, -headSize * 0.55, headSize * 0.4, headSize * 0.4, headSize * 0.4);
+        addPart("hairTail", 0, headY - headSize * 0.7, -headSize * 0.6, headSize * 0.28, headSize * 1.5, headSize * 0.28);
+    } else if (styleId === "hair_girl_pigtails") {
+        addPart("hairCap", 0, headY + headSize * 0.36, -0.02, headSize * 1.15, headSize * 0.34, headSize * 1.1);
+        addPart("hairBangs", 0, headY + headSize * 0.2, headSize * 0.4, headSize * 0.9, headSize * 0.18, headSize * 0.18);
+        // Left pigtail
+        addPart("pigL1", -headSize * 0.7, headY + headSize * 0.1, 0, headSize * 0.28, headSize * 0.28, headSize * 0.28);
+        addPart("pigL2", -headSize * 0.85, headY - headSize * 0.35, 0.05, headSize * 0.24, headSize * 0.9, headSize * 0.24);
+        // Right pigtail
+        addPart("pigR1", headSize * 0.7, headY + headSize * 0.1, 0, headSize * 0.28, headSize * 0.28, headSize * 0.28);
+        addPart("pigR2", headSize * 0.85, headY - headSize * 0.35, 0.05, headSize * 0.24, headSize * 0.9, headSize * 0.24);
+    } else if (styleId === "hair_girl_bangs") {
+        addPart("hairCap", 0, headY + headSize * 0.38, -0.02, headSize * 1.12, headSize * 0.36, headSize * 1.08);
+        addPart("hairBack", 0, headY + headSize * 0.05, -headSize * 0.4, headSize * 1.0, headSize * 0.6, headSize * 0.35);
+        // Heavy bangs
+        addPart("hairBangs", 0, headY + headSize * 0.15, headSize * 0.45, headSize * 1.05, headSize * 0.28, headSize * 0.25);
+        addPart("hairSideL", -headSize * 0.55, headY - headSize * 0.2, 0.02, headSize * 0.22, headSize * 0.8, headSize * 0.22);
+        addPart("hairSideR", headSize * 0.55, headY - headSize * 0.2, 0.02, headSize * 0.22, headSize * 0.8, headSize * 0.22);
+    }
+    // ---- Boy styles ----
+    else if (styleId === "hair_boy_short") {
+        addPart("hairCap", 0, headY + headSize * 0.32, -0.02, headSize * 1.1, headSize * 0.28, headSize * 1.05);
+        addPart("hairBack", 0, headY + headSize * 0.1, -headSize * 0.35, headSize * 0.95, headSize * 0.4, headSize * 0.3);
+        addPart("hairSideL", -headSize * 0.5, headY + headSize * 0.05, 0, headSize * 0.2, headSize * 0.45, headSize * 0.25);
+        addPart("hairSideR", headSize * 0.5, headY + headSize * 0.05, 0, headSize * 0.2, headSize * 0.45, headSize * 0.25);
+    } else if (styleId === "hair_boy_spiky") {
+        addPart("hairCap", 0, headY + headSize * 0.35, -0.02, headSize * 1.05, headSize * 0.25, headSize * 1.0);
+        // Spikes
+        addPart("spike1", 0, headY + headSize * 0.55, 0.05, headSize * 0.18, headSize * 0.35, headSize * 0.18);
+        addPart("spike2", -headSize * 0.25, headY + headSize * 0.5, 0, headSize * 0.16, headSize * 0.3, headSize * 0.16);
+        addPart("spike3", headSize * 0.25, headY + headSize * 0.5, 0, headSize * 0.16, headSize * 0.3, headSize * 0.16);
+        addPart("spike4", -headSize * 0.4, headY + headSize * 0.42, -0.05, headSize * 0.14, headSize * 0.25, headSize * 0.14);
+        addPart("spike5", headSize * 0.4, headY + headSize * 0.42, -0.05, headSize * 0.14, headSize * 0.25, headSize * 0.14);
+    } else if (styleId === "hair_boy_side") {
+        addPart("hairCap", 0, headY + headSize * 0.32, -0.05, headSize * 1.08, headSize * 0.28, headSize * 1.0);
+        addPart("hairBack", 0, headY + headSize * 0.08, -headSize * 0.38, headSize * 0.95, headSize * 0.45, headSize * 0.32);
+        // Side sweep to the right
+        addPart("sweep", headSize * 0.35, headY + headSize * 0.15, headSize * 0.25, headSize * 0.55, headSize * 0.22, headSize * 0.3);
+        addPart("sideL", -headSize * 0.48, headY + headSize * 0.05, 0, headSize * 0.18, headSize * 0.4, headSize * 0.22);
+    } else if (styleId === "hair_boy_cap") {
+        // Flat cap-like hair
+        addPart("hairCap", 0, headY + headSize * 0.4, 0.05, headSize * 1.25, headSize * 0.22, headSize * 1.2);
+        addPart("brim", 0, headY + headSize * 0.28, headSize * 0.35, headSize * 1.15, headSize * 0.12, headSize * 0.35);
+        addPart("hairBack", 0, headY + headSize * 0.1, -headSize * 0.35, headSize * 1.0, headSize * 0.4, headSize * 0.3);
+    } else {
+        // Fallback: girl default short
+        addPart("hairCap", 0, headY + headSize * 0.38, -0.02, headSize * 1.18, headSize * 0.38, headSize * 1.12);
+        addPart("hairBack", 0, headY + headSize * 0.05, -headSize * 0.42, headSize * 1.05, headSize * 0.7, headSize * 0.4);
+        addPart("hairBangs", 0, headY + headSize * 0.22, headSize * 0.4, headSize * 0.95, headSize * 0.2, headSize * 0.2);
+        addPart("hairSideL", -headSize * 0.58, headY - headSize * 0.35, 0.02, headSize * 0.28, headSize * 1.15, headSize * 0.3);
+        addPart("hairSideR", headSize * 0.58, headY - headSize * 0.35, 0.02, headSize * 0.28, headSize * 1.15, headSize * 0.3);
+    }
 
     return group;
 }
+
 
 function removeAvatarHair(parent) {
     if (!parent) return;
@@ -2020,9 +2083,20 @@ function applyGenderVisualsToCustomizer(gender, colors) {
     gender = gender || getAvatarGender();
     colors = colors || {};
     removeAvatarHair(avatarCharacterGroup);
-    if (gender === "girl" || gender === "female") {
-        var hair = makeAvatarHair(colors.hair || "#4a3728", headMesh ? headMesh.position.y : 1.12, 0.65);
+    // Prefer equipped marketplace hair, else default style for gender
+    var styleId = null;
+    try {
+        if (typeof getEquippedHairStyle === "function") styleId = getEquippedHairStyle();
+    } catch (e) {}
+    if (!styleId) {
+        if (gender === "girl" || gender === "female") styleId = "hair_girl_default";
+        else styleId = "hair_boy_none";
+    }
+    if (styleId && styleId !== "hair_boy_none" && styleId !== "none") {
+        var hair = makeAvatarHair(colors.hair || "#4a3728", headMesh ? headMesh.position.y : 1.12, 0.65, styleId);
         if (hair) avatarCharacterGroup.add(hair);
+    }
+    if (gender === "girl" || gender === "female") {
         // Slightly wider hips / dress silhouette on torso
         if (torsoMesh) {
             torsoMesh.scale.set(1.05, 1.05, 1.08);
@@ -2480,6 +2554,13 @@ function saveAvatar() {
         else genderNow = (account.avatar && account.avatar.gender) || account.gender || getAvatarGender();
     } catch (eG) { genderNow = getAvatarGender(); }
     account.gender = genderNow;
+    var equippedHair = null;
+    try {
+        if (typeof getEquippedHairStyle === "function") equippedHair = getEquippedHairStyle();
+    } catch (eH) {}
+    if (!equippedHair) {
+        equippedHair = (account.avatar && account.avatar.hairStyle) || (genderNow === "girl" ? "hair_girl_default" : "hair_boy_none");
+    }
     account.avatar = {
         head: validated.head,
         torso: validated.torso,
@@ -2488,9 +2569,20 @@ function saveAvatar() {
         leftLeg: validated.leftLeg,
         rightLeg: validated.rightLeg,
         hair: (account.avatar && account.avatar.hair) || (genderNow === "girl" ? "#4a3728" : "#3b2f2f"),
+        hairStyle: equippedHair,
         gender: genderNow,
         face: genderNow === "girl" ? "female" : "male"
     };
+    // Keep inventory equipped in sync with saved avatar
+    try {
+        if (typeof getInventory === "function" && typeof saveInventory === "function") {
+            var invSave = getInventory();
+            invSave.equipped = invSave.equipped || {};
+            invSave.equipped.hair = equippedHair;
+            if (invSave.items.indexOf(equippedHair) === -1) invSave.items.push(equippedHair);
+            saveInventory(invSave);
+        }
+    } catch (eInv) {}
     try {
         if (typeof applyGenderVisualsToCustomizer === "function") {
             applyGenderVisualsToCustomizer(genderNow, account.avatar);
@@ -2544,6 +2636,16 @@ function loadAvatarFromStorage() {
         if (avatar) {
             setAvatarColorInputs(avatar);
             try { if (typeof syncCustomizerGenderUI === "function") syncCustomizerGenderUI(); } catch (eS) {}
+            // Restore equipped hair from saved avatar
+            try {
+                if (avatar.hairStyle && typeof getInventory === "function") {
+                    var invL = getInventory();
+                    if (invL.items.indexOf(avatar.hairStyle) === -1) invL.items.push(avatar.hairStyle);
+                    invL.equipped = invL.equipped || {};
+                    invL.equipped.hair = avatar.hairStyle;
+                    if (typeof saveInventory === "function") saveInventory(invL);
+                }
+            } catch (eHairLoad) {}
             if (localStorage.getItem("loggedIn") === "true") {
                 var validated = moderateCharacterColors(
                     avatar.head, avatar.torso, avatar.leftArm, avatar.rightArm, avatar.leftLeg, avatar.rightLeg
@@ -8871,3 +8973,359 @@ function syncCustomizerGenderUI() {
     });
 }
 window.syncCustomizerGenderUI = syncCustomizerGenderUI;
+
+
+
+/* =========================================================
+   AzoraCoins + Daily Login + Marketplace + Inventory
+   ========================================================= */
+
+var AZORA_HAIR_CATALOG = [
+    // Girl hair
+    { id: "hair_girl_default", name: "Classic Short", gender: "girl", price: 0, desc: "Default short hair for girls" },
+    { id: "hair_girl_bangs", name: "Heavy Bangs", gender: "girl", price: 1, desc: "Cute bangs across the forehead" },
+    { id: "hair_girl_bob", name: "Bob Cut", gender: "girl", price: 2, desc: "Clean shoulder-length bob" },
+    { id: "hair_girl_ponytail", name: "Ponytail", gender: "girl", price: 3, desc: "Tied-back ponytail" },
+    { id: "hair_girl_pigtails", name: "Pigtails", gender: "girl", price: 3, desc: "Twin pigtails" },
+    // Boy hair
+    { id: "hair_boy_none", name: "No Hair", gender: "boy", price: 0, desc: "Default — no hair" },
+    { id: "hair_boy_short", name: "Short Crop", gender: "boy", price: 1, desc: "Simple short hair" },
+    { id: "hair_boy_spiky", name: "Spiky", gender: "boy", price: 2, desc: "Spiky top hair" },
+    { id: "hair_boy_side", name: "Side Sweep", gender: "boy", price: 2, desc: "Swept to one side" },
+    { id: "hair_boy_cap", name: "Flat Cap", gender: "boy", price: 3, desc: "Flat cap style hair" }
+];
+
+function getCoins() {
+    try {
+        var n = parseInt(localStorage.getItem("azoraCoins") || "0", 10);
+        return isNaN(n) ? 0 : Math.max(0, n);
+    } catch (e) { return 0; }
+}
+
+function setCoins(n) {
+    n = Math.max(0, Math.floor(Number(n) || 0));
+    try { localStorage.setItem("azoraCoins", String(n)); } catch (e) {}
+    updateCoinsUI();
+    return n;
+}
+
+function addCoins(amount) {
+    return setCoins(getCoins() + (Number(amount) || 0));
+}
+
+function spendCoins(amount) {
+    amount = Math.floor(Number(amount) || 0);
+    var cur = getCoins();
+    if (cur < amount) return false;
+    setCoins(cur - amount);
+    return true;
+}
+
+function updateCoinsUI() {
+    try {
+        var el = document.getElementById("bucks");
+        if (el) el.textContent = String(getCoins());
+    } catch (e) {}
+}
+
+/** Daily login reward — 10 AzoraCoins once per calendar day */
+function getTodayKey() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function checkDailyLoginReward() {
+    try {
+        if (localStorage.getItem("loggedIn") !== "true") return;
+        var today = getTodayKey();
+        var last = localStorage.getItem("azoraLastDailyClaim") || "";
+        if (last === today) return; // already claimed today
+        localStorage.setItem("azoraLastDailyClaim", today);
+        addCoins(10);
+        showAzoraToast("+10 AzoraCoins! Daily login reward 🪙");
+    } catch (e) {
+        console.warn("[Azora] daily claim", e);
+    }
+}
+
+function showAzoraToast(msg) {
+    try {
+        var old = document.getElementById("azoraToast");
+        if (old) old.remove();
+        var t = document.createElement("div");
+        t.id = "azoraToast";
+        t.className = "azora-toast";
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(function () { t.classList.add("show"); }, 20);
+        setTimeout(function () {
+            t.classList.remove("show");
+            setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 400);
+        }, 3500);
+    } catch (e) {}
+}
+
+function getInventory() {
+    try {
+        var raw = JSON.parse(localStorage.getItem("azoraInventory") || "null");
+        if (!raw || typeof raw !== "object") {
+            raw = { items: [], equipped: { hair: null } };
+        }
+        if (!Array.isArray(raw.items)) raw.items = [];
+        if (!raw.equipped || typeof raw.equipped !== "object") raw.equipped = { hair: null };
+        return raw;
+    } catch (e) {
+        return { items: [], equipped: { hair: null } };
+    }
+}
+
+function saveInventory(inv) {
+    try {
+        localStorage.setItem("azoraInventory", JSON.stringify(inv));
+    } catch (e) {}
+}
+
+function ownsItem(itemId) {
+    var inv = getInventory();
+    return inv.items.indexOf(itemId) !== -1;
+}
+
+function getEquippedHairStyle() {
+    var inv = getInventory();
+    var id = inv.equipped && inv.equipped.hair;
+    if (id && ownsItem(id)) return id;
+    // Defaults by gender
+    var g = (typeof getAvatarGender === "function") ? getAvatarGender() : "boy";
+    if (g === "girl" || g === "female") return "hair_girl_default";
+    return "hair_boy_none";
+}
+
+function grantDefaultHairForGender() {
+    var inv = getInventory();
+    var g = (typeof getAvatarGender === "function") ? getAvatarGender() : "boy";
+    var defaults = (g === "girl" || g === "female")
+        ? ["hair_girl_default"]
+        : ["hair_boy_none"];
+    defaults.forEach(function (id) {
+        if (inv.items.indexOf(id) === -1) inv.items.push(id);
+    });
+    // Auto-equip default if nothing equipped
+    if (!inv.equipped.hair) {
+        inv.equipped.hair = defaults[0];
+    }
+    saveInventory(inv);
+}
+
+function buyMarketplaceItem(itemId) {
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Log in or create an account to buy items!");
+        if (typeof openCreateAccount === "function") openCreateAccount();
+        return;
+    }
+    var item = null;
+    for (var i = 0; i < AZORA_HAIR_CATALOG.length; i++) {
+        if (AZORA_HAIR_CATALOG[i].id === itemId) { item = AZORA_HAIR_CATALOG[i]; break; }
+    }
+    if (!item) { alert("Item not found."); return; }
+    if (ownsItem(itemId)) {
+        showAzoraToast("You already own this!");
+        return;
+    }
+    if (item.price > 0 && !spendCoins(item.price)) {
+        alert("Not enough AzoraCoins! You need " + item.price + " 🪙");
+        return;
+    }
+    var inv = getInventory();
+    inv.items.push(itemId);
+    saveInventory(inv);
+    showAzoraToast("Bought " + item.name + "! Check Inventory to equip.");
+    renderMarketplace();
+    renderInventory();
+}
+
+function equipInventoryItem(itemId) {
+    if (!ownsItem(itemId)) {
+        alert("You don't own this item yet. Buy it in the Marketplace!");
+        return;
+    }
+    var inv = getInventory();
+    inv.equipped.hair = itemId;
+    saveInventory(inv);
+
+    // Apply live on avatar
+    try {
+        var gender = (typeof getAvatarGender === "function") ? getAvatarGender() : "boy";
+        var colors = {};
+        try {
+            if (typeof readAvatarColorInputs === "function") colors = readAvatarColorInputs() || {};
+        } catch (e) {}
+        colors.hair = colors.hair || "#4a3728";
+        if (typeof applyGenderVisualsToCustomizer === "function") {
+            applyGenderVisualsToCustomizer(gender, colors);
+        }
+    } catch (e) {
+        console.warn("[Azora] equip hair", e);
+    }
+
+    // Persist on account avatar so save keeps it
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc) {
+            if (!acc.avatar) acc.avatar = {};
+            acc.avatar.hairStyle = itemId;
+            localStorage.setItem("azoraAccount", JSON.stringify(acc));
+            // Also update accounts map
+            if (acc.username && typeof getSavedAccounts === "function") {
+                var map = getSavedAccounts();
+                if (map[acc.username]) {
+                    map[acc.username].avatar = map[acc.username].avatar || {};
+                    map[acc.username].avatar.hairStyle = itemId;
+                    if (typeof saveSavedAccounts === "function") saveSavedAccounts(map);
+                }
+            }
+        }
+        // Backup key
+        try {
+            var av = JSON.parse(localStorage.getItem("azoraAvatar") || "{}");
+            av.hairStyle = itemId;
+            localStorage.setItem("azoraAvatar", JSON.stringify(av));
+        } catch (e2) {}
+    } catch (e) {}
+
+    showAzoraToast("Equipped! Save your avatar to keep it forever.");
+    renderInventory();
+}
+
+function openMarketplace() {
+    grantDefaultHairForGender();
+    var el = document.getElementById("marketplaceOverlay");
+    if (el) el.style.display = "flex";
+    renderMarketplace();
+    updateCoinsUI();
+}
+
+function closeMarketplace() {
+    var el = document.getElementById("marketplaceOverlay");
+    if (el) el.style.display = "none";
+}
+
+function openInventory() {
+    grantDefaultHairForGender();
+    var el = document.getElementById("inventoryOverlay");
+    if (el) el.style.display = "flex";
+    renderInventory();
+    updateCoinsUI();
+}
+
+function closeInventory() {
+    var el = document.getElementById("inventoryOverlay");
+    if (el) el.style.display = "none";
+}
+
+function renderMarketplace() {
+    var list = document.getElementById("marketplaceList");
+    if (!list) return;
+    var filter = (document.getElementById("marketGenderFilter") || {}).value || "all";
+    var coins = getCoins();
+    var html = "";
+    AZORA_HAIR_CATALOG.forEach(function (item) {
+        if (filter === "girl" && item.gender !== "girl") return;
+        if (filter === "boy" && item.gender !== "boy") return;
+        var owned = ownsItem(item.id);
+        var canBuy = !owned && (item.price === 0 || coins >= item.price);
+        var priceLabel = item.price === 0 ? "Free" : (item.price + " 🪙");
+        var genderLabel = item.gender === "girl" ? "👧 Girl" : "👦 Boy";
+        html += '<div class="market-card' + (owned ? " owned" : "") + '">';
+        html += '<div class="market-card-title">' + item.name + '</div>';
+        html += '<div class="market-card-meta">' + genderLabel + ' · Hair</div>';
+        html += '<div class="market-card-desc">' + item.desc + '</div>';
+        html += '<div class="market-card-footer">';
+        html += '<span class="market-price">' + priceLabel + '</span>';
+        if (owned) {
+            html += '<button type="button" class="market-btn owned-btn" disabled>Owned</button>';
+        } else {
+            html += '<button type="button" class="market-btn' + (canBuy ? "" : " disabled") + '" onclick="buyMarketplaceItem(\'' + item.id + '\')"' + (canBuy ? "" : " disabled") + '>Buy</button>';
+        }
+        html += '</div></div>';
+    });
+    if (!html) html = '<p style="opacity:0.7;text-align:center;">No items in this filter.</p>';
+    list.innerHTML = html;
+    var bal = document.getElementById("marketCoinBalance");
+    if (bal) bal.textContent = String(coins);
+}
+
+function renderInventory() {
+    var list = document.getElementById("inventoryList");
+    if (!list) return;
+    var inv = getInventory();
+    var equipped = inv.equipped.hair;
+    var html = "";
+    if (!inv.items.length) {
+        html = '<p style="opacity:0.7;text-align:center;">Your inventory is empty. Visit the Marketplace!</p>';
+    } else {
+        inv.items.forEach(function (id) {
+            var item = null;
+            for (var i = 0; i < AZORA_HAIR_CATALOG.length; i++) {
+                if (AZORA_HAIR_CATALOG[i].id === id) { item = AZORA_HAIR_CATALOG[i]; break; }
+            }
+            if (!item) {
+                item = { id: id, name: id, gender: "?", desc: "Item" };
+            }
+            var isEq = equipped === id;
+            var genderLabel = item.gender === "girl" ? "👧 Girl" : (item.gender === "boy" ? "👦 Boy" : "");
+            html += '<div class="market-card' + (isEq ? " equipped" : "") + '">';
+            html += '<div class="market-card-title">' + item.name + (isEq ? " ✓" : "") + '</div>';
+            html += '<div class="market-card-meta">' + genderLabel + ' · Hair</div>';
+            html += '<div class="market-card-desc">' + (item.desc || "") + '</div>';
+            html += '<div class="market-card-footer">';
+            if (isEq) {
+                html += '<button type="button" class="market-btn owned-btn" disabled>Equipped</button>';
+            } else {
+                html += '<button type="button" class="market-btn" onclick="equipInventoryItem(\'' + id + '\')">Equip</button>';
+            }
+            html += '</div></div>';
+        });
+    }
+    list.innerHTML = html;
+}
+
+// Hook daily reward after login / on load when already logged in
+(function setupDailyAndCoins() {
+    function run() {
+        updateCoinsUI();
+        grantDefaultHairForGender();
+        checkDailyLoginReward();
+        // Re-apply equipped hair once avatar exists
+        setTimeout(function () {
+            try {
+                if (typeof applyGenderVisualsToCustomizer === "function" && typeof avatarCharacterGroup !== "undefined" && avatarCharacterGroup) {
+                    var g = (typeof getAvatarGender === "function") ? getAvatarGender() : "boy";
+                    var colors = {};
+                    try { if (typeof readAvatarColorInputs === "function") colors = readAvatarColorInputs() || {}; } catch (e) {}
+                    applyGenderVisualsToCustomizer(g, colors);
+                }
+            } catch (e) {}
+        }, 800);
+    }
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", run);
+    } else {
+        setTimeout(run, 200);
+    }
+})();
+
+window.getCoins = getCoins;
+window.setCoins = setCoins;
+window.addCoins = addCoins;
+window.updateCoinsUI = updateCoinsUI;
+window.checkDailyLoginReward = checkDailyLoginReward;
+window.openMarketplace = openMarketplace;
+window.closeMarketplace = closeMarketplace;
+window.openInventory = openInventory;
+window.closeInventory = closeInventory;
+window.buyMarketplaceItem = buyMarketplaceItem;
+window.equipInventoryItem = equipInventoryItem;
+window.getEquippedHairStyle = getEquippedHairStyle;
+window.renderMarketplace = renderMarketplace;
+window.renderInventory = renderInventory;
+window.AZORA_HAIR_CATALOG = AZORA_HAIR_CATALOG;
