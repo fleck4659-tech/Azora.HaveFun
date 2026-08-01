@@ -1,9 +1,9 @@
 /* Azora main app service worker — v48.1 */
-var CACHE = "azora-app-v48.1-1-userid";
+var CACHE = "azora-app-v50-tiles-sfx";
 var ASSETS = [
   "./", "./index.html", "./style.css",
   "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./Mossy.mp3",
-  "./grass.jpg", "./road.jpg", "./concrete.jpg", "./wood1.jpg", "./wood2.jpg"
+  "./grass.jpg", "./road.jpg", "./concrete.jpg", "./wood1.jpg", "./wood2.jpg", "./walking.mp3", "./jumping.mp3", "./character_reset.mp3", "./notifcation.mp3"
 ];
 self.addEventListener("install", function (e) {
   e.waitUntil(

@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v48.1 sequential IDs by join date + owner Aza:0","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v50 tiled textures + named SFX","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -210,6 +210,306 @@ function fetchGlobalRegistry(callback) {
 window.AZORA_CLOUD = AZORA_CLOUD;
 window.registerGlobalUser = registerGlobalUser;
 window.fetchGlobalRegistry = fetchGlobalRegistry;
+
+// ============================================================
+// CLOUD SOCIAL — friends, requests, chats, notifications
+// (localStorage alone cannot sync across phone ↔ computer)
+// ============================================================
+var _socialCloudTimer = null;
+var _chatCloudTimer = null;
+
+function socialSafeKey(username) {
+    return encodeURIComponent(String(username || "").toLowerCase().replace(/[.#$\/\[\]]/g, "_"));
+}
+
+function cloudSocialUrl(username) {
+    return cloudBase() + "/azoraSocial/" + socialSafeKey(username) + ".json";
+}
+function cloudFriendReqUrl(toUser, fromUser) {
+    var base = cloudBase() + "/azoraFriendRequests/" + socialSafeKey(toUser);
+    if (fromUser) return base + "/" + socialSafeKey(fromUser) + ".json";
+    return base + ".json";
+}
+function cloudChatUrl(chatKey, msgId) {
+    var safe = encodeURIComponent(String(chatKey || "").replace(/[.#$\/\[\]]/g, "_"));
+    var base = cloudBase() + "/azoraChats/" + safe;
+    if (msgId) return base + "/" + msgId + ".json";
+    return base + ".json";
+}
+function cloudNotifUrl(username, notifId) {
+    var base = cloudBase() + "/azoraNotifications/" + socialSafeKey(username);
+    if (notifId) return base + "/" + notifId + ".json";
+    return base + ".json";
+}
+
+function cloudFetchJson(url) {
+    return fetch(url + (url.indexOf("?") >= 0 ? "&" : "?") + "ts=" + Date.now(), {
+        method: "GET",
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" }
+    }).then(function (r) { return r.json(); });
+}
+
+function cloudPutJson(url, body) {
+    return fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        cache: "no-store"
+    });
+}
+
+function cloudDeleteJson(url) {
+    return fetch(url, { method: "DELETE", cache: "no-store" });
+}
+
+function isCloudSocialReady() {
+    return typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady();
+}
+
+/** Upload one user's social blob (friends, following, etc.) */
+function pushUserSocialToCloud(username, userBlob) {
+    if (!isCloudSocialReady() || !username) return;
+    var payload = {
+        followers: (userBlob && userBlob.followers) || [],
+        following: (userBlob && userBlob.following) || [],
+        friends: (userBlob && userBlob.friends) || [],
+        friendRequests: (userBlob && userBlob.friendRequests) || [],
+        updatedAt: Date.now()
+    };
+    cloudPutJson(cloudSocialUrl(username), payload).catch(function () {});
+}
+
+/** Merge cloud social for a username into local azoraSocial */
+function pullUserSocialFromCloud(username, callback) {
+    callback = callback || function () {};
+    if (!isCloudSocialReady() || !username) { callback(null); return; }
+    cloudFetchJson(cloudSocialUrl(username))
+        .then(function (remote) {
+            if (!remote || typeof remote !== "object") { callback(null); return; }
+            var data = getSocialData();
+            var local = ensureUserSocial(data, username);
+            function mergeArr(a, b) {
+                var out = (a || []).slice();
+                (b || []).forEach(function (x) {
+                    if (out.indexOf(x) === -1) out.push(x);
+                });
+                return out;
+            }
+            local.followers = mergeArr(local.followers, remote.followers);
+            local.following = mergeArr(local.following, remote.following);
+            local.friends = mergeArr(local.friends, remote.friends);
+            local.friendRequests = mergeArr(local.friendRequests, remote.friendRequests);
+            data[username] = local;
+            // local-only write to avoid recursion
+            try { localStorage.setItem("azoraSocial", JSON.stringify(data)); } catch (e) {}
+            callback(local);
+        })
+        .catch(function () { callback(null); });
+}
+
+/** Incoming friend requests inbox for `toUser` */
+function pushFriendRequestToCloud(fromUser, toUser) {
+    if (!isCloudSocialReady() || !fromUser || !toUser) return;
+    cloudPutJson(cloudFriendReqUrl(toUser, fromUser), {
+        from: fromUser,
+        to: toUser,
+        at: Date.now(),
+        status: "pending"
+    }).catch(function () {});
+}
+
+function pullIncomingFriendRequests(toUser, callback) {
+    callback = callback || function () {};
+    if (!isCloudSocialReady() || !toUser) { callback([]); return; }
+    cloudFetchJson(cloudFriendReqUrl(toUser))
+        .then(function (data) {
+            var list = [];
+            if (data && typeof data === "object") {
+                Object.keys(data).forEach(function (k) {
+                    var row = data[k];
+                    if (row && row.status !== "accepted" && row.status !== "declined") {
+                        list.push(row.from || k);
+                    }
+                });
+            }
+            // Also reflect into local: people who requested me appear as
+            // their.friendRequests including me (for acceptFriend logic)
+            if (list.length) {
+                var social = getSocialData();
+                list.forEach(function (from) {
+                    var their = ensureUserSocial(social, from);
+                    if ((their.friendRequests || []).indexOf(toUser) === -1) {
+                        their.friendRequests = their.friendRequests || [];
+                        their.friendRequests.push(toUser);
+                    }
+                });
+                try { localStorage.setItem("azoraSocial", JSON.stringify(social)); } catch (e) {}
+            }
+            callback(list);
+        })
+        .catch(function () { callback([]); });
+}
+
+function clearFriendRequestCloud(fromUser, toUser) {
+    if (!isCloudSocialReady()) return;
+    cloudDeleteJson(cloudFriendReqUrl(toUser, fromUser)).catch(function () {});
+}
+
+function pushChatMessageToCloud(chatKey, entry) {
+    if (!isCloudSocialReady() || !chatKey || !entry) return;
+    var msgId = "m_" + (entry.at || Date.now()) + "_" + Math.random().toString(36).slice(2, 7);
+    cloudPutJson(cloudChatUrl(chatKey, msgId), {
+        from: entry.from,
+        text: entry.text,
+        at: entry.at || Date.now()
+    }).catch(function () {});
+}
+
+function pullChatMessagesFromCloud(chatKey, callback) {
+    callback = callback || function () {};
+    if (!isCloudSocialReady() || !chatKey) { callback([]); return; }
+    cloudFetchJson(cloudChatUrl(chatKey))
+        .then(function (data) {
+            var list = [];
+            if (data && typeof data === "object") {
+                Object.keys(data).forEach(function (k) {
+                    var row = data[k];
+                    if (row && row.text) {
+                        list.push({ from: row.from, text: row.text, at: row.at || 0, _id: k });
+                    }
+                });
+            }
+            list.sort(function (a, b) { return (a.at || 0) - (b.at || 0); });
+            // Merge into localStorage key
+            try {
+                var local = JSON.parse(localStorage.getItem(chatKey) || "[]");
+                var seen = {};
+                local.forEach(function (m) { seen[(m.at || 0) + "|" + m.from + "|" + m.text] = true; });
+                list.forEach(function (m) {
+                    var sig = (m.at || 0) + "|" + m.from + "|" + m.text;
+                    if (!seen[sig]) local.push({ from: m.from, text: m.text, at: m.at });
+                });
+                local.sort(function (a, b) { return (a.at || 0) - (b.at || 0); });
+                localStorage.setItem(chatKey, JSON.stringify(local));
+                callback(local);
+            } catch (e) {
+                callback(list);
+            }
+        })
+        .catch(function () { callback([]); });
+}
+
+function pushNotifToCloud(toUsername, notif) {
+    if (!isCloudSocialReady() || !toUsername || !notif) return;
+    var id = notif.id || ("n_" + Date.now());
+    cloudPutJson(cloudNotifUrl(toUsername, id), notif).catch(function () {});
+}
+
+function pullNotifsFromCloud(username, callback) {
+    callback = callback || function () {};
+    if (!isCloudSocialReady() || !username) { callback([]); return; }
+    cloudFetchJson(cloudNotifUrl(username))
+        .then(function (data) {
+            var list = [];
+            if (data && typeof data === "object") {
+                Object.keys(data).forEach(function (k) {
+                    var row = data[k];
+                    if (row && row.message) {
+                        list.push({
+                            id: row.id || k,
+                            message: row.message,
+                            type: row.type || "info",
+                            read: !!row.read,
+                            at: row.at || 0
+                        });
+                    }
+                });
+            }
+            list.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
+            // Merge into local notif store
+            var local = getNotifications(username);
+            var seen = {};
+            local.forEach(function (n) { seen[n.id] = true; });
+            list.forEach(function (n) {
+                if (!seen[n.id]) local.push(n);
+            });
+            local.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
+            saveNotifications(username, local);
+            if (username === getMyUsername()) updateNotifBadge();
+            callback(local);
+        })
+        .catch(function () { callback([]); });
+}
+
+/** Refresh me + friends social + inbox + notifs */
+function refreshCloudSocial(callback) {
+    callback = callback || function () {};
+    var me = typeof getMyUsername === "function" ? getMyUsername() : null;
+    if (!me || !isCloudSocialReady()) { callback(); return; }
+    pullUserSocialFromCloud(me, function () {
+        pullIncomingFriendRequests(me, function () {
+            pullNotifsFromCloud(me, function () {
+                var data = getSocialData();
+                var my = ensureUserSocial(data, me);
+                var friends = (my.friends || []).slice(0, 20);
+                var left = friends.length;
+                if (!left) { callback(); return; }
+                friends.forEach(function (f) {
+                    pullUserSocialFromCloud(f, function () {
+                        left--;
+                        if (left <= 0) callback();
+                    });
+                });
+            });
+        });
+    });
+}
+
+function startCloudSocialPolling() {
+    if (_socialCloudTimer) return;
+    _socialCloudTimer = setInterval(function () {
+        if (document.hidden) return;
+        refreshCloudSocial(function () {
+            try {
+                if (typeof renderFriendsList === "function") renderFriendsList();
+                if (typeof updateNotifBadge === "function") updateNotifBadge();
+            } catch (e) {}
+        });
+    }, 4000);
+}
+
+function startCloudChatPolling() {
+    if (_chatCloudTimer) return;
+    _chatCloudTimer = setInterval(function () {
+        if (document.hidden) return;
+        if (typeof currentChatFriend === "undefined" || !currentChatFriend) return;
+        if (currentChatFriend === AZORA_AI_ID) return;
+        var me = typeof getChatSenderId === "function" ? getChatSenderId() : getMyUsername();
+        if (!me) return;
+        var key = getChatKey(me, currentChatFriend);
+        pullChatMessagesFromCloud(key, function () {
+            if (typeof renderChatMessages === "function") renderChatMessages();
+        });
+    }, 2500);
+}
+
+window.refreshCloudSocial = refreshCloudSocial;
+window.pullChatMessagesFromCloud = pullChatMessagesFromCloud;
+window.startCloudSocialPolling = startCloudSocialPolling;
+window.startCloudChatPolling = startCloudChatPolling;
+
+// Start background social sync when logged in
+try {
+    setTimeout(function () {
+        if (localStorage.getItem("loggedIn") === "true") {
+            refreshCloudSocial();
+            startCloudSocialPolling();
+        }
+    }, 1500);
+} catch (e) {}
+
+
 
 /** Ensure cloud has official Azora as Aza: 0 and nextId is at least 1 */
 function seedCloudOwnerAndNextId() {
@@ -735,6 +1035,11 @@ function setLoggedInAccount(account) {
     // Persist full account + session flag so topbar switches after reload
     localStorage.setItem("azoraAccount", JSON.stringify(account));
     localStorage.setItem("loggedIn", "true");
+    try {
+        if (typeof refreshCloudSocial === "function") setTimeout(function () { refreshCloudSocial(); }, 500);
+        if (typeof startCloudSocialPolling === "function") startCloudSocialPolling();
+        if (typeof startCloudChatPolling === "function") startCloudChatPolling();
+    } catch (e) {}
 }
 
 function finishCreateAccount(username, password, userId, email) {
@@ -3627,6 +3932,14 @@ function getSocialData() {
 
 function saveSocialData(data) {
     localStorage.setItem("azoraSocial", JSON.stringify(data));
+    // Mirror each touched user to Firebase so other devices see friends/requests
+    try {
+        if (typeof pushUserSocialToCloud === "function" && data) {
+            Object.keys(data).forEach(function (uname) {
+                pushUserSocialToCloud(uname, data[uname]);
+            });
+        }
+    } catch (e) {}
 }
 
 function ensureUserSocial(data, username) {
@@ -3713,6 +4026,19 @@ function renderProfileGames(username, isOwn) {
 }
 
 function openUserProfile(username) {
+    // Pull this user's social + my inbox from cloud (friend requests / friends)
+    try {
+        if (typeof pullUserSocialFromCloud === "function") {
+            pullUserSocialFromCloud(username, function () {
+                try { if (typeof renderProfileActions === "function") { /* redraw below */ } } catch (e) {}
+            });
+        }
+        if (typeof pullIncomingFriendRequests === "function" && typeof getMyUsername === "function") {
+            var _me = getMyUsername();
+            if (_me) pullIncomingFriendRequests(_me, function () {});
+        }
+    } catch (e) {}
+
     // owner badge applied after render via hook below
 
     if (!username) return;
@@ -3841,6 +4167,28 @@ function openUserProfile(username) {
     var meName = getMyUsername();
     renderProfileGames(username, meName === username);
     document.getElementById("profileOverlay").style.display = "flex";
+
+    // After first paint, sync cloud social once and refresh buttons (friend requests)
+    if (!openUserProfile._syncing) {
+        openUserProfile._syncing = true;
+        try {
+            var pulls = 0;
+            function maybeRefresh() {
+                pulls++;
+                if (pulls < 2) return;
+                openUserProfile._syncing = false;
+                try { openUserProfile(username); } catch (e) { openUserProfile._syncing = false; }
+            }
+            if (typeof pullUserSocialFromCloud === "function") {
+                pullUserSocialFromCloud(username, maybeRefresh);
+            } else { pulls++; }
+            if (typeof pullIncomingFriendRequests === "function" && meName) {
+                pullIncomingFriendRequests(meName, maybeRefresh);
+            } else { pulls++; maybeRefresh(); }
+        } catch (e) {
+            openUserProfile._syncing = false;
+        }
+    }
 }
 
 function closeProfile() {
@@ -3899,6 +4247,9 @@ function sendFriendRequest(username) {
 
     // For accept: when I view X and X.friendRequests includes me, I can accept.
     saveSocialData(data);
+    // Cloud inbox so the OTHER device receives the request
+    try { pushFriendRequestToCloud(me, username); } catch (e) {}
+    try { pushUserSocialToCloud(me, myData); } catch (e) {}
     pushNotification(username, me + " sent you a friend request.", "friend");
     alert("Friend request sent to " + username + "!");
     openUserProfile(username);
@@ -3923,6 +4274,13 @@ function acceptFriend(username) {
     if (theirData.friends.indexOf(me) === -1) theirData.friends.push(me);
 
     saveSocialData(data);
+    try { clearFriendRequestCloud(username, me); } catch (e) {}
+    try { clearFriendRequestCloud(me, username); } catch (e) {}
+    try {
+        pushUserSocialToCloud(me, myData);
+        pushUserSocialToCloud(username, theirData);
+    } catch (e) {}
+    pushNotification(username, me + " accepted your friend request.", "friend");
     alert("You and " + username + " are now friends!");
     openUserProfile(username);
 }
@@ -4263,6 +4621,15 @@ function openChatPanel() {
     }
     document.getElementById("chatOverlay").style.display = "flex";
     ensureActiveAIChat();
+    // Sync friends / requests from Firebase before drawing list
+    try {
+        refreshCloudSocial(function () {
+            renderFriendsList();
+            renderAIChatHistoryList();
+        });
+        startCloudSocialPolling();
+        startCloudChatPolling();
+    } catch (e) {}
     renderFriendsList();
     renderAIChatHistoryList();
     // Default: open AI companion (available to accounts and guests)
@@ -4387,6 +4754,15 @@ function selectChatFriend(friend) {
         var fl = getFriendLastTalked(friend);
         document.getElementById("chatWithLabel").textContent =
             "Chat with " + friend + " · " + formatLastTalked(fl);
+        // Pull shared chat from Firebase
+        try {
+            var me2 = getChatSenderId() || getMyUsername();
+            var ckey = getChatKey(me2, friend);
+            pullChatMessagesFromCloud(ckey, function () {
+                if (currentChatFriend === friend) renderChatMessages();
+            });
+        } catch (e) {}
+        try { startCloudChatPolling(); } catch (e) {}
     }
     document.getElementById("chatInputRow").style.display = "flex";
     renderFriendsList();
@@ -5080,14 +5456,15 @@ function sendChatMessage() {
         return;
     }
 
-    // Friend message — live thread + permanent archive
+    // Friend message — local + Firebase so the other device can see it
     var key = getChatKey(me, currentChatFriend);
     var messages = [];
     try { messages = JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) {}
     var entry = { from: me, text: text, at: Date.now() };
     messages.push(entry);
     localStorage.setItem(key, JSON.stringify(messages));
-    archivePlayerMessage("with:" + currentChatFriend, entry);
+    try { archivePlayerMessage("with:" + currentChatFriend, entry); } catch (e) {}
+    try { pushChatMessageToCloud(key, entry); } catch (e) {}
     renderChatMessages();
 
     showChatTyping();
@@ -5363,15 +5740,18 @@ function saveNotifications(username, list) {
 
 function pushNotification(toUsername, message, type) {
     if (!toUsername) return;
-    var list = getNotifications(toUsername);
-    list.unshift({
+    try { playAzoraSfx("notification"); } catch (e) {}
+    var notif = {
         id: "n_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
         message: message,
         type: type || "info",
         read: false,
         at: Date.now()
-    });
+    };
+    var list = getNotifications(toUsername);
+    list.unshift(notif);
     saveNotifications(toUsername, list);
+    try { pushNotifToCloud(toUsername, notif); } catch (e) {}
     // Update badge if it's me
     if (toUsername === getMyUsername()) updateNotifBadge();
 }
@@ -5391,6 +5771,16 @@ function updateNotifBadge() {
 }
 
 function toggleNotifPanel() {
+    try {
+        var _nm = typeof getMyUsername === "function" ? getMyUsername() : null;
+        if (_nm && typeof pullNotifsFromCloud === "function") {
+            pullNotifsFromCloud(_nm, function () {
+                try { if (typeof renderNotifications === "function") renderNotifications(); } catch (e) {}
+                try { if (typeof updateNotifBadge === "function") updateNotifBadge(); } catch (e) {}
+            });
+        }
+    } catch (e) {}
+
     var ov = document.getElementById("notifOverlay");
     if (ov.style.display === "flex") {
         closeNotifPanel();
@@ -5410,6 +5800,15 @@ function openNotifPanel() {
     }
     document.getElementById("notifOverlay").style.display = "flex";
     renderNotifList();
+    try {
+        var me = getMyUsername();
+        if (me && typeof pullNotifsFromCloud === "function") {
+            pullNotifsFromCloud(me, function () { renderNotifList(); updateNotifBadge(); });
+        }
+        if (me && typeof pullIncomingFriendRequests === "function") {
+            pullIncomingFriendRequests(me, function () {});
+        }
+    } catch (e) {}
 }
 
 function closeNotifPanel() {
@@ -6569,8 +6968,8 @@ function loadNormTextures(done) {
  */
 var _normMatPool = {};
 function normTexForSize(baseTex, sizeX, sizeZ, tileSize) {
-    // For shared pool we set repeat on a lightweight clone only when needed;
-    // preferred path is makeNormMatShared.
+    // Tile the texture in world-space: every `tileSize` units = 1 full square of the image.
+    // That way grass/road/concrete look like repeated tiles, not one stretched photo.
     if (!baseTex) return null;
     try {
         var t = baseTex.clone();
@@ -6580,8 +6979,12 @@ function normTexForSize(baseTex, sizeX, sizeZ, tileSize) {
         t.generateMipmaps = false;
         t.minFilter = THREE.LinearFilter;
         t.magFilter = THREE.LinearFilter;
-        var ts = tileSize || 4;
-        t.repeat.set(Math.max(0.5, sizeX / ts), Math.max(0.5, sizeZ / ts));
+        // Smaller default tile = more repeats (sharper tiled look)
+        var ts = (typeof tileSize === "number" && tileSize > 0.25) ? tileSize : 2;
+        var rx = Math.max(1, Math.round((sizeX || ts) / ts));
+        var ry = Math.max(1, Math.round((sizeZ || ts) / ts));
+        t.repeat.set(rx, ry);
+        t.offset.set(0, 0);
         return t;
     } catch (e) { return baseTex; }
 }
@@ -6614,7 +7017,7 @@ function buildNormCity(scene, tex) {
     // Ground — grass (shared material, green tint)
     var ground = new THREE.Mesh(
         new THREE.BoxGeometry(400, 1.2, 400),
-        makeNormMatShared("grass", tex.grass ? 0x6fbf6a : 0x2f6b3c, 400, 400, 4)
+        makeNormMatShared("grass", tex.grass ? 0x6fbf6a : 0x2f6b3c, 400, 400, 2)
     );
     ground.position.y = -0.6;
     scene.add(ground);
@@ -6622,19 +7025,19 @@ function buildNormCity(scene, tex) {
     // Roads — shared asphalt mats
     var roadX = new THREE.Mesh(
         new THREE.BoxGeometry(400, 0.15, 18),
-        makeNormMatShared("road", tex.road ? 0xbbbbbb : 0x374151, 400, 18, 3)
+        makeNormMatShared("road", tex.road ? 0xbbbbbb : 0x374151, 400, 18, 2)
     );
     roadX.position.y = 0.02;
     scene.add(roadX);
     var roadZ = new THREE.Mesh(
         new THREE.BoxGeometry(18, 0.15, 400),
-        makeNormMatShared("road", tex.road ? 0xbbbbbb : 0x374151, 18, 400, 3)
+        makeNormMatShared("road", tex.road ? 0xbbbbbb : 0x374151, 18, 400, 2)
     );
     roadZ.position.y = 0.025;
     scene.add(roadZ);
 
     // Sidewalks — one shared concrete mat for all
-    var walkMat = makeNormMatShared("concrete", tex.concrete ? 0xc8c8c8 : 0x9ca3af, 20, 4, 2);
+    var walkMat = makeNormMatShared("concrete", tex.concrete ? 0xc8c8c8 : 0x9ca3af, 20, 4, 1.5);
     [[0, 12], [0, -12], [12, 0], [-12, 0]].forEach(function (off) {
         var sx = off[0] === 0 ? 400 : 6;
         var sz = off[1] === 0 ? 400 : 6;
@@ -6652,17 +7055,17 @@ function buildNormCity(scene, tex) {
     function building(x, z, w, h, d, color) {
         var wallT = 0.55; // wall thickness
         // Shared mats per building size (not per wall) — big lag win
-        var mat = makeNormMatShared("concrete", color || 0x909090, Math.max(w, d), h, 2);
+        var mat = makeNormMatShared("concrete", color || 0x909090, Math.max(w, d), h, 1.5);
         var winMat = makeNormMat({ color: 0x93c5fd });
         var floorMat = makeNormMatShared(
             tex.wood1 ? "wood1" : "wood2",
             (tex.wood1 || tex.wood2) ? 0xe8d4b8 : 0x78716c,
-            Math.max(1, w - 1), Math.max(1, d - 1), 3
+            Math.max(1, w - 1), Math.max(1, d - 1), 1.5
         );
         var stairMat = makeNormMatShared(
             tex.wood2 ? "wood2" : "wood1",
             (tex.wood2 || tex.wood1) ? 0xd4b896 : 0x57534e,
-            3, 4, 2
+            3, 4, 1.5
         );
         var doorW = Math.min(3.2, w * 0.35); // front door opening
         var floorStep = 3.2; // height between floors
@@ -6863,6 +7266,90 @@ function buildNormCity(scene, tex) {
     }
 }
 
+
+
+/* ===== Azora SFX by filename purpose =====
+   Mossy.mp3          → roleplay background music (loop)
+   walking.mp3        → footsteps while moving on ground
+   jumping.mp3        → jump
+   character_reset.mp3→ character reset / collapse
+   notifcation.mp3    → notification received (filename spelling as provided)
+*/
+var _azoraSfx = {
+    walking: null,
+    jumping: null,
+    character_reset: null,
+    notification: null
+};
+var _walkSfxPlaying = false;
+
+function getAzoraSfx(kind) {
+    var map = {
+        walking: "walking.mp3",
+        jumping: "jumping.mp3",
+        character_reset: "character_reset.mp3",
+        notification: "notifcation.mp3" // matches uploaded filename
+    };
+    if (!_azoraSfx[kind]) {
+        try {
+            var a = new Audio(map[kind]);
+            a.preload = "auto";
+            if (kind === "walking") {
+                a.loop = true;
+                a.volume = 0.35;
+            } else if (kind === "jumping") {
+                a.volume = 0.55;
+            } else if (kind === "character_reset") {
+                a.volume = 0.6;
+            } else {
+                a.volume = 0.5;
+            }
+            _azoraSfx[kind] = a;
+        } catch (e) {
+            _azoraSfx[kind] = null;
+        }
+    }
+    return _azoraSfx[kind];
+}
+
+function playAzoraSfx(kind) {
+    var a = getAzoraSfx(kind);
+    if (!a) return;
+    try {
+        if (kind !== "walking") {
+            a.currentTime = 0;
+        }
+        var p = a.play();
+        if (p && p.catch) p.catch(function () {});
+    } catch (e) {}
+}
+
+function startWalkSfx() {
+    if (_walkSfxPlaying) return;
+    var a = getAzoraSfx("walking");
+    if (!a) return;
+    _walkSfxPlaying = true;
+    try {
+        a.loop = true;
+        var p = a.play();
+        if (p && p.catch) p.catch(function () { _walkSfxPlaying = false; });
+    } catch (e) { _walkSfxPlaying = false; }
+}
+
+function stopWalkSfx() {
+    if (!_walkSfxPlaying) return;
+    _walkSfxPlaying = false;
+    var a = getAzoraSfx("walking");
+    if (!a) return;
+    try {
+        a.pause();
+        a.currentTime = 0;
+    } catch (e) {}
+}
+
+window.playAzoraSfx = playAzoraSfx;
+window.startWalkSfx = startWalkSfx;
+window.stopWalkSfx = stopWalkSfx;
 
 /* ===== Roleplay music (Mossy.mp3) ===== */
 var _normMusic = null;
@@ -7120,6 +7607,14 @@ function startNormGameWorld(def) {
         if (Math.abs(throttle) > 0.001) {
             _normLocalMesh.position.x += fwdX * throttle * sp;
             _normLocalMesh.position.z += fwdZ * throttle * sp;
+            // Footsteps only while moving on the ground
+            if (_normSession.onGround) {
+                try { startWalkSfx(); } catch (e) {}
+            } else {
+                try { stopWalkSfx(); } catch (e) {}
+            }
+        } else {
+            try { stopWalkSfx(); } catch (e) {}
         }
 
         // Can't walk through building walls (hollow shells, solid walls)
@@ -7138,6 +7633,7 @@ function startNormGameWorld(def) {
             if (_normSession.onGround) {
                 _normSession.velY = jumpPower;
                 _normSession.onGround = false;
+                try { playAzoraSfx("jumping"); } catch (e) {}
             }
         }
         _normSession.velY = (_normSession.velY || 0) - gravity;
@@ -7520,6 +8016,7 @@ function disposeNormWorld(keepSession) {
 
 function leaveNormGame() {
     stopNormMusic();
+    try { stopWalkSfx(); } catch (e) {}
     try {
         var st = document.querySelector(".norm-game-stage");
         if (st) st.classList.remove("show-joysticks");
@@ -7569,6 +8066,7 @@ function startNormCharacterCollapse() {
     if (_normResetBusy || !_normLocalMesh || !_normScene) return;
     _normResetBusy = true;
     if (_normSession) _normSession.frozen = true;
+    try { playAzoraSfx("character_reset"); } catch (e) {}
 
     // Detach each limb into free-flying debris
     var root = _normLocalMesh;
