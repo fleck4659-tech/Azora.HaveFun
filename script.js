@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v54 marketplace inventory daily coins","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v55 more norm games + cat simulator","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -10,16 +10,16 @@ let spawnInterval;
 
 // Mock database for search demonstration
 const database = {
+    // Real platform data only — no fake demo users/games
     users: [
-        { username: "603blox", profileLink: "https://www.roblox.com/users/9744531169/profile" },
-        { username: "AzoraDeveloper", profileLink: "#" },
-        { username: "LeemoonFan", profileLink: "#" },
-        { username: "Guest1337", profileLink: "#" }
+        { username: "Azora", profileLink: "#", userId: "Aza: 0" }
     ],
     games: [
-        { title: "Super Azora Run", author: "603blox", link: "#" },
-        { title: "Avatar Customizer Tycoon", author: "AzoraDeveloper", link: "#" },
-        { title: "Sword Fighting Arena", author: "System", link: "#" }
+        { title: "Azora Roleplay", author: "Azora", link: "#", type: "norm" },
+        { title: "Become a Cat Simulator", author: "Azora", link: "#", type: "norm" },
+        { title: "Parkour Plains", author: "Azora", link: "#", type: "norm" },
+        { title: "Cozy Cafe", author: "Azora", link: "#", type: "norm" },
+        { title: "Sky Islands", author: "Azora", link: "#", type: "norm" }
     ]
 };
 
@@ -6827,7 +6827,45 @@ var NORM_GAMES = {
         title: "Azora Roleplay",
         owner: "Azora",
         dimensions: "3D",
+        world: "city",
+        avatarMode: "human",
         roomPath: "/azoraNormRooms/azora-roleplay/players"
+    },
+    "become-a-cat": {
+        id: "become-a-cat",
+        title: "Become a Cat Simulator",
+        owner: "Azora",
+        dimensions: "3D",
+        world: "catpark",
+        avatarMode: "cat",
+        roomPath: "/azoraNormRooms/become-a-cat/players"
+    },
+    "parkour-plains": {
+        id: "parkour-plains",
+        title: "Parkour Plains",
+        owner: "Azora",
+        dimensions: "3D",
+        world: "parkour",
+        avatarMode: "human",
+        roomPath: "/azoraNormRooms/parkour-plains/players"
+    },
+    "cozy-cafe": {
+        id: "cozy-cafe",
+        title: "Cozy Cafe",
+        owner: "Azora",
+        dimensions: "3D",
+        world: "cafe",
+        avatarMode: "human",
+        roomPath: "/azoraNormRooms/cozy-cafe/players"
+    },
+    "sky-islands": {
+        id: "sky-islands",
+        title: "Sky Islands",
+        owner: "Azora",
+        dimensions: "3D",
+        world: "islands",
+        avatarMode: "human",
+        roomPath: "/azoraNormRooms/sky-islands/players"
     }
 };
 
@@ -6932,6 +6970,106 @@ function makeNormAvatar(colors) {
     g.userData.gender = gender;
     return g;
 }
+
+/** Blocky cat-like creature for Become a Cat Simulator */
+function makeNormCatAvatar(colors) {
+    colors = colors || getNormAvatarColors();
+    var g = new THREE.Group();
+    g.name = "normAvatar";
+    g.userData = g.userData || {};
+    g.userData.isCat = true;
+
+    function box(w, h, d, color) {
+        return new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, d),
+            new THREE.MeshLambertMaterial({ color: color })
+        );
+    }
+
+    // Body (horizontal-ish cat torso)
+    var body = box(0.7, 0.55, 1.1, colors.torso || "#ff9f43");
+    body.position.set(0, 0.55, 0);
+    body.name = "torso";
+    g.add(body);
+
+    // Head
+    var head = box(0.55, 0.5, 0.55, colors.head || "#feca57");
+    head.position.set(0, 0.95, 0.45);
+    head.name = "head";
+    g.add(head);
+
+    // Ears
+    var earL = box(0.16, 0.28, 0.12, colors.head || "#feca57");
+    earL.position.set(-0.18, 1.28, 0.4);
+    earL.name = "earL";
+    g.add(earL);
+    var earR = box(0.16, 0.28, 0.12, colors.head || "#feca57");
+    earR.position.set(0.18, 1.28, 0.4);
+    earR.name = "earR";
+    g.add(earR);
+
+    // Inner ear pink
+    var innerL = box(0.08, 0.14, 0.06, "#ff9ff3");
+    innerL.position.set(-0.18, 1.26, 0.46);
+    g.add(innerL);
+    var innerR = box(0.08, 0.14, 0.06, "#ff9ff3");
+    innerR.position.set(0.18, 1.26, 0.46);
+    g.add(innerR);
+
+    // Legs (four short legs — feet on y=0)
+    var legColor = colors.leftLeg || "#ee5a24";
+    var fl = box(0.2, 0.4, 0.2, legColor);
+    fl.position.set(-0.22, 0.2, 0.35);
+    fl.name = "leftLeg";
+    g.add(fl);
+    var fr = box(0.2, 0.4, 0.2, colors.rightLeg || legColor);
+    fr.position.set(0.22, 0.2, 0.35);
+    fr.name = "rightLeg";
+    g.add(fr);
+    var bl = box(0.2, 0.4, 0.2, legColor);
+    bl.position.set(-0.22, 0.2, -0.35);
+    bl.name = "leftArm";
+    g.add(bl);
+    var br = box(0.2, 0.4, 0.2, colors.rightArm || legColor);
+    br.position.set(0.22, 0.2, -0.35);
+    br.name = "rightArm";
+    g.add(br);
+
+    // Tail
+    var tail = box(0.14, 0.14, 0.7, colors.torso || "#ff9f43");
+    tail.position.set(0, 0.65, -0.85);
+    tail.rotation.x = -0.35;
+    tail.name = "tail";
+    g.add(tail);
+
+    // Simple face dots (eyes) on head front
+    try {
+        var eyeMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+        var eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.06), eyeMat);
+        eyeL.position.set(-0.12, 1.0, 0.73);
+        g.add(eyeL);
+        var eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.06), eyeMat);
+        eyeR.position.set(0.12, 1.0, 0.73);
+        g.add(eyeR);
+        var nose = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.06), new THREE.MeshLambertMaterial({ color: 0xff6b81 }));
+        nose.position.set(0, 0.9, 0.74);
+        g.add(nose);
+    } catch (e) {}
+
+    return g;
+}
+
+function makeNormAvatarForCurrentGame(colors) {
+    var mode = "human";
+    try {
+        if (_normSession && _normSession.id && NORM_GAMES[_normSession.id]) {
+            mode = NORM_GAMES[_normSession.id].avatarMode || "human";
+        }
+    } catch (e) {}
+    if (mode === "cat") return makeNormCatAvatar(colors);
+    return makeNormAvatar(colors);
+}
+
 
 /** Bottom of feet in local space (leg center -0.7, height 1.0 → bottom -1.2) */
 var NORM_AVATAR_FOOT_OFFSET = 0.02; // feet at local y=0; sit just above ground top
@@ -7673,6 +7811,140 @@ function buildNormCity(scene, tex) {
     }
 }
 
+/** Alternate Norm Game worlds (park, parkour, cafe, islands) */
+function buildNormWorldByType(scene, tex, worldType) {
+    if (!scene || typeof THREE === "undefined") return;
+    tex = tex || {};
+    worldType = worldType || "catpark";
+
+    function groundMat(map, color) {
+        var m = new THREE.MeshLambertMaterial({ color: color || 0x4a7c3a });
+        if (map) {
+            m.map = map;
+            try {
+                map.wrapS = map.wrapT = THREE.RepeatWrapping;
+                map.repeat.set(12, 12);
+            } catch (e) {}
+        }
+        return m;
+    }
+
+    // Shared large ground
+    var ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(120, 120),
+        groundMat(tex.grass, worldType === "islands" ? 0x3d8b6e : 0x5a9e3a)
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    if (worldType === "catpark" || worldType === "park") {
+        // Cat park: trees, yarn balls, boxes, benches
+        function tree(x, z) {
+            var trunk = new THREE.Mesh(
+                new THREE.BoxGeometry(0.5, 2.2, 0.5),
+                new THREE.MeshLambertMaterial({ color: 0x6b4226 })
+            );
+            trunk.position.set(x, 1.1, z);
+            scene.add(trunk);
+            var leaves = new THREE.Mesh(
+                new THREE.BoxGeometry(2.2, 2.0, 2.2),
+                new THREE.MeshLambertMaterial({ color: 0x2ecc71 })
+            );
+            leaves.position.set(x, 2.8, z);
+            scene.add(leaves);
+        }
+        tree(-8, -6); tree(10, 4); tree(-12, 8); tree(6, -10); tree(0, 12);
+        // Cardboard boxes for cats
+        for (var i = 0; i < 6; i++) {
+            var bx = new THREE.Mesh(
+                new THREE.BoxGeometry(1.4, 1.0, 1.4),
+                new THREE.MeshLambertMaterial({ color: 0xc4a574 })
+            );
+            bx.position.set((i % 3) * 4 - 4, 0.5, Math.floor(i / 3) * 5 - 2);
+            scene.add(bx);
+        }
+        // Yarn balls
+        for (var y = 0; y < 5; y++) {
+            var yarn = new THREE.Mesh(
+                new THREE.BoxGeometry(0.5, 0.5, 0.5),
+                new THREE.MeshLambertMaterial({ color: [0xe74c3c, 0x3498db, 0xf1c40f, 0x9b59b6, 0x1abc9c][y] })
+            );
+            yarn.position.set(Math.sin(y * 1.7) * 7, 0.25, Math.cos(y * 1.3) * 7);
+            scene.add(yarn);
+        }
+    } else if (worldType === "parkour") {
+        // Platforms of increasing height
+        for (var p = 0; p < 12; p++) {
+            var plat = new THREE.Mesh(
+                new THREE.BoxGeometry(3, 0.4, 3),
+                new THREE.MeshLambertMaterial({ color: p % 2 ? 0x3498db : 0x2980b9 })
+            );
+            plat.position.set(p * 4 - 10, 0.5 + p * 0.7, Math.sin(p) * 3);
+            scene.add(plat);
+        }
+        // Start pad
+        var start = new THREE.Mesh(
+            new THREE.BoxGeometry(6, 0.3, 6),
+            new THREE.MeshLambertMaterial({ color: 0x2ecc71 })
+        );
+        start.position.set(-14, 0.15, 0);
+        scene.add(start);
+    } else if (worldType === "cafe") {
+        // Floor rug area + counter + tables
+        var rug = new THREE.Mesh(
+            new THREE.BoxGeometry(20, 0.08, 16),
+            new THREE.MeshLambertMaterial({ color: 0xc0392b })
+        );
+        rug.position.set(0, 0.04, 0);
+        scene.add(rug);
+        var counter = new THREE.Mesh(
+            new THREE.BoxGeometry(8, 1.2, 1.5),
+            new THREE.MeshLambertMaterial({ color: 0x6b4226 })
+        );
+        counter.position.set(0, 0.6, -6);
+        scene.add(counter);
+        for (var t = 0; t < 4; t++) {
+            var table = new THREE.Mesh(
+                new THREE.BoxGeometry(1.6, 0.15, 1.6),
+                new THREE.MeshLambertMaterial({ color: 0x8B5A2B })
+            );
+            table.position.set((t % 2) * 5 - 2.5, 0.75, Math.floor(t / 2) * 4 - 1);
+            scene.add(table);
+            var leg = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, 0.7, 0.2),
+                new THREE.MeshLambertMaterial({ color: 0x5d4037 })
+            );
+            leg.position.set((t % 2) * 5 - 2.5, 0.35, Math.floor(t / 2) * 4 - 1);
+            scene.add(leg);
+        }
+    } else if (worldType === "islands") {
+        // Floating island pads
+        var islands = [
+            [0, 0, 0, 10], [14, 2, 4, 6], [-12, 3, -6, 7], [8, 5, -14, 5], [-16, 4, 10, 6]
+        ];
+        islands.forEach(function (isl) {
+            var pad = new THREE.Mesh(
+                new THREE.CylinderGeometry(isl[3], isl[3] * 0.9, 1.2, 12),
+                new THREE.MeshLambertMaterial({ color: 0x3d8b6e })
+            );
+            pad.position.set(isl[0], isl[1], isl[2]);
+            scene.add(pad);
+            var dirt = new THREE.Mesh(
+                new THREE.CylinderGeometry(isl[3] * 0.85, isl[3] * 0.5, 2, 12),
+                new THREE.MeshLambertMaterial({ color: 0x6b4226 })
+            );
+            dirt.position.set(isl[0], isl[1] - 1.4, isl[2]);
+            scene.add(dirt);
+        });
+    } else {
+        // Fallback small park
+        try { buildNormCity(scene, tex); } catch (e) {}
+    }
+}
+
+
 
 
 /* ===== Azora SFX by filename purpose =====
@@ -7901,7 +8173,7 @@ function startNormGameWorld(def) {
     var chat = document.getElementById("normChatMessages");
     if (chat) {
         chat.innerHTML = "";
-        appendNormChat("System", "Welcome to " + def.title + " · v44 · textures optimized · reset. Only real players who join appear here.", true);
+        appendNormChat("System", "Welcome to " + def.title + "! Only real players who join appear here.", true);
         if (typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()) {
             appendNormChat("System", "Live multiplayer is on — you should see other players move in near real-time when they join this room.", true);
         } else {
@@ -7952,13 +8224,22 @@ function startNormGameWorld(def) {
     function _doBuildCity(tex) {
         if (_cityBuilt) return;
         _cityBuilt = true;
-        try { buildNormCity(_normScene, tex || {}); } catch (e) { console.warn("[Azora] city", e); }
+        try {
+            var worldType = (def && def.world) ? def.world : "city";
+            if (worldType === "city") {
+                buildNormCity(_normScene, tex || {});
+            } else if (typeof buildNormWorldByType === "function") {
+                buildNormWorldByType(_normScene, tex || {}, worldType);
+            } else {
+                buildNormCity(_normScene, tex || {});
+            }
+        } catch (e) { console.warn("[Azora] world build", e); }
     }
     loadNormTextures(function (tex) { _doBuildCity(tex); });
     setTimeout(function () { _doBuildCity(_normTexCache || {}); }, 1800);
 
 
-    _normLocalMesh = makeNormAvatar(getNormAvatarColors());
+    _normLocalMesh = makeNormAvatarForCurrentGame(getNormAvatarColors());
     placeNormAvatarOnGround(_normLocalMesh, 0, 0, 0);
     _normScene.add(_normLocalMesh);
     _normRemoteMeshes = {};
@@ -8336,7 +8617,7 @@ function startNormPresence(def) {
 
                         if (_normScene && typeof THREE !== "undefined") {
                             if (!_normRemoteMeshes[pid]) {
-                                var mesh = makeNormAvatar(row.avatar || null);
+                                var mesh = makeNormAvatarForCurrentGame(row.avatar || null);
                                 placeNormAvatarOnGround(
                                     mesh,
                                     (row.pos && typeof row.pos.x === "number") ? row.pos.x : 2,
@@ -8612,7 +8893,7 @@ function finishNormCharacterReset(spawnPos) {
         if (_normLocalMesh && _normScene) {
             try { _normScene.remove(_normLocalMesh); } catch (e) {}
         }
-        _normLocalMesh = makeNormAvatar(getNormAvatarColors());
+        _normLocalMesh = makeNormAvatarForCurrentGame(getNormAvatarColors());
         // Always respawn at map center (spawn area)
         placeNormAvatarOnGround(_normLocalMesh, 0, 0, 0);
         if (_normSession) { _normSession.charYaw = 0; }
