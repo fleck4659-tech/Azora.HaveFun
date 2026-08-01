@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v50.1 louder walking SFX","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v51 click button SFX","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -7279,7 +7279,8 @@ var _azoraSfx = {
     walking: null,
     jumping: null,
     character_reset: null,
-    notification: null
+    notification: null,
+    click: null
 };
 var _walkSfxPlaying = false;
 
@@ -7288,7 +7289,8 @@ function getAzoraSfx(kind) {
         walking: "walking.mp3",
         jumping: "jumping.mp3",
         character_reset: "character_reset.mp3",
-        notification: "notifcation.mp3" // matches uploaded filename
+        notification: "notifcation.mp3", // matches uploaded filename
+        click: "click_buttons.mp3"
     };
     if (!_azoraSfx[kind]) {
         try {
@@ -7301,6 +7303,8 @@ function getAzoraSfx(kind) {
                 a.volume = 0.85;
             } else if (kind === "character_reset") {
                 a.volume = 0.9;
+            } else if (kind === "click") {
+                a.volume = 0.75;
             } else {
                 a.volume = 0.8;
             }
@@ -7347,6 +7351,46 @@ function stopWalkSfx() {
         a.currentTime = 0;
     } catch (e) {}
 }
+
+/* Play click_buttons.mp3 on any button / button-like control */
+function playClickSfx() {
+    try {
+        var a = getAzoraSfx("click");
+        if (!a) return;
+        a.currentTime = 0;
+        a.volume = 0.75;
+        var p = a.play();
+        if (p && p.catch) p.catch(function () {});
+    } catch (e) {}
+}
+
+(function installAzoraClickSfx() {
+    if (window._azoraClickSfxInstalled) return;
+    window._azoraClickSfxInstalled = true;
+    document.addEventListener("click", function (e) {
+        var t = e.target;
+        if (!t) return;
+        // climb a few parents for nested icons/spans inside buttons
+        for (var i = 0; i < 5 && t; i++) {
+            if (t.nodeType !== 1) { t = t.parentElement; continue; }
+            var tag = (t.tagName || "").toUpperCase();
+            var role = (t.getAttribute && t.getAttribute("role")) || "";
+            var cls = (t.className && String(t.className)) || "";
+            var isBtn =
+                tag === "BUTTON" ||
+                tag === "A" ||
+                role === "button" ||
+                (t.type === "button" || t.type === "submit" || t.type === "reset") ||
+                /\b(btn|button|topbar-btn|icon-btn|nav-btn|action-btn|game-btn|join-btn|leave-btn)\b/i.test(cls);
+            if (isBtn) {
+                playClickSfx();
+                return;
+            }
+            t = t.parentElement;
+        }
+    }, true);
+})();
+
 
 window.playAzoraSfx = playAzoraSfx;
 window.startWalkSfx = startWalkSfx;
