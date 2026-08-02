@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v56.3 members off, low prices","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v57.0 marble + block/report/mod","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -121,6 +121,202 @@ function handleDisabledFeatureClick(event, btnEl) {
 }
 window.showDisabledFeatureTip = showDisabledFeatureTip;
 window.handleDisabledFeatureClick = handleDisabledFeatureClick;
+
+/* =========================================================
+   Safety: Block, Report, Automated Moderation
+   ========================================================= */
+
+function getBlockedUsers() {
+    try {
+        var list = JSON.parse(localStorage.getItem("azoraBlocked") || "[]");
+        return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+}
+
+function saveBlockedUsers(list) {
+    try { localStorage.setItem("azoraBlocked", JSON.stringify(list || [])); } catch (e) {}
+}
+
+function isUserBlocked(username) {
+    if (!username) return false;
+    var key = String(username).toLowerCase();
+    return getBlockedUsers().some(function (u) { return String(u).toLowerCase() === key; });
+}
+
+function blockUser(username) {
+    if (!username) return;
+    var me = (typeof getMyUsername === "function") ? getMyUsername() : null;
+    if (me && String(me).toLowerCase() === String(username).toLowerCase()) {
+        alert("You cannot block yourself.");
+        return;
+    }
+    if (String(username).toLowerCase() === "azora") {
+        alert("You cannot block the official Azora account.");
+        return;
+    }
+    var list = getBlockedUsers();
+    if (list.some(function (u) { return String(u).toLowerCase() === String(username).toLowerCase(); })) {
+        if (typeof showAzoraToast === "function") showAzoraToast(username + " is already blocked.");
+        return;
+    }
+    if (!confirm("Block " + username + "?\n\nYou will not see their messages in Chat or Norm Games. You can unblock them later from their profile.")) return;
+    list.push(username);
+    saveBlockedUsers(list);
+
+    // Soft-remove from local friends/following for cleaner UI
+    try {
+        if (typeof getSocialData === "function" && me) {
+            var data = getSocialData();
+            var mine = (typeof ensureUserSocial === "function") ? ensureUserSocial(data, me) : (data[me] || {});
+            ["friends", "following", "followers", "friendRequests"].forEach(function (k) {
+                if (!Array.isArray(mine[k])) return;
+                mine[k] = mine[k].filter(function (n) {
+                    return String(n).toLowerCase() !== String(username).toLowerCase();
+                });
+            });
+            data[me] = mine;
+            if (typeof saveSocialData === "function") saveSocialData(data);
+        }
+    } catch (e) {}
+
+    if (typeof showAzoraToast === "function") showAzoraToast("Blocked " + username);
+    try {
+        if (typeof currentChatFriend !== "undefined" && currentChatFriend === username && typeof selectChatFriend === "function") {
+            selectChatFriend("__azora_ai__");
+        }
+        if (typeof renderFriendsList === "function") renderFriendsList();
+        if (typeof closeProfile === "function") closeProfile();
+    } catch (e2) {}
+}
+
+function unblockUser(username) {
+    if (!username) return;
+    var list = getBlockedUsers().filter(function (u) {
+        return String(u).toLowerCase() !== String(username).toLowerCase();
+    });
+    saveBlockedUsers(list);
+    if (typeof showAzoraToast === "function") showAzoraToast("Unblocked " + username);
+    try {
+        if (typeof openUserProfile === "function") openUserProfile(username);
+    } catch (e) {}
+}
+
+/** Simple family-safe automated moderation for chat text */
+function azoraAutoModerate(text) {
+    text = String(text || "");
+    var original = text;
+    // Patterns kept mild and age-appropriate — catch common bad words / spam
+    var blocked = [
+        /\b(kill\s*yourself|kys)\b/i,
+        /\b(n+i+gg+e*r+|f+a+g+g*o*t+)\b/i,
+        /\b(f+u+c+k+|sh[i1]t+|b[i1]tch+|a+s+s+h+o+l+e+)\b/i,
+        /\b(porn|onlyfans|sex\s*chat|nude|naked)\b/i,
+        /\b(https?:\/\/\S+)/i  // bare links often used for spam in kids platforms
+    ];
+    for (var i = 0; i < blocked.length; i++) {
+        if (blocked[i].test(text)) {
+            return {
+                ok: false,
+                reason: "Your message was blocked by automated moderation. Please keep Azora friendly and safe for everyone."
+            };
+        }
+    }
+    // Soft length spam
+    if (text.length > 400) {
+        return { ok: false, reason: "Message is too long (max 400 characters)." };
+    }
+    // Repeat character spam
+    if (/(.)\1{12,}/.test(text)) {
+        return { ok: false, reason: "Message looks like spam and was blocked." };
+    }
+    return { ok: true, text: original };
+}
+
+function getReports() {
+    try {
+        var list = JSON.parse(localStorage.getItem("azoraReports") || "[]");
+        return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+}
+
+function saveReport(entry) {
+    var list = getReports();
+    list.unshift(entry);
+    list = list.slice(0, 50);
+    try { localStorage.setItem("azoraReports", JSON.stringify(list)); } catch (e) {}
+    // Cloud copy for staff (best effort)
+    try {
+        if (typeof isCloudSocialReady === "function" && isCloudSocialReady() && typeof cloudPutJson === "function") {
+            var id = "r_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+            var base = (typeof cloudBase === "function" ? cloudBase() : "") + "/azoraReports/" + id + ".json";
+            cloudPutJson(base, entry).catch(function () {});
+        }
+    } catch (e2) {}
+}
+
+function openReportUser(username) {
+    if (!username) return;
+    if (String(username).toLowerCase() === "azora") {
+        alert("You cannot report the official Azora account.");
+        return;
+    }
+    var me = (typeof getMyUsername === "function") ? getMyUsername() : "Player";
+    if (me && String(me).toLowerCase() === String(username).toLowerCase()) {
+        alert("You cannot report yourself.");
+        return;
+    }
+
+    var reasons = [
+        "Harassment or bullying",
+        "Inappropriate language",
+        "Spam or scams",
+        "Impersonation",
+        "Other safety concern"
+    ];
+    var reasonText = "Report " + username + "?\n\nPick a reason number:\n";
+    reasons.forEach(function (r, idx) { reasonText += (idx + 1) + ") " + r + "\n"; });
+    reasonText += "\nType 1–5:";
+    var pick = prompt(reasonText, "1");
+    if (pick === null) return;
+    var n = parseInt(pick, 10);
+    if (!(n >= 1 && n <= reasons.length)) {
+        alert("Please enter a number from 1 to " + reasons.length + ".");
+        return;
+    }
+    var details = prompt("Optional: add a short note for moderators (keep it respectful).", "");
+    if (details === null) details = "";
+    details = String(details).slice(0, 240);
+
+    // Auto-mod on the report note itself
+    var mod = azoraAutoModerate(details || "ok");
+    if (details && !mod.ok) {
+        alert(mod.reason);
+        return;
+    }
+
+    var entry = {
+        reported: username,
+        by: me || "unknown",
+        reason: reasons[n - 1],
+        details: details,
+        at: Date.now(),
+        status: "pending"
+    };
+    saveReport(entry);
+    if (typeof showAzoraToast === "function") {
+        showAzoraToast("Report submitted. Thank you for helping keep Azora safe.");
+    } else {
+        alert("Report submitted. Thank you for helping keep Azora safe.");
+    }
+}
+
+window.getBlockedUsers = getBlockedUsers;
+window.isUserBlocked = isUserBlocked;
+window.blockUser = blockUser;
+window.unblockUser = unblockUser;
+window.openReportUser = openReportUser;
+window.azoraAutoModerate = azoraAutoModerate;
+
 
 
 // ============================================================
@@ -4550,6 +4746,27 @@ function openUserProfile(username) {
             };
             actions.appendChild(msgBtn);
         }
+
+        // Block / Unblock
+        var blocked = (typeof isUserBlocked === "function") && isUserBlocked(username);
+        var blockBtn = document.createElement("button");
+        blockBtn.textContent = blocked ? "Unblock" : "Block";
+        blockBtn.style.background = blocked ? "#e2e8f0" : "#1f2937";
+        blockBtn.style.color = blocked ? "#1e60ff" : "#fff";
+        blockBtn.onclick = function () {
+            if (blocked) unblockUser(username);
+            else blockUser(username);
+        };
+        actions.appendChild(blockBtn);
+
+        // Report
+        var reportBtn = document.createElement("button");
+        reportBtn.textContent = "Report";
+        reportBtn.style.background = "#fff";
+        reportBtn.style.color = "#b91c1c";
+        reportBtn.style.border = "2px solid #fca5a5";
+        reportBtn.onclick = function () { openReportUser(username); };
+        actions.appendChild(reportBtn);
     }
 
     var meName = getMyUsername();
@@ -5106,6 +5323,7 @@ function renderFriendsList() {
     }
     if (noMsg) noMsg.style.display = "none";
     myData.friends.forEach(function (friend) {
+        if (typeof isUserBlocked === "function" && isUserBlocked(friend)) return;
         var item = document.createElement("div");
         item.className = "friend-item" + (currentChatFriend === friend ? " active" : "");
         var last = getFriendLastTalked(friend);
@@ -5814,6 +6032,21 @@ function sendChatMessage() {
     if (!text) return;
 
     if (!currentChatFriend) currentChatFriend = AZORA_AI_ID;
+
+    // Cannot message blocked users
+    if (currentChatFriend !== AZORA_AI_ID && typeof isUserBlocked === "function" && isUserBlocked(currentChatFriend)) {
+        alert("You blocked this user. Unblock them from their profile to message again.");
+        return;
+    }
+
+    // Automated moderation
+    if (typeof azoraAutoModerate === "function") {
+        var mod = azoraAutoModerate(text);
+        if (!mod.ok) {
+            alert(mod.reason || "Message blocked by moderation.");
+            return;
+        }
+    }
 
     var isGuest = localStorage.getItem("loggedIn") === "guest";
     if (isGuest && currentChatFriend !== AZORA_AI_ID) {
@@ -7462,12 +7695,12 @@ function loadNormTextures(done) {
     if (_normTexCache && _normTexCache.skybox !== undefined) { done(_normTexCache); return; }
     _normTexCache = null;
     if (typeof THREE === "undefined") {
-        done({ grass: null, road: null, concrete: null, wood1: null, wood2: null, wood3: null, leaf: null, skybox: null });
+        done({ grass: null, road: null, concrete: null, wood1: null, wood2: null, wood3: null, leaf: null, skybox: null, marble: null });
         return;
     }
     var loader = new THREE.TextureLoader();
-    var out = { grass: null, road: null, concrete: null, wood1: null, wood2: null, wood3: null, leaf: null, skybox: null };
-    var left = 8;
+    var out = { grass: null, road: null, concrete: null, wood1: null, wood2: null, wood3: null, leaf: null, skybox: null, marble: null };
+    var left = 9;
     // Cap resolution + lighter filters = less GPU lag (textures stay, just cheaper)
     var MAX_TEX = 256;
     function optimizeTex(tex) {
@@ -7534,6 +7767,7 @@ function loadNormTextures(done) {
     one("wood3", "./wood3.jpg");
     one("leaf", "./leaf.jpg");
     one("skybox", "./skybox.jpg");
+    one("marble", "./marble.png");
 }
 
 /** Apply skybox.jpg as a large inverted sky sphere (all Norm Games) */
@@ -7642,6 +7876,23 @@ function buildNormCity(scene, tex) {
     );
     ground.position.y = -0.6;
     scene.add(ground);
+
+    // Marble plaza (new material) at town center
+    try {
+        var plaza = new THREE.Mesh(
+            new THREE.BoxGeometry(28, 0.35, 28),
+            makeNormMatShared("marble", 0xffffff, 28, 28, 3)
+        );
+        plaza.position.set(0, 0.05, 0);
+        scene.add(plaza);
+        // Keep players from sinking — treat as a floor surface
+        if (typeof _normFloorColliders !== "undefined") {
+            _normFloorColliders.push({
+                minX: -14, maxX: 14, minZ: -14, maxZ: 14,
+                y: 0.22
+            });
+        }
+    } catch (ePl) {}
 
     // Roads — shared asphalt mats
     var roadX = new THREE.Mesh(
@@ -8099,7 +8350,14 @@ function buildNormCity(scene, tex) {
         }
 
         // 3 meshes only: base, stone, plaque (was 10+)
-        var base = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.4, 2.0), baseMat);
+        // Marble plinth when texture available
+        var baseMatUse = baseMat;
+        try {
+            if (tex && tex.marble) {
+                baseMatUse = makeNormMatShared("marble", 0xffffff, 3.6, 2.0, 2);
+            }
+        } catch (eM) {}
+        var base = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.4, 2.0), baseMatUse);
         base.position.y = 0.2;
         group.add(base);
 
@@ -8849,6 +9107,8 @@ function renderNormPlayerList() {
 function appendNormChat(user, text, isSystem) {
     var box = document.getElementById("normChatMessages");
     if (!box) return;
+    // Hide messages from blocked users (not system lines)
+    if (!isSystem && user && typeof isUserBlocked === "function" && isUserBlocked(user)) return;
     var line = document.createElement("div");
     line.className = "norm-chat-line";
     var u = document.createElement("span");
@@ -8865,6 +9125,13 @@ function sendNormChat() {
     if (!input) return;
     var msg = (input.value || "").trim();
     if (!msg) return;
+    if (typeof azoraAutoModerate === "function") {
+        var mod = azoraAutoModerate(msg);
+        if (!mod.ok) {
+            alert(mod.reason || "Message blocked by moderation.");
+            return;
+        }
+    }
     var name = getNormDisplayName();
     appendNormChat(name, msg);
     input.value = "";
