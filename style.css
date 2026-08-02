@@ -3051,3 +3051,28 @@ html[data-theme="dark"] .gender-option input:checked + .gender-chip {
     display: flex;
     justify-content: flex-end;
 }
+
+
+.norm-empire-btn {
+    margin: 0 !important;
+    background: linear-gradient(180deg, #fbbf24, #d97706) !important;
+    color: #111 !important;
+    border: 1px solid #f59e0b !important;
+    font-weight: 800 !important;
+    font-size: 13px !important;
+    padding: 8px 12px !important;
+    border-radius: 10px !important;
+    cursor: pointer;
+}
+.norm-empire-btn:hover {
+    filter: brightness(1.08);
+}
+#normHudEmpire {
+    background: rgba(15, 23, 42, 0.55);
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(251, 191, 36, 0.45);
+    color: #fde68a !important;
+    font-weight: 700;
+    font-size: 12px;
+}

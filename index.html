@@ -431,6 +431,15 @@
                 </div>
                 <button type="button" class="norm-join-btn" onclick="joinNormGame('sky-islands')">Join</button>
             </article>
+            <article class="norm-game-card" data-game-id="planet-empire">
+                <div class="norm-game-icon">🪐</div>
+                <div class="norm-game-info">
+                    <h4>Planet Empire</h4>
+                    <p>Land on a huge open planet with no hard edge. Grow your empire using <strong>Moneys</strong> ($). Outposts earn more income over time.</p>
+                    <span class="norm-game-meta">3D · Multiplayer · Expand · Moneys $</span>
+                </div>
+                <button type="button" class="norm-join-btn" onclick="joinNormGame('planet-empire')">Join</button>
+            </article>
         </div>
         <h3 class="azora-games-sub">Quick Games</h3>
         <p class="azora-games-hint">TikTok-style scroll feed. Play alone — no in-game friend requests (those are for Norm Games only).</p>
@@ -662,6 +671,7 @@
     <div class="azafn-header">
         <h2><img src="logo.jpg" alt="Azora"> <span id="normGameTitle">Norm Game</span></h2>
         <div class="azafn-tabs">
+            <button type="button" id="normEmpireExpandBtn" class="norm-empire-btn" style="display:none;" onclick="expandEmpire()">Expand Empire</button>
             <button type="button" id="normMusicToggleBtn" class="norm-music-btn" onclick="toggleNormMusicPause()">Pause Music</button>
             <button type="button" id="normResetBtn" class="norm-reset-btn" onclick="openNormResetConfirm()">Reset</button>
             <button type="button" onclick="requestLeaveNormGame()" style="margin:0;background:#ff3b30;color:#fff;">Leave</button>
@@ -690,6 +700,7 @@
                 </div>
                 <div class="norm-game-hud">
                     <span id="normHudPlayers">Players: 1</span>
+                    <span id="normHudEmpire" style="display:none;">Moneys: $0</span>
                     <span id="normHudHint">W forward · S reverse · A/D turn · Space jump · Camera locked behind</span>
                 </div>
             </div>
@@ -757,7 +768,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=57.0"></script>
+<script src="script.js?v=57.1"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {

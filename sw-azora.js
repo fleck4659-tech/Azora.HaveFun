@@ -1,5 +1,5 @@
 /* Azora main app service worker — v48.1 */
-var CACHE = "azora-app-v57-0-moderation";
+var CACHE = "azora-app-v57-1-empire";
 var ASSETS = [
   "./", "./index.html", "./checkout.html", "./style.css",
   "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./female_smile.png", "./female_hair.webp", "./Mossy.mp3",

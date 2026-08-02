@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v57.0 marble + block/report/mod","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v57.1 Planet Empire","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -19,7 +19,8 @@ const database = {
         { title: "Become a Cat Simulator", author: "Azora", link: "#", type: "norm" },
         { title: "Parkour Plains", author: "Azora", link: "#", type: "norm" },
         { title: "Cozy Cafe", author: "Azora", link: "#", type: "norm" },
-        { title: "Sky Islands", author: "Azora", link: "#", type: "norm" }
+        { title: "Sky Islands", author: "Azora", link: "#", type: "norm" },
+        { title: "Planet Empire", author: "Azora", link: "#", type: "norm" }
     ]
 };
 
@@ -7101,6 +7102,15 @@ var NORM_GAMES = {
         world: "islands",
         avatarMode: "human",
         roomPath: "/azoraNormRooms/sky-islands/players"
+    },
+    "planet-empire": {
+        id: "planet-empire",
+        title: "Planet Empire",
+        owner: "Azora",
+        dimensions: "3D",
+        world: "empire",
+        avatarMode: "human",
+        roomPath: "/azoraNormRooms/planet-empire/players"
     }
 };
 
@@ -7590,6 +7600,19 @@ function joinNormGame(gameId) {
         roomPath: def.roomPath,
         startedAt: Date.now()
     };
+    // Planet Empire HUD / expand control
+    try {
+        var expBtn = document.getElementById("normEmpireExpandBtn");
+        var empHud = document.getElementById("normHudEmpire");
+        if (def.id === "planet-empire") {
+            if (expBtn) expBtn.style.display = "inline-block";
+            if (empHud) empHud.style.display = "inline";
+            if (typeof updateEmpireHud === "function") updateEmpireHud();
+        } else {
+            if (expBtn) expBtn.style.display = "none";
+            if (empHud) empHud.style.display = "none";
+        }
+    } catch (eEmpUi) {}
 
     var ov = document.getElementById("normGameOverlay");
     var loading = document.getElementById("normGameLoading");
@@ -8398,6 +8421,12 @@ function buildNormWorldByType(scene, tex, worldType) {
     tex = tex || {};
     worldType = worldType || "catpark";
 
+    // Planet Empire — huge open world
+    if (worldType === "empire") {
+        buildEmpireWorld(scene, tex);
+        return;
+    }
+
     function groundMat(map, color) {
         var m = new THREE.MeshLambertMaterial({ color: color || 0x4a7c3a });
         if (map) {
@@ -8547,6 +8576,253 @@ function buildNormWorldByType(scene, tex, worldType) {
 }
 
 
+
+
+
+/* =========================================================
+   Planet Empire — huge open planet, expand with Moneys ($)
+   ========================================================= */
+var _empireState = null; // { moneys, outposts: [{x,z,level}], incomeTimer }
+var _empireMeshes = [];
+
+function getEmpireSaveKey() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        var name = (acc && acc.username) ? String(acc.username).toLowerCase() : "guest";
+        return "azoraEmpire_" + name;
+    } catch (e) { return "azoraEmpire_guest"; }
+}
+
+function loadEmpireState() {
+    try {
+        var raw = JSON.parse(localStorage.getItem(getEmpireSaveKey()) || "null");
+        if (raw && typeof raw === "object") {
+            return {
+                moneys: Math.max(0, Number(raw.moneys) || 0),
+                outposts: Array.isArray(raw.outposts) ? raw.outposts : []
+            };
+        }
+    } catch (e) {}
+    // New players start with a small nest egg to expand once
+    return { moneys: 25, outposts: [] };
+}
+
+function saveEmpireState(st) {
+    try {
+        localStorage.setItem(getEmpireSaveKey(), JSON.stringify({
+            moneys: st.moneys,
+            outposts: st.outposts || []
+        }));
+    } catch (e) {}
+}
+
+function formatMoneys(n) {
+    n = Math.floor(Number(n) || 0);
+    return "$" + n.toLocaleString("en-US");
+}
+
+function empireExpandCost(ownedCount) {
+    // Rising cost: 15, 30, 55, 90, ...
+    var n = ownedCount || 0;
+    return 15 + n * 12 + Math.floor(n * n * 2.5);
+}
+
+function empireIncomePerTick(st) {
+    // HQ always produces a little; each outpost adds more
+    var out = (st && st.outposts) ? st.outposts.length : 0;
+    return 1 + out * 2;
+}
+
+function updateEmpireHud() {
+    var el = document.getElementById("normHudEmpire");
+    if (!el || !_empireState) return;
+    var cost = empireExpandCost((_empireState.outposts || []).length);
+    el.innerHTML =
+        '<strong>Moneys: ' + formatMoneys(_empireState.moneys) + '</strong>' +
+        ' · Empire: ' + (1 + (_empireState.outposts || []).length) +
+        ' · Next expand: ' + formatMoneys(cost);
+}
+
+function buildEmpireOutpostMesh(scene, x, z, level) {
+    level = level || 1;
+    var group = new THREE.Group();
+    group.position.set(x, 0, z);
+    // Flag platform
+    var pad = new THREE.Mesh(
+        new THREE.CylinderGeometry(2.2 + level * 0.3, 2.4 + level * 0.3, 0.4, 10),
+        new THREE.MeshLambertMaterial({ color: 0xc4a574 })
+    );
+    pad.position.y = 0.2;
+    group.add(pad);
+    // Tower
+    var tower = new THREE.Mesh(
+        new THREE.BoxGeometry(1.2, 2.5 + level * 0.8, 1.2),
+        new THREE.MeshLambertMaterial({ color: 0x5b8def })
+    );
+    tower.position.y = 1.4 + level * 0.35;
+    group.add(tower);
+    // Flag tip
+    var tip = new THREE.Mesh(
+        new THREE.BoxGeometry(0.15, 1.2, 0.15),
+        new THREE.MeshLambertMaterial({ color: 0xdddddd })
+    );
+    tip.position.y = 3.2 + level * 0.7;
+    group.add(tip);
+    var flag = new THREE.Mesh(
+        new THREE.BoxGeometry(0.9, 0.55, 0.08),
+        new THREE.MeshLambertMaterial({ color: 0xf59e0b })
+    );
+    flag.position.set(0.45, 3.4 + level * 0.7, 0);
+    group.add(flag);
+    scene.add(group);
+    _empireMeshes.push(group);
+    return group;
+}
+
+function buildEmpireWorld(scene, tex) {
+    _empireMeshes = [];
+    tex = tex || {};
+
+    // Huge planet surface — "no limit" feel (far fog + massive ground)
+    var SIZE = 2400;
+    var groundMat;
+    try {
+        groundMat = makeNormMatShared("grass", 0x4f9b45, SIZE, SIZE, 8);
+    } catch (e) {
+        groundMat = new THREE.MeshLambertMaterial({ color: 0x4f9b45 });
+    }
+    var ground = new THREE.Mesh(new THREE.BoxGeometry(SIZE, 2, SIZE), groundMat);
+    ground.position.y = -1;
+    scene.add(ground);
+
+    // Dirt rings / continents hints
+    for (var r = 0; r < 6; r++) {
+        var ring = new THREE.Mesh(
+            new THREE.CylinderGeometry(80 + r * 140, 90 + r * 140, 0.6, 32, 1, true),
+            new THREE.MeshLambertMaterial({ color: 0x6b8f4e, side: THREE.DoubleSide })
+        );
+        ring.position.y = 0.05;
+        scene.add(ring);
+    }
+
+    // Marble HQ plaza
+    try {
+        var hqPad = new THREE.Mesh(
+            new THREE.BoxGeometry(40, 0.5, 40),
+            makeNormMatShared("marble", 0xffffff, 40, 40, 4)
+        );
+        hqPad.position.y = 0.15;
+        scene.add(hqPad);
+    } catch (e2) {
+        var hqPad2 = new THREE.Mesh(
+            new THREE.BoxGeometry(40, 0.5, 40),
+            new THREE.MeshLambertMaterial({ color: 0xe8e8e8 })
+        );
+        hqPad2.position.y = 0.15;
+        scene.add(hqPad2);
+    }
+
+    // HQ building
+    var hq = new THREE.Mesh(
+        new THREE.BoxGeometry(8, 10, 8),
+        new THREE.MeshLambertMaterial({ color: 0x1e60ff })
+    );
+    hq.position.y = 5.2;
+    scene.add(hq);
+    var roof = new THREE.Mesh(
+        new THREE.BoxGeometry(9, 1, 9),
+        new THREE.MeshLambertMaterial({ color: 0x0f172a })
+    );
+    roof.position.y = 10.5;
+    scene.add(roof);
+    // Antenna
+    var ant = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 4, 0.3),
+        new THREE.MeshLambertMaterial({ color: 0xcbd5e1 })
+    );
+    ant.position.y = 13;
+    scene.add(ant);
+
+    // Soft sky fog for endless feel
+    try {
+        if (scene.fog) {
+            scene.fog.near = 120;
+            scene.fog.far = 900;
+        }
+    } catch (eF) {}
+
+    // Restore saved outposts
+    _empireState = loadEmpireState();
+    (_empireState.outposts || []).forEach(function (o) {
+        if (o && typeof o.x === "number") {
+            buildEmpireOutpostMesh(scene, o.x, o.z, o.level || 1);
+        }
+    });
+
+    // Income ticker while in this world
+    if (_empireState._incomeTimer) {
+        try { clearInterval(_empireState._incomeTimer); } catch (e) {}
+    }
+    _empireState._incomeTimer = setInterval(function () {
+        if (!_empireState) return;
+        // Only while Planet Empire session is active
+        if (!_normSession || _normSession.id !== "planet-empire") return;
+        var gain = empireIncomePerTick(_empireState);
+        _empireState.moneys += gain;
+        saveEmpireState(_empireState);
+        updateEmpireHud();
+    }, 3000);
+
+    updateEmpireHud();
+}
+
+function expandEmpire() {
+    if (!_normSession || _normSession.id !== "planet-empire") {
+        alert("Join Planet Empire to expand.");
+        return;
+    }
+    if (!_empireState) _empireState = loadEmpireState();
+    var owned = (_empireState.outposts || []).length;
+    var cost = empireExpandCost(owned);
+    if (_empireState.moneys < cost) {
+        alert("Not enough Moneys!\nYou have " + formatMoneys(_empireState.moneys) + "\nNeed " + formatMoneys(cost) + " to expand.");
+        return;
+    }
+    _empireState.moneys -= cost;
+    // Place outpost in a spiral outward from HQ
+    var angle = owned * 2.399; // golden angle
+    var dist = 28 + owned * 18;
+    var x = Math.cos(angle) * dist;
+    var z = Math.sin(angle) * dist;
+    var level = 1 + Math.floor(owned / 4);
+    _empireState.outposts.push({ x: x, z: z, level: level });
+    saveEmpireState(_empireState);
+
+    if (_normScene) {
+        buildEmpireOutpostMesh(_normScene, x, z, level);
+    }
+    updateEmpireHud();
+    if (typeof showAzoraToast === "function") {
+        showAzoraToast("Empire expanded! Outpost #" + (owned + 1) + " · " + formatMoneys(_empireState.moneys) + " left");
+    }
+    // Chat system line
+    try {
+        if (typeof appendNormChat === "function") {
+            appendNormChat("System", "Empire grew! New outpost at the frontier. Income increased.", true);
+        }
+    } catch (e) {}
+}
+
+function stopEmpireLoop() {
+    if (_empireState && _empireState._incomeTimer) {
+        try { clearInterval(_empireState._incomeTimer); } catch (e) {}
+        _empireState._incomeTimer = null;
+    }
+}
+
+window.expandEmpire = expandEmpire;
+window.formatMoneys = formatMoneys;
+window.updateEmpireHud = updateEmpireHud;
 
 
 /* ===== Azora SFX by filename purpose =====
@@ -9060,6 +9336,21 @@ function startNormGameWorld(def) {
 function updateNormHudCount() {
     var hud = document.getElementById("normHudPlayers");
     if (hud) hud.textContent = "Players: " + _normPlayers.length;
+    // Empire moneys line
+    try {
+        if (_normSession && _normSession.id === "planet-empire" && typeof updateEmpireHud === "function") {
+            updateEmpireHud();
+            var expBtn = document.getElementById("normEmpireExpandBtn");
+            if (expBtn) expBtn.style.display = "inline-block";
+            var empHud = document.getElementById("normHudEmpire");
+            if (empHud) empHud.style.display = "inline";
+        } else {
+            var expBtn2 = document.getElementById("normEmpireExpandBtn");
+            if (expBtn2) expBtn2.style.display = "none";
+            var empHud2 = document.getElementById("normHudEmpire");
+            if (empHud2) empHud2.style.display = "none";
+        }
+    } catch (eH) {}
 }
 
 function renderNormPlayerList() {
@@ -9340,6 +9631,8 @@ function stopNormPresence() {
 }
 
 function disposeNormWorld(keepSession) {
+    try { if (typeof stopEmpireLoop === "function") stopEmpireLoop(); } catch (eEmp) {}
+
     stopNormMusic();
     stopNormPresence();
     if (_normAnim) {
