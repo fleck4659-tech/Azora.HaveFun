@@ -285,7 +285,7 @@
         <div class="currency-display">🪙 AzoraCoins: <span id="bucks">0</span></div>
         <button type="button" id="marketplaceBtn" class="topbar-shop-btn" onclick="openMarketplace()" title="Marketplace">🛒 Shop</button>
         <button type="button" id="inventoryBtn" class="topbar-shop-btn" onclick="openInventory()" title="Inventory">🎒 Bag</button>
-        <button type="button" id="membershipBtn" class="topbar-shop-btn" onclick="openMembership()" title="Azora Members">⭐ Members</button>
+        <button type="button" id="membershipBtn" class="topbar-shop-btn azora-temp-disabled" onclick="openMembership()" title="Members (disabled for now)" aria-disabled="true">Members</button>
     </div>
     <button id="publicFeedButton" onclick="openPublicFeed()" style="margin:0;">🎮 Feed</button>
     <button type="button" id="installAppBtn" class="install-app-btn" onclick="installAzoraApp()" title="Install Azora app">📲 Get the App</button>
@@ -757,7 +757,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=56.1"></script>
+<script src="script.js?v=56.3"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {
@@ -797,21 +797,24 @@ if ("serviceWorker" in navigator) {
 </div>
 
 
-<!-- Azora Members -->
-<div id="membershipOverlay" class="overlay" style="display:none;">
-    <div class="popup market-popup" style="max-width:min(440px,calc(100vw - 16px));text-align:left;">
-        <h2 style="text-align:center;margin:0 0 6px;">⭐ Azora Members</h2>
-        <p style="text-align:center;margin:0 0 8px;opacity:0.85;font-size:0.88rem;">
-            Balance: <strong id="memberCoinBalance">0</strong> 🪙
-        </p>
-        <p id="membershipStatus" style="text-align:center;font-size:0.85rem;margin:0 0 12px;opacity:0.9;"></p>
-        <p style="font-size:0.8rem;opacity:0.8;margin:0 0 12px;line-height:1.4;">
-            Subscriptions support Azora and yield <strong>AzoraCoins every month</strong>.
-            Hair in the shop costs about <strong>0.3–0.8 🪙</strong>. Daily login gives a small amount so memberships stay meaningful.
-        </p>
-        <div id="membershipList" class="market-list"></div>
-        <button type="button" onclick="cancelMembership()" style="width:100%;margin-top:10px;background:#64748b;color:#fff;">Cancel membership</button>
-        <button type="button" onclick="closeMembership()" style="width:100%;margin-top:8px;">Close</button>
+<!-- Azora Members — clean membership picker -->
+<div id="membershipOverlay" class="overlay members-overlay" style="display:none;">
+    <div class="popup members-popup">
+        <div class="members-header">
+            <img src="logo.jpg" alt="" class="members-logo">
+            <h2>Azora Members</h2>
+            <p class="members-sub">Simple plans. Monthly AzoraCoins. Cancel anytime.</p>
+        </div>
+        <div class="members-balance-row">
+            <span>Your balance</span>
+            <strong><span id="memberCoinBalance">0</span> AzoraCoins</strong>
+        </div>
+        <p id="membershipStatus" class="members-status"></p>
+        <div id="membershipList" class="members-list"></div>
+        <div class="members-footer-actions">
+            <button type="button" class="members-btn-text" onclick="cancelMembership()">Cancel plan</button>
+            <button type="button" class="members-btn-secondary" onclick="closeMembership()">Close</button>
+        </div>
     </div>
 </div>
 

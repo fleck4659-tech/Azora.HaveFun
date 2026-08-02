@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v56.1 skybox.jpg skies","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v56.3 members off, low prices","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -26,6 +26,8 @@ const database = {
 let currentSearchTab = "users";
 
 var AZORA_TEMP_DISABLE_CREATE = true;
+var AZORA_TEMP_DISABLE_MEMBERS = true; // Members / subscriptions off for now
+
 
 // ============================================================
 // AVATAR GENDER — boy (default) / girl (hair + face + torso style)
@@ -9620,25 +9622,29 @@ window.syncCustomizerGenderUI = syncCustomizerGenderUI;
    ========================================================= */
 
 var AZORA_HAIR_CATALOG = [
-    // Girl hair
+    // Girl hair — low prices for small coin economy
     { id: "hair_girl_default", name: "Classic Short", gender: "girl", price: 0, desc: "Default short hair for girls" },
-    { id: "hair_girl_bangs", name: "Heavy Bangs", gender: "girl", price: 1, desc: "Cute bangs across the forehead" },
-    { id: "hair_girl_bob", name: "Bob Cut", gender: "girl", price: 2, desc: "Clean shoulder-length bob" },
-    { id: "hair_girl_ponytail", name: "Ponytail", gender: "girl", price: 3, desc: "Tied-back ponytail" },
-    { id: "hair_girl_pigtails", name: "Pigtails", gender: "girl", price: 3, desc: "Twin pigtails" },
+    { id: "hair_girl_bangs", name: "Heavy Bangs", gender: "girl", price: 0.05, desc: "Cute bangs across the forehead" },
+    { id: "hair_girl_bob", name: "Bob Cut", gender: "girl", price: 0.08, desc: "Clean shoulder-length bob" },
+    { id: "hair_girl_ponytail", name: "Ponytail", gender: "girl", price: 0.1, desc: "Tied-back ponytail" },
+    { id: "hair_girl_pigtails", name: "Pigtails", gender: "girl", price: 0.12, desc: "Twin pigtails" },
     // Boy hair
     { id: "hair_boy_none", name: "No Hair", gender: "boy", price: 0, desc: "Default — no hair" },
-    { id: "hair_boy_short", name: "Short Crop", gender: "boy", price: 1, desc: "Simple short hair" },
-    { id: "hair_boy_spiky", name: "Spiky", gender: "boy", price: 2, desc: "Spiky top hair" },
-    { id: "hair_boy_side", name: "Side Sweep", gender: "boy", price: 2, desc: "Swept to one side" },
-    { id: "hair_boy_cap", name: "Flat Cap", gender: "boy", price: 3, desc: "Flat cap style hair" }
+    { id: "hair_boy_short", name: "Short Crop", gender: "boy", price: 0.05, desc: "Simple short hair" },
+    { id: "hair_boy_spiky", name: "Spiky", gender: "boy", price: 0.08, desc: "Spiky top hair" },
+    { id: "hair_boy_side", name: "Side Sweep", gender: "boy", price: 0.1, desc: "Swept to one side" },
+    { id: "hair_boy_cap", name: "Flat Cap", gender: "boy", price: 0.15, desc: "Flat cap style hair" }
 ];
 
 /** Format coins for display — up to 1 decimal (realistic economy) */
 function formatCoins(n) {
     n = Number(n) || 0;
-    if (Math.abs(n - Math.round(n)) < 0.001) return String(Math.round(n));
-    return (Math.round(n * 10) / 10).toFixed(1);
+    if (Math.abs(n - Math.round(n)) < 0.0005) return String(Math.round(n));
+    // Show 2 decimals for small amounts (0.05, 0.12), else 1
+    var r2 = Math.round(n * 100) / 100;
+    if (Math.abs(r2) < 1) return r2.toFixed(2).replace(/0$/, "").replace(/\.0$/, "");
+    if (Math.abs(r2 * 10 - Math.round(r2 * 10)) < 0.001) return (Math.round(n * 10) / 10).toFixed(1);
+    return r2.toFixed(2);
 }
 
 function getCoins() {
@@ -9993,43 +9999,43 @@ window.AZORA_HAIR_CATALOG = AZORA_HAIR_CATALOG;
 var AZORA_MEMBER_TIERS = [
     {
         id: "bronze",
-        name: "Bronze Member",
-        emoji: "🥉",
+        name: "Bronze",
+        emoji: "Bronze",
         priceUsd: 1.99,
         monthlyCoins: 0.3,
-        blurb: "Starter support — a little boost each month."
+        blurb: "A light monthly boost for new members."
     },
     {
         id: "silver",
-        name: "Silver Member",
-        emoji: "🥈",
+        name: "Silver",
+        emoji: "Silver",
         priceUsd: 4.99,
         monthlyCoins: 0.7,
-        blurb: "Solid value for regular players."
+        blurb: "Good value if you visit Azora often."
     },
     {
         id: "gold",
-        name: "Gold Member",
-        emoji: "🥇",
+        name: "Gold",
+        emoji: "Gold",
         priceUsd: 9.99,
         monthlyCoins: 1.5,
-        blurb: "Best balance of coins and price."
+        blurb: "Balanced plan for most members."
     },
     {
         id: "diamond",
-        name: "Diamond Member",
-        emoji: "💎",
+        name: "Diamond",
+        emoji: "Diamond",
         priceUsd: 14.99,
         monthlyCoins: 2.5,
-        blurb: "Premium monthly coin yield."
+        blurb: "Higher monthly AzoraCoins."
     },
     {
         id: "obsidian",
-        name: "Obsidian Member",
-        emoji: "🌌",
+        name: "Obsidian",
+        emoji: "Obsidian",
         priceUsd: 29.99,
         monthlyCoins: 6.0,
-        blurb: "Top tier — maximum monthly AzoraCoins."
+        blurb: "Highest monthly AzoraCoins."
     }
 ];
 
@@ -10084,16 +10090,21 @@ function claimMembershipMonthlyYield() {
  * Until payment is connected, membership can be activated for testing the economy.
  */
 function activateMembershipTier(tierId, opts) {
+    if (typeof AZORA_TEMP_DISABLE_MEMBERS !== "undefined" && AZORA_TEMP_DISABLE_MEMBERS) {
+        alert("Oops! Looks like this button is disabled!");
+        return;
+    }
+
     opts = opts || {};
     if (localStorage.getItem("loggedIn") !== "true") {
-        alert("Log in or create an account to join Azora Members.");
+        alert("Please sign in or create an account before joining Azora Members.");
         if (typeof openCreateAccount === "function") openCreateAccount();
         return;
     }
     try {
         var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
         if (acc && acc.isGuest) {
-            alert("Guests cannot subscribe. Create a free account first!");
+            alert("Guests cannot subscribe. Create a free account first.");
             if (typeof openCreateAccount === "function") openCreateAccount();
             return;
         }
@@ -10101,35 +10112,17 @@ function activateMembershipTier(tierId, opts) {
 
     var tier = getMemberTierById(tierId);
     if (!tier) {
-        alert("Unknown membership tier.");
+        alert("Unknown membership plan.");
         return;
     }
 
-    // Confirm — show USD price and monthly coin yield
-    var msg =
-        tier.emoji + " " + tier.name + "\n\n" +
-        "$" + tier.priceUsd.toFixed(2) + " / month\n" +
-        "Yields " + formatCoins(tier.monthlyCoins) + " AzoraCoins every month\n\n" +
-        "Hair styles cost about 0.3–0.8 🪙, so membership helps you collect styles over time.\n\n" +
-        (opts.demo
-            ? "Activate this tier on this device for the economy system? (Live card payments come later with Stripe.)"
-            : "Continue?");
-    if (!confirm(msg)) return;
-
-    var m = getMembership();
-    m.tier = tier.id;
-    m.since = m.since || Date.now();
-    m.priceUsd = tier.priceUsd;
-    m.name = tier.name;
-    // Allow immediate first yield this month
-    if (m.lastYieldMonth !== getMonthKey()) {
-        m.lastYieldMonth = null;
-    }
-    saveMembership(m);
-    claimMembershipMonthlyYield();
-    showAzoraToast(tier.emoji + " You are now a " + tier.name + "!");
-    renderMembershipPanel();
-    updateCoinsUI();
+    // Leave the game-style modal and open the clean checkout page (real money)
+    try {
+        sessionStorage.setItem("azoraCheckoutTier", tierId);
+        localStorage.setItem("azoraCheckoutTier", tierId);
+    } catch (e2) {}
+    if (typeof closeMembership === "function") closeMembership();
+    window.location.href = "checkout.html?tier=" + encodeURIComponent(tierId);
 }
 
 function cancelMembership() {
@@ -10145,6 +10138,15 @@ function cancelMembership() {
 }
 
 function openMembership() {
+    if (typeof AZORA_TEMP_DISABLE_MEMBERS !== "undefined" && AZORA_TEMP_DISABLE_MEMBERS) {
+        if (typeof showDisabledFeatureTip === "function") {
+            var btn = document.getElementById("membershipBtn");
+            showDisabledFeatureTip({ clientX: window.innerWidth / 2, clientY: 80 }, btn);
+        } else {
+            alert("Oops! Looks like this button is disabled!");
+        }
+        return;
+    }
     var el = document.getElementById("membershipOverlay");
     if (el) el.style.display = "flex";
     renderMembershipPanel();
@@ -10167,10 +10169,11 @@ function renderMembershipPanel() {
     if (status) {
         if (activeId) {
             var t = getMemberTierById(activeId);
-            status.innerHTML = "Active: <strong>" + (t ? (t.emoji + " " + t.name) : activeId) + "</strong>" +
-                (t ? (" · " + formatCoins(t.monthlyCoins) + " 🪙 / month") : "");
+            status.textContent = t
+                ? ("Current plan: " + t.name + " · " + formatCoins(t.monthlyCoins) + " coins / month")
+                : ("Current plan: " + activeId);
         } else {
-            status.textContent = "No active membership — pick a tier below.";
+            status.textContent = "Choose a plan to continue to secure checkout.";
         }
     }
 
@@ -10178,15 +10181,17 @@ function renderMembershipPanel() {
     AZORA_MEMBER_TIERS.forEach(function (tier) {
         var isActive = activeId === tier.id;
         html += '<div class="member-card' + (isActive ? " active" : "") + '">';
-        html += '<div class="member-card-title">' + tier.emoji + " " + tier.name + "</div>";
-        html += '<div class="member-card-price">$' + tier.priceUsd.toFixed(2) + " / mo</div>";
-        html += '<div class="member-card-yield">Yields <strong>' + formatCoins(tier.monthlyCoins) + " AzoraCoins</strong> monthly</div>";
+        html += '<div class="member-card-top">';
+        html += '<div class="member-card-title">' + tier.name + "</div>";
+        html += '<div class="member-card-price">$' + tier.priceUsd.toFixed(2) + " <span>/ mo</span></div>";
+        html += "</div>";
+        html += '<div class="member-card-yield">' + formatCoins(tier.monthlyCoins) + " AzoraCoins every month</div>";
         html += '<div class="member-card-desc">' + tier.blurb + "</div>";
         html += '<div class="member-card-footer">';
         if (isActive) {
             html += '<button type="button" class="market-btn owned-btn" disabled>Current plan</button>';
         } else {
-            html += '<button type="button" class="market-btn" onclick="activateMembershipTier(\'' + tier.id + '\', { demo: true })">Choose plan</button>';
+            html += '<button type="button" class="member-subscribe-btn" onclick="activateMembershipTier(\'' + tier.id + '\')">Subscribe</button>';
         }
         html += "</div></div>";
     });
@@ -10218,4 +10223,17 @@ window.activateMembershipTier = activateMembershipTier;
 window.cancelMembership = cancelMembership;
 window.claimMembershipMonthlyYield = claimMembershipMonthlyYield;
 window.renderMembershipPanel = renderMembershipPanel;
+
+(function membershipReturnHook() {
+    try {
+        if (localStorage.getItem("azoraMembershipPendingYield") === "1") {
+            localStorage.removeItem("azoraMembershipPendingYield");
+            setTimeout(function () {
+                if (typeof claimMembershipMonthlyYield === "function") claimMembershipMonthlyYield();
+                if (typeof updateCoinsUI === "function") updateCoinsUI();
+            }, 500);
+        }
+    } catch (e) {}
+})();
+
 
