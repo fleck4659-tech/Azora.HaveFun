@@ -1,9 +1,9 @@
 /* Azora main app service worker — v48.1 */
-var CACHE = "azora-app-v56-0-economy";
+var CACHE = "azora-app-v56-1-skybox";
 var ASSETS = [
   "./", "./index.html", "./style.css",
   "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./female_smile.png", "./female_hair.webp", "./Mossy.mp3",
-  "./grass.jpg", "./road.jpg", "./concrete.jpg", "./wood1.jpg", "./wood2.jpg", "./wood3.jpg", "./leaf.jpg", "./walking.mp3", "./jumping.mp3", "./character_reset.mp3", "./notifcation.mp3", "./click_buttons.mp3"
+  "./grass.jpg", "./road.jpg", "./concrete.jpg", "./wood1.jpg", "./wood2.jpg", "./wood3.jpg", "./leaf.jpg", "./skybox.jpg", "./walking.mp3", "./jumping.mp3", "./character_reset.mp3", "./notifcation.mp3", "./click_buttons.mp3"
 ];
 self.addEventListener("install", function (e) {
   e.waitUntil(

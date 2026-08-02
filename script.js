@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v56.0 economy + Azora Members","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v56.1 skybox.jpg skies","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -7457,14 +7457,15 @@ var _normTexCache = null;
 
 function loadNormTextures(done) {
     done = done || function () {};
-    if (_normTexCache) { done(_normTexCache); return; }
+    if (_normTexCache && _normTexCache.skybox !== undefined) { done(_normTexCache); return; }
+    _normTexCache = null;
     if (typeof THREE === "undefined") {
-        done({ grass: null, road: null, concrete: null, wood1: null, wood2: null, wood3: null, leaf: null });
+        done({ grass: null, road: null, concrete: null, wood1: null, wood2: null, wood3: null, leaf: null, skybox: null });
         return;
     }
     var loader = new THREE.TextureLoader();
-    var out = { grass: null, road: null, concrete: null, wood1: null, wood2: null, wood3: null, leaf: null };
-    var left = 7;
+    var out = { grass: null, road: null, concrete: null, wood1: null, wood2: null, wood3: null, leaf: null, skybox: null };
+    var left = 8;
     // Cap resolution + lighter filters = less GPU lag (textures stay, just cheaper)
     var MAX_TEX = 256;
     function optimizeTex(tex) {
@@ -7491,7 +7492,30 @@ function loadNormTextures(done) {
     }
     function one(key, url) {
         loader.load(url, function (tex) {
-            out[key] = optimizeTex(tex);
+            // Sky stays sharper (512); other maps stay 256 for FPS
+            if (key === "skybox") {
+                try {
+                    var img = tex.image;
+                    var MAX_SKY = 512;
+                    if (img && (img.width > MAX_SKY || img.height > MAX_SKY)) {
+                        var c = document.createElement("canvas");
+                        var scale = Math.min(MAX_SKY / img.width, MAX_SKY / img.height);
+                        c.width = Math.max(64, Math.floor(img.width * scale));
+                        c.height = Math.max(64, Math.floor(img.height * scale));
+                        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+                        tex.image = c;
+                        tex.needsUpdate = true;
+                    }
+                    tex.wrapS = THREE.ClampToEdgeWrapping;
+                    tex.wrapT = THREE.ClampToEdgeWrapping;
+                    tex.magFilter = THREE.LinearFilter;
+                    tex.minFilter = THREE.LinearFilter;
+                    tex.generateMipmaps = false;
+                } catch (eS) {}
+                out[key] = tex;
+            } else {
+                out[key] = optimizeTex(tex);
+            }
             left -= 1;
             if (left <= 0) { _normTexCache = out; done(out); }
         }, undefined, function () {
@@ -7507,7 +7531,55 @@ function loadNormTextures(done) {
     one("wood2", "./wood2.jpg");
     one("wood3", "./wood3.jpg");
     one("leaf", "./leaf.jpg");
+    one("skybox", "./skybox.jpg");
 }
+
+/** Apply skybox.jpg as a large inverted sky sphere (all Norm Games) */
+function applyNormSky(scene, tex) {
+    if (!scene || typeof THREE === "undefined") return;
+    try {
+        var oldSky = scene.getObjectByName("azoraSkyDome");
+        if (oldSky) {
+            scene.remove(oldSky);
+            try {
+                if (oldSky.geometry) oldSky.geometry.dispose();
+                if (oldSky.material) {
+                    if (oldSky.material.map) { /* shared cache map — do not dispose */ }
+                    oldSky.material.dispose();
+                }
+            } catch (eD) {}
+        }
+        var map = tex && tex.skybox ? tex.skybox : null;
+        if (!map) {
+            scene.background = new THREE.Color(0x7eb6e8);
+            scene.fog = new THREE.Fog(0x9ec9f0, 90, 240);
+            return;
+        }
+        try {
+            map.wrapS = THREE.ClampToEdgeWrapping;
+            map.wrapT = THREE.ClampToEdgeWrapping;
+            map.needsUpdate = true;
+        } catch (eW) {}
+
+        scene.fog = new THREE.Fog(0xa8d4f0, 100, 280);
+        scene.background = new THREE.Color(0x6eb6e8);
+
+        var geo = new THREE.SphereGeometry(420, 24, 16);
+        var mat = new THREE.MeshBasicMaterial({
+            map: map,
+            side: THREE.BackSide,
+            fog: false,
+            depthWrite: false
+        });
+        var dome = new THREE.Mesh(geo, mat);
+        dome.name = "azoraSkyDome";
+        dome.renderOrder = -100;
+        scene.add(dome);
+    } catch (e) {
+        try { scene.background = new THREE.Color(0x7eb6e8); } catch (e2) {}
+    }
+}
+window.applyNormSky = applyNormSky;
 
 /**
  * Shared materials with UV repeat set on the base texture once.
@@ -8495,6 +8567,7 @@ function startNormGameWorld(def) {
         if (_cityBuilt) return;
         _cityBuilt = true;
         try {
+            if (typeof applyNormSky === "function") applyNormSky(_normScene, tex || {});
             var worldType = (def && def.world) ? def.world : "city";
             if (worldType === "city") {
                 buildNormCity(_normScene, tex || {});
