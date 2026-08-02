@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v58.2 Face center","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v59.0 Economy TShirts","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -1414,6 +1414,17 @@ function migrateLegacyAccount() {
 
 function setLoggedInAccount(account) {
     // Persist full account + session flag so topbar switches after reload
+    if (account && (account.isOwner || (typeof isOwnerUsername === "function" && isOwnerUsername(account.username)))) {
+        account.isOwner = true;
+        if (typeof account.coins !== "number" || isNaN(account.coins) || account.coins < AZORA_OWNER_STARTING_COINS) {
+            account.coins = AZORA_OWNER_STARTING_COINS;
+        }
+        // Owner owns every official catalog item
+        try { if (typeof grantAllOfficialItemsToOwner === "function") grantAllOfficialItemsToOwner(); } catch (eOwn) {}
+    }
+    if (account && typeof account.coins === "number") {
+        try { localStorage.setItem("azoraCoins", String(account.coins)); } catch (eC) {}
+    }
     localStorage.setItem("azoraAccount", JSON.stringify(account));
     localStorage.setItem("loggedIn", "true");
     try { if (typeof updateCoinsUI === "function") updateCoinsUI(); if (typeof checkDailyLoginReward === "function") checkDailyLoginReward(); if (typeof grantDefaultHairForGender === "function") grantDefaultHairForGender(); } catch (eMkt) {}
@@ -1842,6 +1853,13 @@ function ensureOwnerAccount() {
         existing.userId = "Aza: 0"; // reserved official ID
         // Owner may have empty password ("no code")
         if (typeof existing.password !== "string") existing.password = "";
+        if (typeof existing.coins !== "number" || isNaN(existing.coins)) {
+            existing.coins = AZORA_OWNER_STARTING_COINS;
+        }
+        // Keep owner as richest baseline if somehow lower
+        if (existing.coins < AZORA_OWNER_STARTING_COINS) {
+            existing.coins = AZORA_OWNER_STARTING_COINS;
+        }
         map[AZORA_OWNER_NAME] = existing;
         // remove case variants
         Object.keys(map).forEach(function (k) {
@@ -1857,6 +1875,7 @@ function ensureOwnerAccount() {
         isGuest: false,
         isOwner: true,
         userId: "Aza: 0",
+        coins: AZORA_OWNER_STARTING_COINS,
         bio: "Official Azora account. Build games. Customize avatars. Have fun.",
         avatar: {
             head: "#ffcc00",
@@ -6848,17 +6867,99 @@ window.addEventListener("appinstalled", function () {
   _azoraDeferredPrompt = null;
   syncInstallAppButton();
   try {
-    // Keep current session so the app opens already logged in
     sessionStorage.setItem("azoraJustInstalled", "1");
   } catch (e) {}
-  alert("Azora installed! Open it from your home screen or apps list.\nYour account or guest session stays logged in on this device.");
+  try { closeDownloadAzora(); } catch (e2) {}
+  alert("Azora downloaded! Open it from your home screen or apps list.\nYour account or guest session stays logged in on this device.");
 });
 
+function openDownloadAzora() {
+  if (isAzoraRunningAsApp()) return;
+  var ov = document.getElementById("downloadAzoraOverlay");
+  if (!ov) {
+    installAzoraAppLegacy();
+    return;
+  }
+  var status = document.getElementById("downloadAzoraStatus");
+  var note = document.getElementById("downloadAzoraNote");
+  var primary = document.getElementById("downloadAzoraPrimaryBtn");
+  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  if (status) {
+    if (_azoraDeferredPrompt) {
+      status.innerHTML = "<strong>Ready to install</strong> on this device.";
+    } else if (isIOS) {
+      status.innerHTML = "<strong>iPhone / iPad</strong><br>1. Tap the <strong>Share</strong> button<br>2. Choose <strong>Add to Home Screen</strong><br>3. Open <strong>Azora</strong> from your home screen";
+    } else {
+      status.innerHTML = "Tap <strong>Download Azora</strong> below. If nothing happens, use your browser menu → <strong>Install app</strong> / <strong>Install Azora</strong>.";
+    }
+  }
+  if (note) {
+    note.textContent = isIOS
+      ? "Safari cannot auto-download apps. Add to Home Screen is the official way on iPhone."
+      : "After download, open Azora from your apps list or home screen. Your account or guest stays logged in on this device.";
+  }
+  if (primary) {
+    primary.style.display = isIOS && !_azoraDeferredPrompt ? "none" : "block";
+    primary.textContent = "Download Azora";
+  }
+  ov.style.display = "flex";
+  ov.setAttribute("aria-hidden", "false");
+}
+
+function closeDownloadAzora() {
+  var ov = document.getElementById("downloadAzoraOverlay");
+  if (ov) {
+    ov.style.display = "none";
+    ov.setAttribute("aria-hidden", "true");
+  }
+}
+
+function confirmDownloadAzora() {
+  if (isAzoraRunningAsApp()) {
+    closeDownloadAzora();
+    return;
+  }
+  if (_azoraDeferredPrompt) {
+    var promptEvent = _azoraDeferredPrompt;
+    promptEvent.prompt();
+    promptEvent.userChoice.then(function (choice) {
+      _azoraDeferredPrompt = null;
+      syncInstallAppButton();
+      closeDownloadAzora();
+      if (choice && choice.outcome === "accepted") {
+        try { sessionStorage.setItem("azoraJustInstalled", "1"); } catch (e) {}
+      }
+    }).catch(function () {
+      closeDownloadAzora();
+    });
+    return;
+  }
+  // No deferred prompt — guide user
+  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  var status = document.getElementById("downloadAzoraStatus");
+  if (status) {
+    if (isIOS) {
+      status.innerHTML = "On iPhone: Share → <strong>Add to Home Screen</strong>, then open Azora from the home screen.";
+    } else {
+      status.innerHTML = "Open the browser menu (⋮) and choose <strong>Install app</strong> or <strong>Install Azora</strong>. Or look for the install icon in the address bar.";
+    }
+  }
+}
+
+/** Opens the Download Azora flow (website only). */
 function installAzoraApp() {
+  if (isAzoraRunningAsApp()) return;
+  openDownloadAzora();
+}
+
+function installAzoraAppLegacy() {
   if (isAzoraRunningAsApp()) return;
   if (_azoraDeferredPrompt) {
     _azoraDeferredPrompt.prompt();
-    _azoraDeferredPrompt.userChoice.then(function (choice) {
+    _azoraDeferredPrompt.userChoice.then(function () {
       _azoraDeferredPrompt = null;
       syncInstallAppButton();
     });
@@ -6867,16 +6968,13 @@ function installAzoraApp() {
   var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   if (isIOS) {
-    alert("Install Azora on iPhone / iPad:\n\n1. Tap Share (square with arrow)\n2. Add to Home Screen\n3. Open Azora from the home screen\n\nYour login or guest session is saved on this device and will open in the app.");
+    alert("Download Azora on iPhone / iPad:\\n\\n1. Tap Share (square with arrow)\\n2. Add to Home Screen\\n3. Open Azora from the home screen");
   } else {
-    alert("Install Azora:\n\n• Chrome / Edge: Menu → Install Azora, or the install icon in the address bar\n\nAfter install, open Azora from your apps list.\nSame device keeps you logged in (account or guest).");
+    alert("Download Azora:\\n\\nChrome / Edge → Menu → Install Azora\\n(or the install icon in the address bar)");
   }
 }
 
-/**
- * App session: same localStorage as the website on this device.
- * If you were logged in or a guest in the browser, the app stays that way.
- */
+
 function restoreAppSessionIfNeeded() {
   try {
     var logged = localStorage.getItem("loggedIn");
@@ -6912,6 +7010,20 @@ function restoreAppSessionIfNeeded() {
 }
 
 window.installAzoraApp = installAzoraApp;
+
+window.toggleCoinsDropdown = toggleCoinsDropdown;
+window.closeCoinsDropdown = closeCoinsDropdown;
+window.openPendingCoins = openPendingCoins;
+window.collectPendingCoins = collectPendingCoins;
+window.openCreateTShirt = openCreateTShirt;
+window.closeCreateTShirt = closeCreateTShirt;
+window.onTShirtFileChosen = onTShirtFileChosen;
+window.submitCreateTShirt = submitCreateTShirt;
+window.equipTShirt = equipTShirt;
+
+window.openDownloadAzora = openDownloadAzora;
+window.closeDownloadAzora = closeDownloadAzora;
+window.confirmDownloadAzora = confirmDownloadAzora;
 window.isAzoraRunningAsApp = isAzoraRunningAsApp;
 window.syncInstallAppButton = syncInstallAppButton;
 window.restoreAppSessionIfNeeded = restoreAppSessionIfNeeded;
@@ -10333,8 +10445,144 @@ function formatCoins(n) {
     return r2.toFixed(2);
 }
 
+
+/** —— Azora economy: per-account coins, platform cut, pending sales —— */
+var AZORA_PLATFORM_FEE = 0.10; // 10% to official Azora, 90% to seller
+var AZORA_OWNER_STARTING_COINS = 2642.62;
+
+function getActiveAccount() {
+    try {
+        if (localStorage.getItem("loggedIn") !== "true") return null;
+        return JSON.parse(localStorage.getItem("azoraAccount") || "null");
+    } catch (e) { return null; }
+}
+
+function persistActiveAccount(acc) {
+    if (!acc) return;
+    try {
+        localStorage.setItem("azoraAccount", JSON.stringify(acc));
+        var map = getSavedAccounts();
+        var key = acc.username || "";
+        if (key) {
+            map[key] = acc;
+            // also store under exact owner name
+            if (acc.isOwner || (typeof isOwnerUsername === "function" && isOwnerUsername(acc.username))) {
+                map[AZORA_OWNER_NAME] = acc;
+            }
+            saveSavedAccounts(map);
+        }
+    } catch (e) {}
+}
+
+function getSalesLedger() {
+    try {
+        var list = JSON.parse(localStorage.getItem("azoraSalesLedger") || "[]");
+        return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+}
+
+function saveSalesLedger(list) {
+    try { localStorage.setItem("azoraSalesLedger", JSON.stringify(list || [])); } catch (e) {}
+}
+
+function getPendingForUser(username) {
+    var u = String(username || "").trim().toLowerCase();
+    return getSalesLedger().filter(function (row) {
+        return row && !row.collected && String(row.toUser || "").trim().toLowerCase() === u;
+    });
+}
+
+function sumPendingForUser(username) {
+    var sum = 0;
+    getPendingForUser(username).forEach(function (row) {
+        sum += Number(row.amount) || 0;
+    });
+    return Math.round(sum * 1000) / 1000;
+}
+
+function collectPendingCoins() {
+    var acc = getActiveAccount();
+    if (!acc || acc.isGuest) {
+        alert("Log in with an account to collect pending AzoraCoins.");
+        return;
+    }
+    var pending = getPendingForUser(acc.username);
+    if (!pending.length) {
+        showAzoraToast("No pending AzoraCoins.");
+        return;
+    }
+    var total = 0;
+    var ledger = getSalesLedger();
+    pending.forEach(function (p) {
+        total += Number(p.amount) || 0;
+        ledger.forEach(function (row) {
+            if (row && row.id === p.id) row.collected = true;
+        });
+    });
+    total = Math.round(total * 1000) / 1000;
+    saveSalesLedger(ledger);
+    setCoins(getCoins() + total);
+    showAzoraToast("Collected " + formatCoins(total) + " AzoraCoins!");
+    renderCoinsDropdown();
+    updateCoinsUI();
+}
+
+/** Record a sale. amountToSeller goes pending for seller; amountToPlatform pending for Azora. */
+function recordSale(opts) {
+    opts = opts || {};
+    var ledger = getSalesLedger();
+    var ts = Date.now();
+    var buyer = opts.buyerName || "Someone";
+    var itemName = opts.itemName || "Item";
+    if (opts.amountToSeller > 0 && opts.sellerName) {
+        ledger.unshift({
+            id: "sale_" + ts + "_s",
+            toUser: opts.sellerName,
+            fromUser: buyer,
+            itemName: itemName,
+            amount: Math.round(opts.amountToSeller * 1000) / 1000,
+            fee: false,
+            collected: false,
+            at: ts
+        });
+    }
+    if (opts.amountToPlatform > 0) {
+        ledger.unshift({
+            id: "sale_" + ts + "_p",
+            toUser: AZORA_OWNER_NAME,
+            fromUser: buyer,
+            itemName: itemName + " (10% platform fee)",
+            amount: Math.round(opts.amountToPlatform * 1000) / 1000,
+            fee: true,
+            collected: false,
+            at: ts
+        });
+    }
+    // keep ledger from growing forever
+    if (ledger.length > 300) ledger = ledger.slice(0, 300);
+    saveSalesLedger(ledger);
+}
+
+function creditOfficialCatalogSale(price, buyerName, itemName) {
+    // Official hair/faces are By Azora → 100% to Azora (pending)
+    var p = Math.round((Number(price) || 0) * 1000) / 1000;
+    if (p <= 0) return;
+    recordSale({
+        sellerName: AZORA_OWNER_NAME,
+        buyerName: buyerName,
+        itemName: itemName,
+        amountToSeller: p,
+        amountToPlatform: 0
+    });
+}
+
+
 function getCoins() {
     try {
+        var acc = getActiveAccount();
+        if (acc && typeof acc.coins === "number" && !isNaN(acc.coins)) {
+            return Math.max(0, Math.round(acc.coins * 1000) / 1000);
+        }
         var n = parseFloat(localStorage.getItem("azoraCoins") || "0");
         if (isNaN(n)) n = 0;
         return Math.max(0, Math.round(n * 1000) / 1000);
@@ -10344,6 +10592,13 @@ function getCoins() {
 function setCoins(n) {
     n = Math.max(0, Math.round((Number(n) || 0) * 1000) / 1000);
     try { localStorage.setItem("azoraCoins", String(n)); } catch (e) {}
+    try {
+        var acc = getActiveAccount();
+        if (acc) {
+            acc.coins = n;
+            persistActiveAccount(acc);
+        }
+    } catch (e2) {}
     updateCoinsUI();
     return n;
 }
@@ -10359,6 +10614,83 @@ function spendCoins(amount) {
     setCoins(cur - amount);
     return true;
 }
+
+
+function toggleCoinsDropdown(ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    var dd = document.getElementById("coinsDropdown");
+    if (!dd) return;
+    var open = dd.classList.contains("open");
+    closeCoinsDropdown();
+    if (!open) {
+        renderCoinsDropdown();
+        dd.classList.add("open");
+        dd.setAttribute("aria-hidden", "false");
+    }
+}
+
+function closeCoinsDropdown() {
+    var dd = document.getElementById("coinsDropdown");
+    if (dd) {
+        dd.classList.remove("open");
+        dd.setAttribute("aria-hidden", "true");
+    }
+    var panel = document.getElementById("pendingCoinsPanel");
+    if (panel) panel.style.display = "none";
+}
+
+function renderCoinsDropdown() {
+    var bal = document.getElementById("coinsDropBalance");
+    if (bal) bal.textContent = formatCoins(getCoins());
+    var pendSum = document.getElementById("coinsDropPending");
+    var acc = getActiveAccount();
+    var name = acc && acc.username ? acc.username : "";
+    var pendingTotal = name ? sumPendingForUser(name) : 0;
+    if (pendSum) pendSum.textContent = formatCoins(pendingTotal);
+}
+
+function openPendingCoins() {
+    var panel = document.getElementById("pendingCoinsPanel");
+    if (!panel) return;
+    var acc = getActiveAccount();
+    if (!acc || acc.isGuest) {
+        panel.innerHTML = '<p class="pending-empty">Log in with an account to see pending AzoraCoins.</p>';
+        panel.style.display = "block";
+        return;
+    }
+    var rows = getPendingForUser(acc.username);
+    var html = '<div class="pending-head"><strong>Pending AzoraCoins</strong>';
+    html += '<button type="button" class="pending-collect-btn" onclick="collectPendingCoins()">Collect all</button></div>';
+    if (!rows.length) {
+        html += '<p class="pending-empty">No pending coins right now.</p>';
+    } else {
+        rows.forEach(function (row) {
+            var when = row.at ? new Date(row.at).toLocaleString() : "";
+            html += '<div class="pending-row">';
+            html += '<div class="pending-amt">+' + formatCoins(row.amount) + ' 🪙</div>';
+            html += '<div class="pending-meta">From <strong>' + (row.fromUser || "Someone") + '</strong>';
+            html += '<br><span class="pending-item">' + (row.itemName || "Item") + '</span>';
+            if (when) html += '<br><span class="pending-time">' + when + '</span>';
+            html += '</div></div>';
+        });
+    }
+    panel.innerHTML = html;
+    panel.style.display = "block";
+    renderCoinsDropdown();
+}
+
+(function bindCoinsDropdownClose() {
+    if (window._azoraCoinsDropBound) return;
+    window._azoraCoinsDropBound = true;
+    document.addEventListener("click", function (e) {
+        var dd = document.getElementById("coinsDropdown");
+        var wrap = document.getElementById("coinsMenuWrap");
+        if (!dd || !dd.classList.contains("open")) return;
+        if (wrap && wrap.contains(e.target)) return;
+        closeCoinsDropdown();
+    });
+})();
+
 
 function updateCoinsUI() {
     try {
@@ -10414,10 +10746,11 @@ function getInventory() {
     try {
         var raw = JSON.parse(localStorage.getItem("azoraInventory") || "null");
         if (!raw || typeof raw !== "object") {
-            raw = { items: [], equipped: { hair: null, face: null } };
+            raw = { items: [], equipped: { hair: null, face: null, shirt: null } };
         }
         if (!Array.isArray(raw.items)) raw.items = [];
-        if (!raw.equipped || typeof raw.equipped !== "object") raw.equipped = { hair: null, face: null };
+        if (!raw.equipped || typeof raw.equipped !== "object") raw.equipped = { hair: null, face: null, shirt: null };
+        if (!("shirt" in raw.equipped)) raw.equipped.shirt = null;
         if (typeof raw.equipped.face === "undefined") raw.equipped.face = null;
         if (typeof raw.equipped.hair === "undefined") raw.equipped.hair = null;
         return raw;
@@ -10432,7 +10765,33 @@ function saveInventory(inv) {
     } catch (e) {}
 }
 
+
+function getAllOfficialCatalogIds() {
+    var ids = [];
+    try {
+        (AZORA_HAIR_CATALOG || []).forEach(function (it) { if (it && it.id) ids.push(it.id); });
+        (AZORA_FACE_CATALOG || []).forEach(function (it) { if (it && it.id) ids.push(it.id); });
+    } catch (e) {}
+    return ids;
+}
+
+function grantAllOfficialItemsToOwner() {
+    if (typeof isAzoraOwner === "function" && !isAzoraOwner()) return;
+    var inv = getInventory();
+    var ids = getAllOfficialCatalogIds();
+    ids.forEach(function (id) {
+        if (inv.items.indexOf(id) === -1) inv.items.push(id);
+    });
+    saveInventory(inv);
+}
+
 function ownsItem(itemId) {
+    // Official account owns every official catalog item (hair + faces)
+    try {
+        if (typeof isAzoraOwner === "function" && isAzoraOwner()) {
+            if (hairCatalogById(itemId) || faceCatalogById(itemId)) return true;
+        }
+    } catch (e) {}
     var inv = getInventory();
     return inv.items.indexOf(itemId) !== -1;
 }
@@ -10473,22 +10832,64 @@ function buyMarketplaceItem(itemId) {
         if (typeof openCreateAccount === "function") openCreateAccount();
         return;
     }
+    if (typeof isAzoraOwner === "function" && isAzoraOwner()) {
+        showAzoraToast("Azora already owns every official item.");
+        return;
+    }
     var item = hairCatalogById(itemId) || faceCatalogById(itemId);
+    var isShirt = false;
+    if (!item && typeof getTShirtById === "function") {
+        item = getTShirtById(itemId);
+        isShirt = !!item;
+    }
     if (!item) { alert("Item not found."); return; }
-    if (ownsItem(itemId)) {
+    if (ownsItem(itemId) || (isShirt && ownsItem(itemId))) {
         showAzoraToast("You already own this!");
         return;
     }
-    if (item.price > 0 && !spendCoins(item.price)) {
-        alert("Not enough AzoraCoins! You need " + formatCoins(item.price) + " 🪙");
+    // Cannot buy your own T-Shirt
+    if (isShirt) {
+        var acc = getActiveAccount();
+        if (acc && item.creator && String(item.creator).toLowerCase() === String(acc.username || "").toLowerCase()) {
+            showAzoraToast("You already created this T-Shirt.");
+            return;
+        }
+    }
+    var price = Number(item.price) || 0;
+    if (price > 0 && !spendCoins(price)) {
+        alert("Not enough AzoraCoins! You need " + formatCoins(price) + " 🪙");
         return;
     }
     var inv = getInventory();
-    inv.items.push(itemId);
+    if (inv.items.indexOf(itemId) === -1) inv.items.push(itemId);
     saveInventory(inv);
-    showAzoraToast("Bought " + item.name + "! Check Inventory to equip.");
+
+    var buyerName = "Someone";
+    try {
+        var a = getActiveAccount();
+        if (a && a.username) buyerName = a.isGuest ? ("Guest " + (a.userId || "")) : a.username;
+    } catch (e) {}
+
+    if (isShirt) {
+        // 90% seller pending, 10% Azora pending
+        var fee = Math.round(price * AZORA_PLATFORM_FEE * 1000) / 1000;
+        var sellerCut = Math.round((price - fee) * 1000) / 1000;
+        recordSale({
+            sellerName: item.creator || "Creator",
+            buyerName: buyerName,
+            itemName: item.name || "T-Shirt",
+            amountToSeller: sellerCut,
+            amountToPlatform: fee
+        });
+    } else if (price > 0) {
+        // Official catalog By Azora → 100% to Azora pending
+        creditOfficialCatalogSale(price, buyerName, item.name || itemId);
+    }
+
+    showAzoraToast("Bought " + (item.name || "item") + "! Check Inventory to equip.");
     renderMarketplace();
     renderInventory();
+    try { renderCoinsDropdown(); } catch (e3) {}
 }
 
 function equipInventoryItem(itemId) {
@@ -10556,6 +10957,164 @@ function getMarketCategory() {
     return (el && el.value) ? el.value : "hair";
 }
 
+
+/** —— User T-Shirts (free upload, priced by creator, 10% to Azora) —— */
+function getTShirtCatalog() {
+    try {
+        var list = JSON.parse(localStorage.getItem("azoraTShirts") || "[]");
+        return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+}
+
+function saveTShirtCatalog(list) {
+    try { localStorage.setItem("azoraTShirts", JSON.stringify(list || [])); } catch (e) {}
+}
+
+function getTShirtById(id) {
+    var list = getTShirtCatalog();
+    for (var i = 0; i < list.length; i++) {
+        if (list[i] && list[i].id === id) return list[i];
+    }
+    return null;
+}
+
+function openCreateTShirt() {
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Log in or create an account to upload a T-Shirt.");
+        if (typeof openCreateAccount === "function") openCreateAccount();
+        return;
+    }
+    var acc = getActiveAccount();
+    if (acc && acc.isGuest) {
+        alert("Guests cannot upload T-Shirts. Create an account first!");
+        return;
+    }
+    var ov = document.getElementById("createTShirtOverlay");
+    if (!ov) return;
+    var nameEl = document.getElementById("tshirtNameInput");
+    var priceEl = document.getElementById("tshirtPriceInput");
+    var prev = document.getElementById("tshirtPreviewImg");
+    var fileEl = document.getElementById("tshirtFileInput");
+    if (nameEl) nameEl.value = "";
+    if (priceEl) priceEl.value = "0.05";
+    if (fileEl) fileEl.value = "";
+    if (prev) { prev.removeAttribute("src"); prev.style.display = "none"; }
+    window._azoraTShirtDataUrl = null;
+    ov.style.display = "flex";
+}
+
+function closeCreateTShirt() {
+    var ov = document.getElementById("createTShirtOverlay");
+    if (ov) ov.style.display = "none";
+}
+
+function onTShirtFileChosen(input) {
+    var file = input && input.files && input.files[0];
+    if (!file) return;
+    if (!/^image\//.test(file.type)) {
+        alert("Please choose an image file.");
+        return;
+    }
+    if (file.size > 1.5 * 1024 * 1024) {
+        alert("Image is too large. Please use an image under 1.5 MB.");
+        return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+        var dataUrl = String(reader.result || "");
+        // Draw onto small canvas for torso decal size
+        var img = new Image();
+        img.onload = function () {
+            var c = document.createElement("canvas");
+            c.width = 128;
+            c.height = 128;
+            var ctx = c.getContext("2d");
+            ctx.clearRect(0, 0, 128, 128);
+            // cover fit
+            var scale = Math.max(128 / img.width, 128 / img.height);
+            var dw = img.width * scale, dh = img.height * scale;
+            ctx.drawImage(img, (128 - dw) / 2, (128 - dh) / 2, dw, dh);
+            window._azoraTShirtDataUrl = c.toDataURL("image/png");
+            var prev = document.getElementById("tshirtPreviewImg");
+            if (prev) {
+                prev.src = window._azoraTShirtDataUrl;
+                prev.style.display = "block";
+            }
+        };
+        img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+}
+
+function submitCreateTShirt() {
+    var acc = getActiveAccount();
+    if (!acc || acc.isGuest) {
+        alert("Create an account to upload T-Shirts.");
+        return;
+    }
+    var name = ((document.getElementById("tshirtNameInput") || {}).value || "").trim();
+    if (!name) { alert("Please name your T-Shirt."); return; }
+    if (name.length > 40) { alert("Name must be 40 characters or less."); return; }
+    var price = parseFloat((document.getElementById("tshirtPriceInput") || {}).value || "0");
+    if (isNaN(price) || price < 0) price = 0;
+    price = Math.round(price * 1000) / 1000;
+    if (price > 50) { alert("Price is too high. Max 50 AzoraCoins for now."); return; }
+    if (!window._azoraTShirtDataUrl) {
+        alert("Please choose an image for the front of the torso.");
+        return;
+    }
+    var list = getTShirtCatalog();
+    var id = "shirt_" + Date.now() + "_" + Math.floor(Math.random() * 9999);
+    var item = {
+        id: id,
+        name: name,
+        price: price,
+        creator: acc.username,
+        creatorId: acc.userId || "",
+        imageData: window._azoraTShirtDataUrl,
+        createdAt: Date.now(),
+        by: acc.username
+    };
+    list.unshift(item);
+    if (list.length > 80) list = list.slice(0, 80);
+    saveTShirtCatalog(list);
+    // Creator owns it
+    var inv = getInventory();
+    if (inv.items.indexOf(id) === -1) inv.items.push(id);
+    saveInventory(inv);
+    closeCreateTShirt();
+    showAzoraToast("T-Shirt uploaded! It is free to list — buyers pay your price (Azora takes 10%).");
+    try {
+        var cat = document.getElementById("marketCategory");
+        if (cat) cat.value = "shirts";
+        renderMarketplace();
+        openMarketplace();
+    } catch (e) {}
+}
+
+function getEquippedTShirtId() {
+    var inv = getInventory();
+    return (inv.equipped && inv.equipped.shirt) || null;
+}
+
+function equipTShirt(itemId) {
+    if (!ownsItem(itemId) && !(getTShirtById(itemId) && getActiveAccount() && getTShirtById(itemId).creator === getActiveAccount().username)) {
+        // still allow if in inventory
+    }
+    var inv = getInventory();
+    if (inv.items.indexOf(itemId) === -1) {
+        showAzoraToast("You do not own this T-Shirt.");
+        return;
+    }
+    inv.equipped = inv.equipped || {};
+    inv.equipped.shirt = itemId;
+    saveInventory(inv);
+    showAzoraToast("T-Shirt equipped! Save Avatar to keep it.");
+    renderInventory();
+    try { if (typeof refreshAvatarPreview === "function") refreshAvatarPreview(); } catch (e) {}
+}
+
+
 function renderMarketplace() {
     var list = document.getElementById("marketplaceList");
     if (!list) return;
@@ -10563,6 +11122,7 @@ function renderMarketplace() {
     var filter = (document.getElementById("marketGenderFilter") || {}).value || "all";
     var coins = getCoins();
     var html = "";
+    var isOwner = (typeof isAzoraOwner === "function" && isAzoraOwner());
 
     function buyBtn(id) {
         return '<button type="button" class="market-btn" data-buy="' + id + '">Buy</button>';
@@ -10571,69 +11131,81 @@ function renderMarketplace() {
         return '<button type="button" class="market-btn owned-btn" disabled>Owned</button>';
     }
 
+    // Gender filter only for hair
+    var genderWrap = document.getElementById("marketGenderFilterWrap");
+    if (genderWrap) genderWrap.style.display = (category === "hair") ? "" : "none";
+    var uploadBtn = document.getElementById("uploadTShirtBtn");
+    if (uploadBtn) uploadBtn.style.display = (category === "shirts") ? "" : "none";
+
     if (category === "faces") {
         AZORA_FACE_CATALOG.forEach(function (item) {
-            var owned = ownsItem(item.id);
-            var canBuy = !owned && (item.price === 0 || coins >= item.price);
+            var owned = ownsItem(item.id) || isOwner;
+            var canBuy = !owned && !isOwner && (item.price === 0 || coins >= item.price);
             var priceLabel = item.price === 0 ? "Free" : (formatCoins(item.price) + " 🪙");
             var file = item.file || "Smile.png";
             html += '<div class="market-card market-card-face' + (owned ? " owned" : "") + '">';
             html += '<div class="market-face-row">';
-            html += '<div class="market-face-thumb" aria-hidden="true">';
-            html += '<img src="' + file + '" alt="" loading="lazy" onerror="this.style.opacity=0.3">';
-            html += '</div>';
+            html += '<div class="market-face-thumb" aria-hidden="true"><img src="' + file + '" alt="" loading="lazy" onerror="this.style.opacity=0.3"></div>';
             html += '<div class="market-face-info">';
             html += '<div class="market-card-title">' + item.name + '</div>';
-            html += '<div class="market-card-meta">Faces · Avatar face</div>';
+            html += '<div class="market-card-meta">Faces · <span class="by-creator">By Azora</span></div>';
             html += '<div class="market-card-desc">' + (item.desc || "") + '</div>';
             html += '</div></div>';
-            html += '<div class="market-card-footer">';
-            html += '<span class="market-price">' + priceLabel + '</span>';
+            html += '<div class="market-card-footer"><span class="market-price">' + priceLabel + '</span>';
+            if (owned) html += ownedBtn();
+            else if (canBuy) html += buyBtn(item.id);
+            else html += '<button type="button" class="market-btn disabled" disabled>Buy</button>';
+            html += '</div></div>';
+        });
+    } else if (category === "shirts") {
+        var shirts = (typeof getTShirtCatalog === "function") ? getTShirtCatalog() : [];
+        if (!shirts.length) {
+            html += '<p class="market-empty">No T-Shirts yet. Upload one for free and set your own price!</p>';
+        }
+        shirts.forEach(function (item) {
+            var owned = ownsItem(item.id);
+            var canBuy = !owned && (item.price === 0 || coins >= item.price);
+            var priceLabel = item.price === 0 ? "Free" : (formatCoins(item.price) + " 🪙");
+            var by = item.creator || "Player";
+            html += '<div class="market-card market-card-face' + (owned ? " owned" : "") + '">';
+            html += '<div class="market-face-row">';
+            html += '<div class="market-face-thumb market-shirt-thumb" aria-hidden="true">';
+            if (item.imageData) html += '<img src="' + item.imageData + '" alt="">';
+            html += '</div>';
+            html += '<div class="market-face-info">';
+            html += '<div class="market-card-title">' + (item.name || "T-Shirt") + '</div>';
+            html += '<div class="market-card-meta">T-Shirts · <span class="by-creator">By ' + by + '</span></div>';
+            html += '<div class="market-card-desc">Front of torso · Azora takes 10% of sales</div>';
+            html += '</div></div>';
+            html += '<div class="market-card-footer"><span class="market-price">' + priceLabel + '</span>';
             if (owned) html += ownedBtn();
             else if (canBuy) html += buyBtn(item.id);
             else html += '<button type="button" class="market-btn disabled" disabled>Buy</button>';
             html += '</div></div>';
         });
     } else {
+        // Hair (default)
         AZORA_HAIR_CATALOG.forEach(function (item) {
             if (filter === "girl" && item.gender !== "girl") return;
             if (filter === "boy" && item.gender !== "boy") return;
-            var owned = ownsItem(item.id);
-            var canBuy = !owned && (item.price === 0 || coins >= item.price);
+            var owned = ownsItem(item.id) || isOwner;
+            var canBuy = !owned && !isOwner && (item.price === 0 || coins >= item.price);
             var priceLabel = item.price === 0 ? "Free" : (formatCoins(item.price) + " 🪙");
-            var genderLabel = item.gender === "girl" ? "Girl" : "Boy";
             html += '<div class="market-card' + (owned ? " owned" : "") + '">';
             html += '<div class="market-card-title">' + item.name + '</div>';
-            html += '<div class="market-card-meta">Hair · ' + genderLabel + '</div>';
-            html += '<div class="market-card-desc">' + item.desc + '</div>';
-            html += '<div class="market-card-footer">';
-            html += '<span class="market-price">' + priceLabel + '</span>';
+            html += '<div class="market-card-meta">Hair · <span class="by-creator">By Azora</span>' +
+                (item.gender === "girl" ? " · Girl" : (item.gender === "boy" ? " · Boy" : "")) + '</div>';
+            html += '<div class="market-card-desc">' + (item.desc || "") + '</div>';
+            html += '<div class="market-card-footer"><span class="market-price">' + priceLabel + '</span>';
             if (owned) html += ownedBtn();
             else if (canBuy) html += buyBtn(item.id);
             else html += '<button type="button" class="market-btn disabled" disabled>Buy</button>';
             html += '</div></div>';
         });
     }
-    if (!html) html = '<p style="opacity:0.7;text-align:center;">No items in this category.</p>';
-    list.innerHTML = html;
-    var nodes = list.querySelectorAll("[data-buy]");
-    for (var bi = 0; bi < nodes.length; bi++) {
-        (function (btn) {
-            btn.addEventListener("click", function () {
-                buyMarketplaceItem(btn.getAttribute("data-buy"));
-            });
-        })(nodes[bi]);
-    }
-    var bal = document.getElementById("marketCoinBalance");
-    if (bal) bal.textContent = String(coins);
-    var genWrap = document.getElementById("marketGenderFilterWrap");
-    if (genWrap) genWrap.style.display = (category === "hair") ? "" : "none";
+    list.innerHTML = html || '<p class="market-empty">Nothing here yet.</p>';
 }
 
-function getInventoryCategory() {
-    var el = document.getElementById("inventoryCategory");
-    return (el && el.value) ? el.value : "hair";
-}
 
 function renderInventory() {
     var list = document.getElementById("inventoryList");
@@ -10642,67 +11214,100 @@ function renderInventory() {
     var category = getInventoryCategory();
     var equippedHair = inv.equipped.hair;
     var equippedFace = inv.equipped.face;
+    var equippedShirt = inv.equipped.shirt;
     var html = "";
     var shown = 0;
 
     inv.items.forEach(function (id) {
         var isFace = isFaceItemId(id);
+        var isShirt = String(id).indexOf("shirt_") === 0;
         if (category === "faces" && !isFace) return;
-        if (category === "hair" && isFace) return;
+        if (category === "hair" && (isFace || isShirt)) return;
+        if (category === "shirts" && !isShirt) return;
+        if (category === "faces" && isShirt) return;
 
-        var item = isFace ? faceCatalogById(id) : hairCatalogById(id);
+        var item = null;
+        if (isShirt) item = (typeof getTShirtById === "function") ? getTShirtById(id) : null;
+        else if (isFace) item = faceCatalogById(id);
+        else item = hairCatalogById(id);
+
         if (!item) {
-            var raw = String(id).replace(/^face_/, "").replace(/^hair_/, "").replace(/_/g, " ");
+            var raw = String(id).replace(/^face_/, "").replace(/^hair_/, "").replace(/^shirt_/, "").replace(/_/g, " ");
             item = {
                 id: id,
                 name: raw.split(" ").map(function (w) {
                     return w ? (w.charAt(0).toUpperCase() + w.slice(1)) : "";
                 }).join(" "),
-                desc: "Item"
+                desc: isShirt ? "T-Shirt" : "Item"
             };
         }
-        var isEq = isFace ? (equippedFace === id) : (equippedHair === id);
-        var meta = isFace ? "Faces" : ("Hair" + (item.gender === "girl" ? " · Girl" : (item.gender === "boy" ? " · Boy" : "")));
-        html += '<div class="market-card' + (isFace ? " market-card-face" : "") + (isEq ? " equipped" : "") + '">';
+        var isEq = isShirt ? (equippedShirt === id) : (isFace ? (equippedFace === id) : (equippedHair === id));
+        var meta;
+        if (isShirt) meta = 'T-Shirts · <span class="by-creator">By ' + (item.creator || "Player") + '</span>';
+        else if (isFace) meta = 'Faces · <span class="by-creator">By Azora</span>';
+        else meta = 'Hair · <span class="by-creator">By Azora</span>' + (item.gender === "girl" ? " · Girl" : (item.gender === "boy" ? " · Boy" : ""));
+
+        html += '<div class="market-card' + ((isFace || isShirt) ? " market-card-face" : "") + (isEq ? " equipped" : "") + '">';
         if (isFace) {
             var file = item.file || "Smile.png";
-            html += '<div class="market-face-row">';
-            html += '<div class="market-face-thumb" aria-hidden="true">';
-            html += '<img src="' + file + '" alt="" loading="lazy" onerror="this.style.opacity=0.3">';
-            html += '</div>';
-            html += '<div class="market-face-info">';
-            html += '<div class="market-card-title">' + item.name + (isEq ? " ✓" : "") + '</div>';
-            html += '<div class="market-card-meta">' + meta + '</div>';
-            html += '<div class="market-card-desc">' + (item.desc || "") + '</div>';
-            html += '</div></div>';
+            html += '<div class="market-face-row"><div class="market-face-thumb" aria-hidden="true"><img src="' + file + '" alt="" loading="lazy"></div>';
+            html += '<div class="market-face-info"><div class="market-card-title">' + item.name + (isEq ? " ✓" : "") + '</div>';
+            html += '<div class="market-card-meta">' + meta + '</div></div></div>';
+        } else if (isShirt) {
+            html += '<div class="market-face-row"><div class="market-face-thumb market-shirt-thumb" aria-hidden="true">';
+            if (item.imageData) html += '<img src="' + item.imageData + '" alt="">';
+            html += '</div><div class="market-face-info"><div class="market-card-title">' + (item.name || "T-Shirt") + (isEq ? " ✓" : "") + '</div>';
+            html += '<div class="market-card-meta">' + meta + '</div></div></div>';
         } else {
             html += '<div class="market-card-title">' + item.name + (isEq ? " ✓" : "") + '</div>';
             html += '<div class="market-card-meta">' + meta + '</div>';
             html += '<div class="market-card-desc">' + (item.desc || "") + '</div>';
         }
         html += '<div class="market-card-footer">';
-        if (isEq) {
-            html += '<button type="button" class="market-btn owned-btn" disabled>Equipped</button>';
-        } else {
-            html += '<button type="button" class="market-btn" data-equip="' + id + '">Equip</button>';
-        }
+        if (isEq) html += '<button type="button" class="market-btn owned-btn" disabled>Equipped</button>';
+        else if (isShirt) html += '<button type="button" class="market-btn" data-equip-shirt="' + id + '">Equip</button>';
+        else html += '<button type="button" class="market-btn" data-equip="' + id + '">Equip</button>';
         html += '</div></div>';
         shown++;
     });
 
     if (!shown) {
-        html = '<p style="opacity:0.7;text-align:center;">No ' + (category === "faces" ? "faces" : "hair") + ' yet. Visit the Marketplace!</p>';
+        html = '<p class="market-empty">No items in this category yet.</p>';
     }
     list.innerHTML = html;
-    var nodes = list.querySelectorAll("[data-equip]");
-    for (var ei = 0; ei < nodes.length; ei++) {
-        (function (btn) {
-            btn.addEventListener("click", function () {
-                equipInventoryItem(btn.getAttribute("data-equip"));
-            });
-        })(nodes[ei]);
-    }
 }
+
+
+
+(function bindMarketInventoryClicks() {
+    if (window._azoraMarketClicksBound) return;
+    window._azoraMarketClicksBound = true;
+    document.addEventListener("click", function (e) {
+        var t = e.target;
+        if (!t || !t.closest) return;
+        var buy = t.closest("[data-buy]");
+        if (buy) {
+            e.preventDefault();
+            var id = buy.getAttribute("data-buy");
+            if (id && typeof buyMarketplaceItem === "function") buyMarketplaceItem(id);
+            return;
+        }
+        var eq = t.closest("[data-equip]");
+        if (eq) {
+            e.preventDefault();
+            var eid = eq.getAttribute("data-equip");
+            if (eid && typeof equipInventoryItem === "function") equipInventoryItem(eid);
+            return;
+        }
+        var es = t.closest("[data-equip-shirt]");
+        if (es) {
+            e.preventDefault();
+            var sid = es.getAttribute("data-equip-shirt");
+            if (sid && typeof equipTShirt === "function") equipTShirt(sid);
+            return;
+        }
+    });
+})();
 
 
 function openMarketplace() {

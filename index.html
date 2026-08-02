@@ -13,7 +13,7 @@
     <link rel="manifest" href="manifest-azora.json">
     <link rel="apple-touch-icon" href="logo.jpg">
     <link rel="icon" href="logo.jpg">
-    <link rel="stylesheet" href="style.css?v=58.2">
+    <link rel="stylesheet" href="style.css?v=59.0">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -282,13 +282,24 @@
     <h2>Azora</h2>
     <div class="topbar-right">
         <span id="azoraPlayModeBadge" class="azora-play-mode-badge online" title="Connection status">Play Azora Online</span>
-        <div class="currency-display">🪙 AzoraCoins: <span id="bucks">0</span></div>
+        <div class="currency-display coins-menu-wrap" id="coinsMenuWrap">
+            <button type="button" class="coins-menu-btn" id="coinsMenuBtn" onclick="toggleCoinsDropdown(event)" aria-haspopup="true">
+                🪙 AzoraCoins: <span id="bucks">0</span> ▾
+            </button>
+            <div class="coins-dropdown" id="coinsDropdown" aria-hidden="true">
+                <div class="coins-drop-row"><span>Balance</span><strong><span id="coinsDropBalance">0</span> 🪙</strong></div>
+                <button type="button" class="coins-drop-item" onclick="openPendingCoins()">Pending AzoraCoins <span id="coinsDropPending">0</span></button>
+                <button type="button" class="coins-drop-item" onclick="openMarketplace(); closeCoinsDropdown();">Open Shop</button>
+                <button type="button" class="coins-drop-item" onclick="openInventory(); closeCoinsDropdown();">Open Inventory</button>
+                <div id="pendingCoinsPanel" class="pending-coins-panel" style="display:none;"></div>
+            </div>
+        </div>
         <button type="button" id="marketplaceBtn" class="topbar-shop-btn" onclick="openMarketplace()" title="Marketplace">🛒 Shop</button>
         <button type="button" id="inventoryBtn" class="topbar-shop-btn" onclick="openInventory()" title="Inventory">🎒 Bag</button>
         <button type="button" id="membershipBtn" class="topbar-shop-btn azora-temp-disabled" onclick="openMembership()" title="Members (disabled for now)" aria-disabled="true">Members</button>
     </div>
     <button id="publicFeedButton" onclick="openPublicFeed()" style="margin:0;">🎮 Feed</button>
-    <button type="button" id="installAppBtn" class="install-app-btn" onclick="installAzoraApp()" title="Install Azora app">📲 Get the App</button>
+    <button type="button" id="installAppBtn" class="install-app-btn" onclick="installAzoraApp()" title="Download Azora app">⬇️ Download Azora</button>
     <div id="guestButtons" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <button onclick="openCreateAccount()" style="margin:0;">Create Account</button>
         <button onclick="openLogin()" style="margin:0;">Log In</button>
@@ -399,7 +410,7 @@
                 <div class="norm-game-icon">🐱</div>
                 <div class="norm-game-info">
                     <h4>Become a Cat Simulator</h4>
-                    <p>Turn into a cat! Explore the park, climb boxes, and chat with other cats.</p>
+                    <p><span class="by-creator">By Azora</span>. Turn into a cat! Explore the park, climb boxes, and chat with other cats.</p>
                     <span class="norm-game-meta">3D · Multiplayer · You are a cat</span>
                 </div>
                 <button type="button" class="norm-join-btn" onclick="joinNormGame('become-a-cat')">Join</button>
@@ -408,7 +419,7 @@
                 <div class="norm-game-icon">🏃</div>
                 <div class="norm-game-info">
                     <h4>Parkour Plains</h4>
-                    <p>Jump across platforms and climb higher with friends.</p>
+                    <p><span class="by-creator">By Azora</span>. Jump across platforms and climb higher with friends.</p>
                     <span class="norm-game-meta">3D · Multiplayer · Parkour</span>
                 </div>
                 <button type="button" class="norm-join-btn" onclick="joinNormGame('parkour-plains')">Join</button>
@@ -417,7 +428,7 @@
                 <div class="norm-game-icon">☕</div>
                 <div class="norm-game-info">
                     <h4>Cozy Cafe</h4>
-                    <p>Hang out in a calm cafe, chat, and relax.</p>
+                    <p><span class="by-creator">By Azora</span>. Hang out in a calm cafe, chat, and relax.</p>
                     <span class="norm-game-meta">3D · Multiplayer · Social</span>
                 </div>
                 <button type="button" class="norm-join-btn" onclick="joinNormGame('cozy-cafe')">Join</button>
@@ -426,7 +437,7 @@
                 <div class="norm-game-icon">☁️</div>
                 <div class="norm-game-info">
                     <h4>Sky Islands</h4>
-                    <p>Explore floating islands high above the clouds.</p>
+                    <p><span class="by-creator">By Azora</span>. Explore floating islands high above the clouds.</p>
                     <span class="norm-game-meta">3D · Multiplayer · Explore</span>
                 </div>
                 <button type="button" class="norm-join-btn" onclick="joinNormGame('sky-islands')">Join</button>
@@ -435,7 +446,7 @@
                 <div class="norm-game-icon">🪐</div>
                 <div class="norm-game-info">
                     <h4>Planet Empire</h4>
-                    <p>Land on a huge open planet with no hard edge. Grow your empire using <strong>Moneys</strong> ($). Outposts earn more income over time.</p>
+                    <p><span class="by-creator">By Azora</span>. Land on a huge open planet with no hard edge. Grow your empire using <strong>Moneys</strong> ($). Outposts earn more income over time.</p>
                     <span class="norm-game-meta">3D · Multiplayer · Expand · Moneys $</span>
                 </div>
                 <button type="button" class="norm-join-btn" onclick="joinNormGame('planet-empire')">Join</button>
@@ -768,7 +779,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=58.2"></script>
+<script src="script.js?v=59.0"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {
@@ -788,8 +799,10 @@ if ("serviceWorker" in navigator) {
                 <select id="marketCategory" onchange="renderMarketplace()">
                     <option value="hair">Hair</option>
                     <option value="faces">Faces</option>
+                    <option value="shirts">T-Shirts</option>
                 </select>
             </label>
+            <button type="button" id="uploadTShirtBtn" class="market-upload-btn" style="display:none;" onclick="openCreateTShirt()">Upload T-Shirt (Free)</button>
             <label id="marketGenderFilterWrap" style="font-size:0.85rem;">Filter:
                 <select id="marketGenderFilter" onchange="renderMarketplace()">
                     <option value="all">All</option>
@@ -813,6 +826,7 @@ if ("serviceWorker" in navigator) {
                 <select id="inventoryCategory" onchange="renderInventory()">
                     <option value="hair">Hair</option>
                     <option value="faces">Faces</option>
+                    <option value="shirts">T-Shirts</option>
                 </select>
             </label>
         </div>
@@ -839,6 +853,50 @@ if ("serviceWorker" in navigator) {
         <div class="members-footer-actions">
             <button type="button" class="members-btn-text" onclick="cancelMembership()">Cancel plan</button>
             <button type="button" class="members-btn-secondary" onclick="closeMembership()">Close</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- Download Azora (website only — hidden inside installed app) -->
+<div id="downloadAzoraOverlay" class="overlay download-azora-overlay" style="display:none;" aria-hidden="true">
+    <div class="popup download-azora-popup" role="dialog" aria-labelledby="downloadAzoraTitle">
+        <img src="logo.jpg" alt="" class="download-azora-logo">
+        <h2 id="downloadAzoraTitle">Download Azora</h2>
+        <p class="download-azora-lead">Install Azora on this device. It opens like a normal app — no browser bar.</p>
+        <div id="downloadAzoraStatus" class="download-azora-status"></div>
+        <div class="download-azora-actions">
+            <button type="button" id="downloadAzoraPrimaryBtn" class="download-azora-primary" onclick="confirmDownloadAzora()">Download Azora</button>
+            <button type="button" class="download-azora-secondary" onclick="closeDownloadAzora()">Not now</button>
+        </div>
+        <p class="download-azora-note" id="downloadAzoraNote">Works best on Chrome, Edge, or Samsung Internet. On iPhone, use Add to Home Screen.</p>
+    </div>
+</div>
+
+
+<!-- Create T-Shirt (free upload) -->
+<div id="createTShirtOverlay" class="overlay" style="display:none;">
+    <div class="popup market-popup" style="max-width:min(400px,calc(100vw - 16px));text-align:left;">
+        <h2 style="text-align:center;margin:0 0 8px;">Upload T-Shirt</h2>
+        <p style="text-align:center;margin:0 0 12px;opacity:0.85;font-size:0.85rem;">
+            Free to upload. Image goes on the <strong>front of the torso</strong>.
+            You set the price — when someone buys it, you get <strong>90%</strong> and Azora gets <strong>10%</strong>.
+        </p>
+        <label style="display:block;margin-bottom:8px;font-size:0.85rem;">Name
+            <input id="tshirtNameInput" type="text" maxlength="40" placeholder="Cool Logo Tee" style="width:100%;margin-top:4px;">
+        </label>
+        <label style="display:block;margin-bottom:8px;font-size:0.85rem;">Price (AzoraCoins)
+            <input id="tshirtPriceInput" type="number" min="0" max="50" step="0.01" value="0.05" style="width:100%;margin-top:4px;">
+        </label>
+        <label style="display:block;margin-bottom:8px;font-size:0.85rem;">Image
+            <input id="tshirtFileInput" type="file" accept="image/*" onchange="onTShirtFileChosen(this)" style="width:100%;margin-top:4px;">
+        </label>
+        <div style="text-align:center;margin:10px 0;">
+            <img id="tshirtPreviewImg" alt="" style="display:none;max-width:128px;max-height:128px;border-radius:12px;border:1px solid rgba(255,255,255,0.2);">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+            <button type="button" onclick="submitCreateTShirt()" style="flex:1;">Publish T-Shirt</button>
+            <button type="button" onclick="closeCreateTShirt()" style="flex:1;">Cancel</button>
         </div>
     </div>
 </div>
