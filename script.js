@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v58.1 Face thumbs","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v58.2 Face center","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -74,6 +74,99 @@ function getAvatarGender() {
         if (acc && (acc.gender === "girl" || acc.gender === "female")) return "girl";
     } catch (e) {}
     return "boy";
+}
+
+
+/** Crop padding and draw face content perfectly centered on a square canvas.
+ *  Near-white / empty pixels are treated as transparent so faces sit centered. */
+function centerFaceContentOnCanvas(sourceImg, size) {
+    size = size || 256;
+    try {
+        var w = sourceImg.naturalWidth || sourceImg.width || 0;
+        var h = sourceImg.naturalHeight || sourceImg.height || 0;
+        if (!w || !h) return null;
+
+        var tmp = document.createElement("canvas");
+        tmp.width = w;
+        tmp.height = h;
+        var tctx = tmp.getContext("2d");
+        tctx.clearRect(0, 0, w, h);
+        tctx.drawImage(sourceImg, 0, 0);
+
+        var data;
+        try {
+            data = tctx.getImageData(0, 0, w, h);
+        } catch (e) {
+            var c0 = document.createElement("canvas");
+            c0.width = size;
+            c0.height = size;
+            var ctx0 = c0.getContext("2d");
+            var scale0 = Math.min(size / w, size / h) * 0.88;
+            var dw0 = w * scale0, dh0 = h * scale0;
+            ctx0.clearRect(0, 0, size, size);
+            ctx0.drawImage(sourceImg, (size - dw0) / 2, (size - dh0) / 2, dw0, dh0);
+            return c0;
+        }
+
+        var px = data.data;
+        // Treat near-white / very light gray as transparent (legacy Smile.png backgrounds)
+        for (var i = 0; i < px.length; i += 4) {
+            var r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
+            var lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            if (a < 10 || (lum > 245 && a > 200)) {
+                px[i] = px[i + 1] = px[i + 2] = px[i + 3] = 0;
+            }
+        }
+        tctx.putImageData(data, 0, 0);
+
+        var minX = w, minY = h, maxX = -1, maxY = -1;
+        for (var y = 0; y < h; y++) {
+            for (var x = 0; x < w; x++) {
+                if (px[(y * w + x) * 4 + 3] > 12) {
+                    if (x < minX) minX = x;
+                    if (y < minY) minY = y;
+                    if (x > maxX) maxX = x;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+        if (maxX < minX) {
+            minX = 0; minY = 0; maxX = w - 1; maxY = h - 1;
+        }
+
+        var bw = maxX - minX + 1;
+        var bh = maxY - minY + 1;
+        var pad = Math.max(6, Math.floor(size * 0.08));
+        var scale = Math.min((size - pad * 2) / bw, (size - pad * 2) / bh);
+        var dw = bw * scale;
+        var dh = bh * scale;
+        var dx = (size - dw) / 2;
+        var dy = (size - dh) / 2;
+
+        var out = document.createElement("canvas");
+        out.width = size;
+        out.height = size;
+        var ctx = out.getContext("2d");
+        ctx.clearRect(0, 0, size, size);
+        ctx.imageSmoothingEnabled = true;
+        if (ctx.imageSmoothingQuality) ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(tmp, minX, minY, bw, bh, dx, dy, dw, dh);
+        return out;
+    } catch (e) {
+        return null;
+    }
+}
+
+function textureFromCenteredFace(sourceImg) {
+    if (typeof THREE === "undefined" || !sourceImg) return null;
+    var canvas = centerFaceContentOnCanvas(sourceImg, 256);
+    if (!canvas) return null;
+    var tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;
+    tex.needsUpdate = true;
+    return tex;
 }
 
 function faceTextureUrlForGender(gender) {
@@ -2098,9 +2191,10 @@ function buildAvatarFace(headColor, gender) {
         alphaTest: 0.2
     });
 
-    var plane = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.56), mat);
+    // Plane is centered on the front of the head (head is ~0.65 cube)
+    var plane = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 0.54), mat);
     plane.name = "faceDecal";
-    plane.position.set(0, 0.02, 0.34);
+    plane.position.set(0, 0, 0.34);
     plane.visible = false;
     face.add(plane);
 
@@ -2113,32 +2207,30 @@ function buildAvatarFace(headColor, gender) {
         mat.map = tex;
         mat.transparent = true;
         mat.opacity = 1;
-        mat.alphaTest = 0.2;
+        mat.alphaTest = 0.15;
         mat.needsUpdate = true;
         plane.visible = true;
     }
 
-    // Prefer TextureLoader (works on https / PWA). Avoid crossOrigin on file:// so local tests work.
-    function loadWithThree(url, onFail) {
+    function showCenteredFromImage(img) {
+        var centered = null;
         try {
-            var loader = new THREE.TextureLoader();
-            // only set CORS when not opening as a local file
-            if (typeof location !== "undefined" && location.protocol !== "file:") {
-                loader.setCrossOrigin("anonymous");
+            if (typeof textureFromCenteredFace === "function") {
+                centered = textureFromCenteredFace(img);
             }
-            loader.load(
-                url,
-                function (tex) { showTex(tex); },
-                undefined,
-                function () { if (onFail) onFail(); }
-            );
-        } catch (e) {
-            if (onFail) onFail();
+        } catch (e) {}
+        if (centered) showTex(centered);
+        else {
+            try {
+                var t = new THREE.Texture(img);
+                t.needsUpdate = true;
+                showTex(t);
+            } catch (e2) {}
         }
     }
 
-    // Image + canvas fallback strips any leftover gray if an old Smile.png is cached
-    function loadWithImage(url, onFail) {
+    // Prefer TextureLoader (works on https / PWA). Avoid crossOrigin on file:// so local tests work.
+    function loadFaceImage(url, onFail) {
         try {
             var img = new Image();
             if (typeof location !== "undefined" && location.protocol !== "file:") {
@@ -2146,30 +2238,18 @@ function buildAvatarFace(headColor, gender) {
             }
             img.onload = function () {
                 try {
-                    var c = document.createElement("canvas");
-                    c.width = img.naturalWidth || img.width;
-                    c.height = img.naturalHeight || img.height;
-                    var ctx = c.getContext("2d");
-                    ctx.clearRect(0, 0, c.width, c.height);
-                    ctx.drawImage(img, 0, 0);
-                    var data = ctx.getImageData(0, 0, c.width, c.height);
-                    var px = data.data;
-                    for (var i = 0; i < px.length; i += 4) {
-                        var lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-                        if (px[i + 3] < 15 || lum > 90) {
-                            px[i] = px[i + 1] = px[i + 2] = px[i + 3] = 0;
-                        } else {
-                            px[i] = px[i + 1] = px[i + 2] = 12;
-                            px[i + 3] = 255;
-                        }
+                    if (typeof showCenteredFromImage === "function") {
+                        showCenteredFromImage(img);
+                    } else {
+                        var t = new THREE.Texture(img);
+                        t.needsUpdate = true;
+                        showTex(t);
                     }
-                    ctx.putImageData(data, 0, 0);
-                    showTex(new THREE.CanvasTexture(c));
                 } catch (e) {
-                    // canvas tainted (common on file://) — try raw texture without process
                     try {
-                        showTex(new THREE.Texture(img));
-                        mat.map.needsUpdate = true;
+                        var t2 = new THREE.Texture(img);
+                        t2.needsUpdate = true;
+                        showTex(t2);
                     } catch (e2) {
                         if (onFail) onFail();
                     }
@@ -2182,13 +2262,10 @@ function buildAvatarFace(headColor, gender) {
         }
     }
 
-    loadWithThree(faceUrl, function () {
-        loadWithThree((faceUrl.charAt(0)==="."?faceUrl:("./"+faceUrl)), function () {
-            loadWithImage(faceUrl, function () {
-                loadWithImage((faceUrl.charAt(0)==="."?faceUrl:("./"+faceUrl)), function () {
-                    console.warn("[Azora] Smile.png missing — face left blank (no white square)");
-                });
-            });
+    // Prefer Image path so we can crop + center opaque face pixels on the head
+    loadFaceImage(faceUrl, function () {
+        loadFaceImage((faceUrl.charAt(0) === "." ? faceUrl : ("./" + faceUrl)), function () {
+            console.warn("[Azora] face texture missing — face left blank");
         });
     });
 
@@ -7372,8 +7449,8 @@ function attachNormFaceDecal(avatarGroup, headMesh, gender) {
         });
         var plane = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.52), mat);
         plane.name = "faceDecal";
-        // Sit just in front of the head cube
-        plane.position.set(0, headMesh.position.y + 0.02, 0.34);
+        // Perfectly centered on the front of the head cube
+        plane.position.set(0, headMesh.position.y, 0.34);
         plane.visible = false;
         avatarGroup.add(plane);
 
@@ -7386,21 +7463,29 @@ function attachNormFaceDecal(avatarGroup, headMesh, gender) {
             mat.map = tex;
             mat.transparent = true;
             mat.opacity = 1;
+            mat.alphaTest = 0.15;
             mat.needsUpdate = true;
             plane.visible = true;
         }
 
-        function loadThree(url, onFail) {
+        function showCenteredFromImage(img) {
+            var centered = null;
             try {
-                var loader = new THREE.TextureLoader();
-                if (typeof location !== "undefined" && location.protocol !== "file:") {
-                    loader.setCrossOrigin("anonymous");
+                if (typeof textureFromCenteredFace === "function") {
+                    centered = textureFromCenteredFace(img);
                 }
-                loader.load(url, function (tex) { showTex(tex); }, undefined, function () { if (onFail) onFail(); });
-            } catch (e) { if (onFail) onFail(); }
+            } catch (e) {}
+            if (centered) showTex(centered);
+            else {
+                try {
+                    var t = new THREE.Texture(img);
+                    t.needsUpdate = true;
+                    showTex(t);
+                } catch (e2) {}
+            }
         }
 
-        function loadImage(url, onFail) {
+        function loadFaceImage(url, onFail) {
             try {
                 var img = new Image();
                 if (typeof location !== "undefined" && location.protocol !== "file:") {
@@ -7408,25 +7493,7 @@ function attachNormFaceDecal(avatarGroup, headMesh, gender) {
                 }
                 img.onload = function () {
                     try {
-                        var c = document.createElement("canvas");
-                        c.width = img.naturalWidth || img.width || 64;
-                        c.height = img.naturalHeight || img.height || 64;
-                        var ctx = c.getContext("2d");
-                        ctx.clearRect(0, 0, c.width, c.height);
-                        ctx.drawImage(img, 0, 0);
-                        var data = ctx.getImageData(0, 0, c.width, c.height);
-                        var px = data.data;
-                        for (var i = 0; i < px.length; i += 4) {
-                            var lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-                            if (px[i + 3] < 15 || lum > 95) {
-                                px[i] = px[i + 1] = px[i + 2] = px[i + 3] = 0;
-                            } else {
-                                px[i] = px[i + 1] = px[i + 2] = 12;
-                                px[i + 3] = 255;
-                            }
-                        }
-                        ctx.putImageData(data, 0, 0);
-                        showTex(new THREE.CanvasTexture(c));
+                        showCenteredFromImage(img);
                     } catch (e) {
                         try {
                             var t = new THREE.Texture(img);
@@ -7440,12 +7507,8 @@ function attachNormFaceDecal(avatarGroup, headMesh, gender) {
             } catch (e) { if (onFail) onFail(); }
         }
 
-        loadThree(faceUrl, function () {
-            loadThree("./" + faceUrl.replace(/^\.\//, ""), function () {
-                loadImage(faceUrl, function () {
-                    loadImage("./" + faceUrl.replace(/^\.\//, ""), function () {});
-                });
-            });
+        loadFaceImage(faceUrl, function () {
+            loadFaceImage("./" + faceUrl.replace(/^\.\//, ""), function () {});
         });
     } catch (e) {}
 }
