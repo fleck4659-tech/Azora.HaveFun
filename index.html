@@ -13,7 +13,7 @@
     <link rel="manifest" href="manifest-azora.json">
     <link rel="apple-touch-icon" href="logo.jpg">
     <link rel="icon" href="logo.jpg">
-    <link rel="stylesheet" href="style.css?v=57">
+    <link rel="stylesheet" href="style.css?v=58">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -768,7 +768,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=57.1"></script>
+<script src="script.js?v=58.0"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {
@@ -783,8 +783,14 @@ if ("serviceWorker" in navigator) {
     <div class="popup market-popup" style="max-width:min(420px,calc(100vw - 16px));text-align:left;">
         <h2 style="text-align:center;margin:0 0 8px;">🛒 Marketplace</h2>
         <p style="text-align:center;margin:0 0 12px;opacity:0.85;font-size:0.9rem;">Your balance: <strong id="marketCoinBalance">0</strong> 🪙</p>
-        <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;flex-wrap:wrap;">
-            <label style="font-size:0.85rem;">Filter:
+        <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+            <label style="font-size:0.85rem;">Category:
+                <select id="marketCategory" onchange="renderMarketplace()">
+                    <option value="hair">Hair</option>
+                    <option value="faces">Faces</option>
+                </select>
+            </label>
+            <label id="marketGenderFilterWrap" style="font-size:0.85rem;">Filter:
                 <select id="marketGenderFilter" onchange="renderMarketplace()">
                     <option value="all">All</option>
                     <option value="girl">Girl hair</option>
@@ -802,6 +808,14 @@ if ("serviceWorker" in navigator) {
     <div class="popup market-popup" style="max-width:min(420px,calc(100vw - 16px));text-align:left;">
         <h2 style="text-align:center;margin:0 0 8px;">🎒 Inventory</h2>
         <p style="text-align:center;margin:0 0 12px;opacity:0.85;font-size:0.85rem;">Equip items, then <strong>Save Avatar</strong> to keep them forever.</p>
+        <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
+            <label style="font-size:0.85rem;">Category:
+                <select id="inventoryCategory" onchange="renderInventory()">
+                    <option value="hair">Hair</option>
+                    <option value="faces">Faces</option>
+                </select>
+            </label>
+        </div>
         <div id="inventoryList" class="market-list"></div>
         <button type="button" onclick="closeInventory()" style="width:100%;margin-top:12px;">Close</button>
     </div>

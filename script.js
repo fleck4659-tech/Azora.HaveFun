@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v57.1 Planet Empire","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v58.0 Faces Shop","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -77,8 +77,34 @@ function getAvatarGender() {
 }
 
 function faceTextureUrlForGender(gender) {
+    // Prefer equipped shop face if the player owns/equipped one
+    try {
+        if (typeof getEquippedFaceFile === "function") {
+            var eq = getEquippedFaceFile();
+            if (eq) return eq;
+        }
+    } catch (e) {}
     return (gender === "girl" || gender === "female") ? "female_smile.png" : "Smile.png";
 }
+
+function getEquippedFaceStyle() {
+    var inv = (typeof getInventory === "function") ? getInventory() : { equipped: {} };
+    var id = inv.equipped && inv.equipped.face;
+    if (id && typeof ownsItem === "function" && ownsItem(id)) return id;
+    // Defaults by gender
+    var g = (typeof getAvatarGender === "function") ? getAvatarGender() : "boy";
+    if (g === "girl" || g === "female") return "face_female_smile";
+    return "face_smile";
+}
+
+function getEquippedFaceFile() {
+    var id = getEquippedFaceStyle();
+    var item = faceCatalogById(id);
+    if (item && item.file) return item.file;
+    var g = (typeof getAvatarGender === "function") ? getAvatarGender() : "boy";
+    return (g === "girl" || g === "female") ? "female_smile.png" : "Smile.png";
+}
+
 
 window.getSelectedSignupGender = getSelectedSignupGender;
 window.defaultAvatarForGender = defaultAvatarForGender;
@@ -10196,6 +10222,43 @@ var AZORA_HAIR_CATALOG = [
     { id: "hair_boy_cap", name: "Flat Cap", gender: "boy", price: 0.15, desc: "Flat cap style hair" }
 ];
 
+/** Face catalog — display name = filename without .png, "_" → space
+ *  Default Smile / Female Smile stay free. Other faces are low-priced shop items. */
+var AZORA_FACE_CATALOG = [
+    { id: "face_smile", name: "Smile", file: "Smile.png", gender: "any", price: 0, desc: "Default smile face", isDefault: true },
+    { id: "face_female_smile", name: "Female Smile", file: "female_smile.png", gender: "any", price: 0, desc: "Default girl smile face", isDefault: true },
+    { id: "face_simple_smile", name: "Simple Smile", file: "simple_smile.png", gender: "any", price: 0.05, desc: "Clean simple smile" },
+    { id: "face_cartoonish_smile", name: "Cartoonish Smile", file: "cartoonish_smile.png", gender: "any", price: 0.08, desc: "Fun cartoon smile" },
+    { id: "face_wide_mouth", name: "Wide Mouth", file: "wide_mouth.png", gender: "any", price: 0.08, desc: "Big open smile" },
+    { id: "face_greedy_smile", name: "Greedy Smile", file: "greedy_smile.png", gender: "any", price: 0.1, desc: "Playful greedy grin" },
+    { id: "face_crying", name: "Crying", file: "crying.png", gender: "any", price: 0.1, desc: "Sad tears face" },
+    { id: "face_sad_tears", name: "Sad Tears", file: "sad_tears.png", gender: "any", price: 0.1, desc: "Emotional tears" },
+    { id: "face_tears_of_joy", name: "Tears Of Joy", file: "tears_of_joy.png", gender: "any", price: 0.12, desc: "Happy tears of joy" },
+    { id: "face_mysterious", name: "Mysterious", file: "mysterious.png", gender: "any", price: 0.12, desc: "Mysterious expression" },
+    { id: "face_red_mysterious", name: "Red Mysterious", file: "red_mysterious.png", gender: "any", price: 0.12, desc: "Bold red mysterious smile" },
+    { id: "face_robotic", name: "Robotic", file: "robotic.png", gender: "any", price: 0.15, desc: "Robotic face look" }
+];
+
+function faceCatalogById(id) {
+    for (var i = 0; i < AZORA_FACE_CATALOG.length; i++) {
+        if (AZORA_FACE_CATALOG[i].id === id) return AZORA_FACE_CATALOG[i];
+    }
+    return null;
+}
+function hairCatalogById(id) {
+    for (var i = 0; i < AZORA_HAIR_CATALOG.length; i++) {
+        if (AZORA_HAIR_CATALOG[i].id === id) return AZORA_HAIR_CATALOG[i];
+    }
+    return null;
+}
+function isFaceItemId(id) {
+    return String(id || "").indexOf("face_") === 0;
+}
+function isHairItemId(id) {
+    return String(id || "").indexOf("hair_") === 0;
+}
+
+
 /** Format coins for display — up to 1 decimal (realistic economy) */
 function formatCoins(n) {
     n = Number(n) || 0;
@@ -10288,13 +10351,15 @@ function getInventory() {
     try {
         var raw = JSON.parse(localStorage.getItem("azoraInventory") || "null");
         if (!raw || typeof raw !== "object") {
-            raw = { items: [], equipped: { hair: null } };
+            raw = { items: [], equipped: { hair: null, face: null } };
         }
         if (!Array.isArray(raw.items)) raw.items = [];
-        if (!raw.equipped || typeof raw.equipped !== "object") raw.equipped = { hair: null };
+        if (!raw.equipped || typeof raw.equipped !== "object") raw.equipped = { hair: null, face: null };
+        if (typeof raw.equipped.face === "undefined") raw.equipped.face = null;
+        if (typeof raw.equipped.hair === "undefined") raw.equipped.hair = null;
         return raw;
     } catch (e) {
-        return { items: [], equipped: { hair: null } };
+        return { items: [], equipped: { hair: null, face: null } };
     }
 }
 
@@ -10322,15 +10387,19 @@ function getEquippedHairStyle() {
 function grantDefaultHairForGender() {
     var inv = getInventory();
     var g = (typeof getAvatarGender === "function") ? getAvatarGender() : "boy";
-    var defaults = (g === "girl" || g === "female")
+    var hairDefaults = (g === "girl" || g === "female")
         ? ["hair_girl_default"]
         : ["hair_boy_none"];
-    defaults.forEach(function (id) {
+    var faceDefaults = ["face_smile", "face_female_smile"];
+    hairDefaults.forEach(function (id) {
         if (inv.items.indexOf(id) === -1) inv.items.push(id);
     });
-    // Auto-equip default if nothing equipped
-    if (!inv.equipped.hair) {
-        inv.equipped.hair = defaults[0];
+    faceDefaults.forEach(function (id) {
+        if (inv.items.indexOf(id) === -1) inv.items.push(id);
+    });
+    if (!inv.equipped.hair) inv.equipped.hair = hairDefaults[0];
+    if (!inv.equipped.face) {
+        inv.equipped.face = (g === "girl" || g === "female") ? "face_female_smile" : "face_smile";
     }
     saveInventory(inv);
 }
@@ -10341,17 +10410,14 @@ function buyMarketplaceItem(itemId) {
         if (typeof openCreateAccount === "function") openCreateAccount();
         return;
     }
-    var item = null;
-    for (var i = 0; i < AZORA_HAIR_CATALOG.length; i++) {
-        if (AZORA_HAIR_CATALOG[i].id === itemId) { item = AZORA_HAIR_CATALOG[i]; break; }
-    }
+    var item = hairCatalogById(itemId) || faceCatalogById(itemId);
     if (!item) { alert("Item not found."); return; }
     if (ownsItem(itemId)) {
         showAzoraToast("You already own this!");
         return;
     }
     if (item.price > 0 && !spendCoins(item.price)) {
-        alert("Not enough AzoraCoins! You need " + item.price + " 🪙");
+        alert("Not enough AzoraCoins! You need " + formatCoins(item.price) + " 🪙");
         return;
     }
     var inv = getInventory();
@@ -10368,7 +10434,12 @@ function equipInventoryItem(itemId) {
         return;
     }
     var inv = getInventory();
-    inv.equipped.hair = itemId;
+    var isFace = isFaceItemId(itemId);
+    if (isFace) {
+        inv.equipped.face = itemId;
+    } else {
+        inv.equipped.hair = itemId;
+    }
     saveInventory(inv);
 
     // Apply live on avatar
@@ -10383,30 +10454,31 @@ function equipInventoryItem(itemId) {
             applyGenderVisualsToCustomizer(gender, colors);
         }
     } catch (e) {
-        console.warn("[Azora] equip hair", e);
+        console.warn("[Azora] equip item", e);
     }
 
-    // Persist on account avatar so save keeps it
+    // Persist on account avatar
     try {
         var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
         if (acc) {
             if (!acc.avatar) acc.avatar = {};
-            acc.avatar.hairStyle = itemId;
+            if (isFace) acc.avatar.faceStyle = itemId;
+            else acc.avatar.hairStyle = itemId;
             localStorage.setItem("azoraAccount", JSON.stringify(acc));
-            // Also update accounts map
             if (acc.username && typeof getSavedAccounts === "function") {
                 var map = getSavedAccounts();
                 if (map[acc.username]) {
                     map[acc.username].avatar = map[acc.username].avatar || {};
-                    map[acc.username].avatar.hairStyle = itemId;
+                    if (isFace) map[acc.username].avatar.faceStyle = itemId;
+                    else map[acc.username].avatar.hairStyle = itemId;
                     if (typeof saveSavedAccounts === "function") saveSavedAccounts(map);
                 }
             }
         }
-        // Backup key
         try {
             var av = JSON.parse(localStorage.getItem("azoraAvatar") || "{}");
-            av.hairStyle = itemId;
+            if (isFace) av.faceStyle = itemId;
+            else av.hairStyle = itemId;
             localStorage.setItem("azoraAvatar", JSON.stringify(av));
         } catch (e2) {}
     } catch (e) {}
@@ -10414,6 +10486,141 @@ function equipInventoryItem(itemId) {
     showAzoraToast("Equipped! Save your avatar to keep it forever.");
     renderInventory();
 }
+
+
+function getMarketCategory() {
+    var el = document.getElementById("marketCategory");
+    return (el && el.value) ? el.value : "hair";
+}
+
+function renderMarketplace() {
+    var list = document.getElementById("marketplaceList");
+    if (!list) return;
+    var category = getMarketCategory();
+    var filter = (document.getElementById("marketGenderFilter") || {}).value || "all";
+    var coins = getCoins();
+    var html = "";
+
+    function buyBtn(id) {
+        return '<button type="button" class="market-btn" data-buy="' + id + '">Buy</button>';
+    }
+    function ownedBtn() {
+        return '<button type="button" class="market-btn owned-btn" disabled>Owned</button>';
+    }
+
+    if (category === "faces") {
+        AZORA_FACE_CATALOG.forEach(function (item) {
+            var owned = ownsItem(item.id);
+            var canBuy = !owned && (item.price === 0 || coins >= item.price);
+            var priceLabel = item.price === 0 ? "Free" : (formatCoins(item.price) + " 🪙");
+            html += '<div class="market-card' + (owned ? " owned" : "") + '">';
+            html += '<div class="market-card-title">' + item.name + '</div>';
+            html += '<div class="market-card-meta">Faces · Avatar face</div>';
+            html += '<div class="market-card-desc">' + (item.desc || "") + '</div>';
+            html += '<div class="market-card-footer">';
+            html += '<span class="market-price">' + priceLabel + '</span>';
+            if (owned) html += ownedBtn();
+            else if (canBuy) html += buyBtn(item.id);
+            else html += '<button type="button" class="market-btn disabled" disabled>Buy</button>';
+            html += '</div></div>';
+        });
+    } else {
+        AZORA_HAIR_CATALOG.forEach(function (item) {
+            if (filter === "girl" && item.gender !== "girl") return;
+            if (filter === "boy" && item.gender !== "boy") return;
+            var owned = ownsItem(item.id);
+            var canBuy = !owned && (item.price === 0 || coins >= item.price);
+            var priceLabel = item.price === 0 ? "Free" : (formatCoins(item.price) + " 🪙");
+            var genderLabel = item.gender === "girl" ? "Girl" : "Boy";
+            html += '<div class="market-card' + (owned ? " owned" : "") + '">';
+            html += '<div class="market-card-title">' + item.name + '</div>';
+            html += '<div class="market-card-meta">Hair · ' + genderLabel + '</div>';
+            html += '<div class="market-card-desc">' + item.desc + '</div>';
+            html += '<div class="market-card-footer">';
+            html += '<span class="market-price">' + priceLabel + '</span>';
+            if (owned) html += ownedBtn();
+            else if (canBuy) html += buyBtn(item.id);
+            else html += '<button type="button" class="market-btn disabled" disabled>Buy</button>';
+            html += '</div></div>';
+        });
+    }
+    if (!html) html = '<p style="opacity:0.7;text-align:center;">No items in this category.</p>';
+    list.innerHTML = html;
+    var nodes = list.querySelectorAll("[data-buy]");
+    for (var bi = 0; bi < nodes.length; bi++) {
+        (function (btn) {
+            btn.addEventListener("click", function () {
+                buyMarketplaceItem(btn.getAttribute("data-buy"));
+            });
+        })(nodes[bi]);
+    }
+    var bal = document.getElementById("marketCoinBalance");
+    if (bal) bal.textContent = String(coins);
+    var genWrap = document.getElementById("marketGenderFilterWrap");
+    if (genWrap) genWrap.style.display = (category === "hair") ? "" : "none";
+}
+
+function getInventoryCategory() {
+    var el = document.getElementById("inventoryCategory");
+    return (el && el.value) ? el.value : "hair";
+}
+
+function renderInventory() {
+    var list = document.getElementById("inventoryList");
+    if (!list) return;
+    var inv = getInventory();
+    var category = getInventoryCategory();
+    var equippedHair = inv.equipped.hair;
+    var equippedFace = inv.equipped.face;
+    var html = "";
+    var shown = 0;
+
+    inv.items.forEach(function (id) {
+        var isFace = isFaceItemId(id);
+        if (category === "faces" && !isFace) return;
+        if (category === "hair" && isFace) return;
+
+        var item = isFace ? faceCatalogById(id) : hairCatalogById(id);
+        if (!item) {
+            var raw = String(id).replace(/^face_/, "").replace(/^hair_/, "").replace(/_/g, " ");
+            item = {
+                id: id,
+                name: raw.split(" ").map(function (w) {
+                    return w ? (w.charAt(0).toUpperCase() + w.slice(1)) : "";
+                }).join(" "),
+                desc: "Item"
+            };
+        }
+        var isEq = isFace ? (equippedFace === id) : (equippedHair === id);
+        var meta = isFace ? "Faces" : ("Hair" + (item.gender === "girl" ? " · Girl" : (item.gender === "boy" ? " · Boy" : "")));
+        html += '<div class="market-card' + (isEq ? " equipped" : "") + '">';
+        html += '<div class="market-card-title">' + item.name + (isEq ? " ✓" : "") + '</div>';
+        html += '<div class="market-card-meta">' + meta + '</div>';
+        html += '<div class="market-card-desc">' + (item.desc || "") + '</div>';
+        html += '<div class="market-card-footer">';
+        if (isEq) {
+            html += '<button type="button" class="market-btn owned-btn" disabled>Equipped</button>';
+        } else {
+            html += '<button type="button" class="market-btn" data-equip="' + id + '">Equip</button>';
+        }
+        html += '</div></div>';
+        shown++;
+    });
+
+    if (!shown) {
+        html = '<p style="opacity:0.7;text-align:center;">No ' + (category === "faces" ? "faces" : "hair") + ' yet. Visit the Marketplace!</p>';
+    }
+    list.innerHTML = html;
+    var nodes = list.querySelectorAll("[data-equip]");
+    for (var ei = 0; ei < nodes.length; ei++) {
+        (function (btn) {
+            btn.addEventListener("click", function () {
+                equipInventoryItem(btn.getAttribute("data-equip"));
+            });
+        })(nodes[ei]);
+    }
+}
+
 
 function openMarketplace() {
     grantDefaultHairForGender();
@@ -10440,164 +10647,6 @@ function closeInventory() {
     var el = document.getElementById("inventoryOverlay");
     if (el) el.style.display = "none";
 }
-
-function renderMarketplace() {
-    var list = document.getElementById("marketplaceList");
-    if (!list) return;
-    var filter = (document.getElementById("marketGenderFilter") || {}).value || "all";
-    var coins = getCoins();
-    var html = "";
-    AZORA_HAIR_CATALOG.forEach(function (item) {
-        if (filter === "girl" && item.gender !== "girl") return;
-        if (filter === "boy" && item.gender !== "boy") return;
-        var owned = ownsItem(item.id);
-        var canBuy = !owned && (item.price === 0 || coins >= item.price);
-        var priceLabel = item.price === 0 ? "Free" : (formatCoins(item.price) + " 🪙");
-        var genderLabel = item.gender === "girl" ? "👧 Girl" : "👦 Boy";
-        html += '<div class="market-card' + (owned ? " owned" : "") + '">';
-        html += '<div class="market-card-title">' + item.name + '</div>';
-        html += '<div class="market-card-meta">' + genderLabel + ' · Hair</div>';
-        html += '<div class="market-card-desc">' + item.desc + '</div>';
-        html += '<div class="market-card-footer">';
-        html += '<span class="market-price">' + priceLabel + '</span>';
-        if (owned) {
-            html += '<button type="button" class="market-btn owned-btn" disabled>Owned</button>';
-        } else {
-            html += '<button type="button" class="market-btn' + (canBuy ? "" : " disabled") + '" onclick="buyMarketplaceItem(\'' + item.id + '\')"' + (canBuy ? "" : " disabled") + '>Buy</button>';
-        }
-        html += '</div></div>';
-    });
-    if (!html) html = '<p style="opacity:0.7;text-align:center;">No items in this filter.</p>';
-    list.innerHTML = html;
-    var bal = document.getElementById("marketCoinBalance");
-    if (bal) bal.textContent = String(coins);
-}
-
-function renderInventory() {
-    var list = document.getElementById("inventoryList");
-    if (!list) return;
-    var inv = getInventory();
-    var equipped = inv.equipped.hair;
-    var html = "";
-    if (!inv.items.length) {
-        html = '<p style="opacity:0.7;text-align:center;">Your inventory is empty. Visit the Marketplace!</p>';
-    } else {
-        inv.items.forEach(function (id) {
-            var item = null;
-            for (var i = 0; i < AZORA_HAIR_CATALOG.length; i++) {
-                if (AZORA_HAIR_CATALOG[i].id === id) { item = AZORA_HAIR_CATALOG[i]; break; }
-            }
-            if (!item) {
-                item = { id: id, name: id, gender: "?", desc: "Item" };
-            }
-            var isEq = equipped === id;
-            var genderLabel = item.gender === "girl" ? "👧 Girl" : (item.gender === "boy" ? "👦 Boy" : "");
-            html += '<div class="market-card' + (isEq ? " equipped" : "") + '">';
-            html += '<div class="market-card-title">' + item.name + (isEq ? " ✓" : "") + '</div>';
-            html += '<div class="market-card-meta">' + genderLabel + ' · Hair</div>';
-            html += '<div class="market-card-desc">' + (item.desc || "") + '</div>';
-            html += '<div class="market-card-footer">';
-            if (isEq) {
-                html += '<button type="button" class="market-btn owned-btn" disabled>Equipped</button>';
-            } else {
-                html += '<button type="button" class="market-btn" onclick="equipInventoryItem(\'' + id + '\')">Equip</button>';
-            }
-            html += '</div></div>';
-        });
-    }
-    list.innerHTML = html;
-}
-
-// Hook daily reward after login / on load when already logged in
-(function setupDailyAndCoins() {
-    function run() {
-        updateCoinsUI();
-        grantDefaultHairForGender();
-        checkDailyLoginReward();
-        // Re-apply equipped hair once avatar exists
-        setTimeout(function () {
-            try {
-                if (typeof applyGenderVisualsToCustomizer === "function" && typeof avatarCharacterGroup !== "undefined" && avatarCharacterGroup) {
-                    var g = (typeof getAvatarGender === "function") ? getAvatarGender() : "boy";
-                    var colors = {};
-                    try { if (typeof readAvatarColorInputs === "function") colors = readAvatarColorInputs() || {}; } catch (e) {}
-                    applyGenderVisualsToCustomizer(g, colors);
-                }
-            } catch (e) {}
-        }, 800);
-    }
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", run);
-    } else {
-        setTimeout(run, 200);
-    }
-})();
-
-window.getCoins = getCoins;
-window.setCoins = setCoins;
-window.addCoins = addCoins;
-window.updateCoinsUI = updateCoinsUI;
-window.checkDailyLoginReward = checkDailyLoginReward;
-window.openMarketplace = openMarketplace;
-window.closeMarketplace = closeMarketplace;
-window.openInventory = openInventory;
-window.closeInventory = closeInventory;
-window.buyMarketplaceItem = buyMarketplaceItem;
-window.equipInventoryItem = equipInventoryItem;
-window.getEquippedHairStyle = getEquippedHairStyle;
-window.renderMarketplace = renderMarketplace;
-window.renderInventory = renderInventory;
-window.AZORA_HAIR_CATALOG = AZORA_HAIR_CATALOG;
-
-/* =========================================================
-   Azora Members — subscriptions + realistic economy
-   Tiers yield AzoraCoins monthly. Live card billing needs a
-   payment provider (e.g. Stripe); membership status is stored
-   on-device and monthly yields are granted automatically.
-   ========================================================= */
-
-var AZORA_MEMBER_TIERS = [
-    {
-        id: "bronze",
-        name: "Bronze",
-        emoji: "Bronze",
-        priceUsd: 1.99,
-        monthlyCoins: 0.3,
-        blurb: "A light monthly boost for new members."
-    },
-    {
-        id: "silver",
-        name: "Silver",
-        emoji: "Silver",
-        priceUsd: 4.99,
-        monthlyCoins: 0.7,
-        blurb: "Good value if you visit Azora often."
-    },
-    {
-        id: "gold",
-        name: "Gold",
-        emoji: "Gold",
-        priceUsd: 9.99,
-        monthlyCoins: 1.5,
-        blurb: "Balanced plan for most members."
-    },
-    {
-        id: "diamond",
-        name: "Diamond",
-        emoji: "Diamond",
-        priceUsd: 14.99,
-        monthlyCoins: 2.5,
-        blurb: "Higher monthly AzoraCoins."
-    },
-    {
-        id: "obsidian",
-        name: "Obsidian",
-        emoji: "Obsidian",
-        priceUsd: 29.99,
-        monthlyCoins: 6.0,
-        blurb: "Highest monthly AzoraCoins."
-    }
-];
 
 function getMembership() {
     try {
