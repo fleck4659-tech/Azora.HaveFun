@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v55.5 memorial lag fix","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v56.0 economy + Azora Members","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -9561,15 +9561,23 @@ var AZORA_HAIR_CATALOG = [
     { id: "hair_boy_cap", name: "Flat Cap", gender: "boy", price: 3, desc: "Flat cap style hair" }
 ];
 
+/** Format coins for display — up to 1 decimal (realistic economy) */
+function formatCoins(n) {
+    n = Number(n) || 0;
+    if (Math.abs(n - Math.round(n)) < 0.001) return String(Math.round(n));
+    return (Math.round(n * 10) / 10).toFixed(1);
+}
+
 function getCoins() {
     try {
-        var n = parseInt(localStorage.getItem("azoraCoins") || "0", 10);
-        return isNaN(n) ? 0 : Math.max(0, n);
+        var n = parseFloat(localStorage.getItem("azoraCoins") || "0");
+        if (isNaN(n)) n = 0;
+        return Math.max(0, Math.round(n * 1000) / 1000);
     } catch (e) { return 0; }
 }
 
 function setCoins(n) {
-    n = Math.max(0, Math.floor(Number(n) || 0));
+    n = Math.max(0, Math.round((Number(n) || 0) * 1000) / 1000);
     try { localStorage.setItem("azoraCoins", String(n)); } catch (e) {}
     updateCoinsUI();
     return n;
@@ -9580,9 +9588,9 @@ function addCoins(amount) {
 }
 
 function spendCoins(amount) {
-    amount = Math.floor(Number(amount) || 0);
+    amount = Math.round((Number(amount) || 0) * 1000) / 1000;
     var cur = getCoins();
-    if (cur < amount) return false;
+    if (cur + 1e-9 < amount) return false;
     setCoins(cur - amount);
     return true;
 }
@@ -9590,7 +9598,11 @@ function spendCoins(amount) {
 function updateCoinsUI() {
     try {
         var el = document.getElementById("bucks");
-        if (el) el.textContent = String(getCoins());
+        if (el) el.textContent = formatCoins(getCoins());
+        var bal = document.getElementById("marketCoinBalance");
+        if (bal) bal.textContent = formatCoins(getCoins());
+        var mBal = document.getElementById("memberCoinBalance");
+        if (mBal) mBal.textContent = formatCoins(getCoins());
     } catch (e) {}
 }
 
@@ -9607,8 +9619,10 @@ function checkDailyLoginReward() {
         var last = localStorage.getItem("azoraLastDailyClaim") || "";
         if (last === today) return; // already claimed today
         localStorage.setItem("azoraLastDailyClaim", today);
-        addCoins(10);
-        showAzoraToast("+10 AzoraCoins! Daily login reward 🪙");
+        addCoins(0.05);
+        showAzoraToast("+0.05 AzoraCoins! Daily login reward 🪙");
+        // Also claim membership monthly yield if due
+        if (typeof claimMembershipMonthlyYield === "function") claimMembershipMonthlyYield();
     } catch (e) {
         console.warn("[Azora] daily claim", e);
     }
@@ -9799,7 +9813,7 @@ function renderMarketplace() {
         if (filter === "boy" && item.gender !== "boy") return;
         var owned = ownsItem(item.id);
         var canBuy = !owned && (item.price === 0 || coins >= item.price);
-        var priceLabel = item.price === 0 ? "Free" : (item.price + " 🪙");
+        var priceLabel = item.price === 0 ? "Free" : (formatCoins(item.price) + " 🪙");
         var genderLabel = item.gender === "girl" ? "👧 Girl" : "👦 Boy";
         html += '<div class="market-card' + (owned ? " owned" : "") + '">';
         html += '<div class="market-card-title">' + item.name + '</div>';
@@ -9895,3 +9909,240 @@ window.getEquippedHairStyle = getEquippedHairStyle;
 window.renderMarketplace = renderMarketplace;
 window.renderInventory = renderInventory;
 window.AZORA_HAIR_CATALOG = AZORA_HAIR_CATALOG;
+
+/* =========================================================
+   Azora Members — subscriptions + realistic economy
+   Tiers yield AzoraCoins monthly. Live card billing needs a
+   payment provider (e.g. Stripe); membership status is stored
+   on-device and monthly yields are granted automatically.
+   ========================================================= */
+
+var AZORA_MEMBER_TIERS = [
+    {
+        id: "bronze",
+        name: "Bronze Member",
+        emoji: "🥉",
+        priceUsd: 1.99,
+        monthlyCoins: 0.3,
+        blurb: "Starter support — a little boost each month."
+    },
+    {
+        id: "silver",
+        name: "Silver Member",
+        emoji: "🥈",
+        priceUsd: 4.99,
+        monthlyCoins: 0.7,
+        blurb: "Solid value for regular players."
+    },
+    {
+        id: "gold",
+        name: "Gold Member",
+        emoji: "🥇",
+        priceUsd: 9.99,
+        monthlyCoins: 1.5,
+        blurb: "Best balance of coins and price."
+    },
+    {
+        id: "diamond",
+        name: "Diamond Member",
+        emoji: "💎",
+        priceUsd: 14.99,
+        monthlyCoins: 2.5,
+        blurb: "Premium monthly coin yield."
+    },
+    {
+        id: "obsidian",
+        name: "Obsidian Member",
+        emoji: "🌌",
+        priceUsd: 29.99,
+        monthlyCoins: 6.0,
+        blurb: "Top tier — maximum monthly AzoraCoins."
+    }
+];
+
+function getMembership() {
+    try {
+        var raw = JSON.parse(localStorage.getItem("azoraMembership") || "null");
+        if (!raw || typeof raw !== "object") return { tier: null, since: null, lastYieldMonth: null };
+        return raw;
+    } catch (e) {
+        return { tier: null, since: null, lastYieldMonth: null };
+    }
+}
+
+function saveMembership(m) {
+    try { localStorage.setItem("azoraMembership", JSON.stringify(m)); } catch (e) {}
+}
+
+function getMemberTierById(id) {
+    for (var i = 0; i < AZORA_MEMBER_TIERS.length; i++) {
+        if (AZORA_MEMBER_TIERS[i].id === id) return AZORA_MEMBER_TIERS[i];
+    }
+    return null;
+}
+
+function getMonthKey() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+}
+
+/** Grant membership coins once per calendar month while subscribed */
+function claimMembershipMonthlyYield() {
+    try {
+        if (localStorage.getItem("loggedIn") !== "true") return;
+        var m = getMembership();
+        if (!m || !m.tier) return;
+        var tier = getMemberTierById(m.tier);
+        if (!tier || !(tier.monthlyCoins > 0)) return;
+        var month = getMonthKey();
+        if (m.lastYieldMonth === month) return;
+        m.lastYieldMonth = month;
+        saveMembership(m);
+        addCoins(tier.monthlyCoins);
+        showAzoraToast(tier.emoji + " +" + formatCoins(tier.monthlyCoins) + " AzoraCoins — " + tier.name + " monthly yield");
+    } catch (e) {
+        console.warn("[Azora] membership yield", e);
+    }
+}
+
+/**
+ * Activate a membership tier on this device.
+ * Real $ billing requires Stripe (or similar) + parent/guardian for paid plans.
+ * Until payment is connected, membership can be activated for testing the economy.
+ */
+function activateMembershipTier(tierId, opts) {
+    opts = opts || {};
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Log in or create an account to join Azora Members.");
+        if (typeof openCreateAccount === "function") openCreateAccount();
+        return;
+    }
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc && acc.isGuest) {
+            alert("Guests cannot subscribe. Create a free account first!");
+            if (typeof openCreateAccount === "function") openCreateAccount();
+            return;
+        }
+    } catch (e) {}
+
+    var tier = getMemberTierById(tierId);
+    if (!tier) {
+        alert("Unknown membership tier.");
+        return;
+    }
+
+    // Confirm — show USD price and monthly coin yield
+    var msg =
+        tier.emoji + " " + tier.name + "\n\n" +
+        "$" + tier.priceUsd.toFixed(2) + " / month\n" +
+        "Yields " + formatCoins(tier.monthlyCoins) + " AzoraCoins every month\n\n" +
+        "Hair styles cost about 0.3–0.8 🪙, so membership helps you collect styles over time.\n\n" +
+        (opts.demo
+            ? "Activate this tier on this device for the economy system? (Live card payments come later with Stripe.)"
+            : "Continue?");
+    if (!confirm(msg)) return;
+
+    var m = getMembership();
+    m.tier = tier.id;
+    m.since = m.since || Date.now();
+    m.priceUsd = tier.priceUsd;
+    m.name = tier.name;
+    // Allow immediate first yield this month
+    if (m.lastYieldMonth !== getMonthKey()) {
+        m.lastYieldMonth = null;
+    }
+    saveMembership(m);
+    claimMembershipMonthlyYield();
+    showAzoraToast(tier.emoji + " You are now a " + tier.name + "!");
+    renderMembershipPanel();
+    updateCoinsUI();
+}
+
+function cancelMembership() {
+    var m = getMembership();
+    if (!m || !m.tier) {
+        alert("You do not have an active membership.");
+        return;
+    }
+    if (!confirm("Cancel your " + (m.name || m.tier) + " membership? You will keep coins you already earned.")) return;
+    saveMembership({ tier: null, since: null, lastYieldMonth: null });
+    showAzoraToast("Membership cancelled.");
+    renderMembershipPanel();
+}
+
+function openMembership() {
+    var el = document.getElementById("membershipOverlay");
+    if (el) el.style.display = "flex";
+    renderMembershipPanel();
+    updateCoinsUI();
+    if (typeof claimMembershipMonthlyYield === "function") claimMembershipMonthlyYield();
+}
+
+function closeMembership() {
+    var el = document.getElementById("membershipOverlay");
+    if (el) el.style.display = "none";
+}
+
+function renderMembershipPanel() {
+    var list = document.getElementById("membershipList");
+    var status = document.getElementById("membershipStatus");
+    if (!list) return;
+    var m = getMembership();
+    var activeId = m && m.tier ? m.tier : null;
+
+    if (status) {
+        if (activeId) {
+            var t = getMemberTierById(activeId);
+            status.innerHTML = "Active: <strong>" + (t ? (t.emoji + " " + t.name) : activeId) + "</strong>" +
+                (t ? (" · " + formatCoins(t.monthlyCoins) + " 🪙 / month") : "");
+        } else {
+            status.textContent = "No active membership — pick a tier below.";
+        }
+    }
+
+    var html = "";
+    AZORA_MEMBER_TIERS.forEach(function (tier) {
+        var isActive = activeId === tier.id;
+        html += '<div class="member-card' + (isActive ? " active" : "") + '">';
+        html += '<div class="member-card-title">' + tier.emoji + " " + tier.name + "</div>";
+        html += '<div class="member-card-price">$' + tier.priceUsd.toFixed(2) + " / mo</div>";
+        html += '<div class="member-card-yield">Yields <strong>' + formatCoins(tier.monthlyCoins) + " AzoraCoins</strong> monthly</div>";
+        html += '<div class="member-card-desc">' + tier.blurb + "</div>";
+        html += '<div class="member-card-footer">';
+        if (isActive) {
+            html += '<button type="button" class="market-btn owned-btn" disabled>Current plan</button>';
+        } else {
+            html += '<button type="button" class="market-btn" onclick="activateMembershipTier(\'' + tier.id + '\', { demo: true })">Choose plan</button>';
+        }
+        html += "</div></div>";
+    });
+    list.innerHTML = html;
+}
+
+// Hook membership yield on load with daily check
+(function setupMembershipOnLoad() {
+    function run() {
+        try {
+            if (localStorage.getItem("loggedIn") === "true") {
+                claimMembershipMonthlyYield();
+            }
+        } catch (e) {}
+    }
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function () { setTimeout(run, 400); });
+    } else {
+        setTimeout(run, 400);
+    }
+})();
+
+window.AZORA_MEMBER_TIERS = AZORA_MEMBER_TIERS;
+window.formatCoins = formatCoins;
+window.getMembership = getMembership;
+window.openMembership = openMembership;
+window.closeMembership = closeMembership;
+window.activateMembershipTier = activateMembershipTier;
+window.cancelMembership = cancelMembership;
+window.claimMembershipMonthlyYield = claimMembershipMonthlyYield;
+window.renderMembershipPanel = renderMembershipPanel;
+

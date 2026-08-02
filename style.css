@@ -3014,3 +3014,40 @@ html[data-theme="dark"] .gender-option input:checked + .gender-chip {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }
+
+
+/* Azora Members */
+.member-card {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 12px;
+    padding: 12px 14px;
+}
+.member-card.active {
+    border-color: #fbbf24;
+    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.4);
+}
+.member-card-title {
+    font-weight: 800;
+    font-size: 1rem;
+}
+.member-card-price {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #34d399;
+    margin-top: 4px;
+}
+.member-card-yield {
+    font-size: 0.85rem;
+    margin-top: 4px;
+    opacity: 0.95;
+}
+.member-card-desc {
+    font-size: 0.8rem;
+    opacity: 0.8;
+    margin: 6px 0 10px;
+}
+.member-card-footer {
+    display: flex;
+    justify-content: flex-end;
+}

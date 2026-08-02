@@ -1,5 +1,5 @@
 /* Azora main app service worker — v48.1 */
-var CACHE = "azora-app-v55-5-lagfix";
+var CACHE = "azora-app-v56-0-economy";
 var ASSETS = [
   "./", "./index.html", "./style.css",
   "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./female_smile.png", "./female_hair.webp", "./Mossy.mp3",
