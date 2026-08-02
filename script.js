@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v58.0 Faces Shop","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v58.1 Face thumbs","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -10513,10 +10513,17 @@ function renderMarketplace() {
             var owned = ownsItem(item.id);
             var canBuy = !owned && (item.price === 0 || coins >= item.price);
             var priceLabel = item.price === 0 ? "Free" : (formatCoins(item.price) + " 🪙");
-            html += '<div class="market-card' + (owned ? " owned" : "") + '">';
+            var file = item.file || "Smile.png";
+            html += '<div class="market-card market-card-face' + (owned ? " owned" : "") + '">';
+            html += '<div class="market-face-row">';
+            html += '<div class="market-face-thumb" aria-hidden="true">';
+            html += '<img src="' + file + '" alt="" loading="lazy" onerror="this.style.opacity=0.3">';
+            html += '</div>';
+            html += '<div class="market-face-info">';
             html += '<div class="market-card-title">' + item.name + '</div>';
             html += '<div class="market-card-meta">Faces · Avatar face</div>';
             html += '<div class="market-card-desc">' + (item.desc || "") + '</div>';
+            html += '</div></div>';
             html += '<div class="market-card-footer">';
             html += '<span class="market-price">' + priceLabel + '</span>';
             if (owned) html += ownedBtn();
@@ -10593,10 +10600,23 @@ function renderInventory() {
         }
         var isEq = isFace ? (equippedFace === id) : (equippedHair === id);
         var meta = isFace ? "Faces" : ("Hair" + (item.gender === "girl" ? " · Girl" : (item.gender === "boy" ? " · Boy" : "")));
-        html += '<div class="market-card' + (isEq ? " equipped" : "") + '">';
-        html += '<div class="market-card-title">' + item.name + (isEq ? " ✓" : "") + '</div>';
-        html += '<div class="market-card-meta">' + meta + '</div>';
-        html += '<div class="market-card-desc">' + (item.desc || "") + '</div>';
+        html += '<div class="market-card' + (isFace ? " market-card-face" : "") + (isEq ? " equipped" : "") + '">';
+        if (isFace) {
+            var file = item.file || "Smile.png";
+            html += '<div class="market-face-row">';
+            html += '<div class="market-face-thumb" aria-hidden="true">';
+            html += '<img src="' + file + '" alt="" loading="lazy" onerror="this.style.opacity=0.3">';
+            html += '</div>';
+            html += '<div class="market-face-info">';
+            html += '<div class="market-card-title">' + item.name + (isEq ? " ✓" : "") + '</div>';
+            html += '<div class="market-card-meta">' + meta + '</div>';
+            html += '<div class="market-card-desc">' + (item.desc || "") + '</div>';
+            html += '</div></div>';
+        } else {
+            html += '<div class="market-card-title">' + item.name + (isEq ? " ✓" : "") + '</div>';
+            html += '<div class="market-card-meta">' + meta + '</div>';
+            html += '<div class="market-card-desc">' + (item.desc || "") + '</div>';
+        }
         html += '<div class="market-card-footer">';
         if (isEq) {
             html += '<button type="button" class="market-btn owned-btn" disabled>Equipped</button>';
