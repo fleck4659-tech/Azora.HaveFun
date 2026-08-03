@@ -27,7 +27,24 @@ const database = {
 let currentSearchTab = "users";
 
 var AZORA_TEMP_DISABLE_CREATE = false;
-var AZORA_TEMP_DISABLE_MEMBERS = true; // Members / subscriptions off for now
+var AZORA_TEMP_DISABLE_MEMBERS = false; // Buy AzoraCoins UI enabled; real $ still goes through Checkout
+
+/** Monthly subscriptions — charged once per month, yields AzoraCoins each month */
+var AZORA_MEMBER_TIERS = [
+    { id: "bronze",   name: "Bronze Member",   emoji: "🥉", priceUsd: 1.99,  monthlyCoins: 0.3,  blurb: "Light monthly top-up for casual players." },
+    { id: "silver",   name: "Silver Member",   emoji: "🥈", priceUsd: 4.99,  monthlyCoins: 0.7,  blurb: "A steady boost for regular builders." },
+    { id: "gold",     name: "Gold Member",     emoji: "🥇", priceUsd: 9.99,  monthlyCoins: 1.5,  blurb: "Best value for active creators." },
+    { id: "diamond",  name: "Diamond Member",  emoji: "💎", priceUsd: 14.99, monthlyCoins: 2.5,  blurb: "Serious support with a bigger monthly yield." },
+    { id: "obsidian", name: "Obsidian Member", emoji: "🌌", priceUsd: 29.99, monthlyCoins: 6.0,  blurb: "Top tier monthly yield for power users." }
+];
+
+/** One-time coin packs — pay once, get coins once (not a subscription) */
+var AZORA_COIN_PACKS = [
+    { id: "pack_tiny",   name: "Tiny Pack",   emoji: "🪙", priceUsd: 0.99,  coins: 0.5,  blurb: "A small one-time top-up." },
+    { id: "pack_small",  name: "Small Pack",  emoji: "🪙", priceUsd: 2.99,  coins: 1.8,  blurb: "Good for a few shop items." },
+    { id: "pack_medium", name: "Medium Pack", emoji: "💰", priceUsd: 6.99,  coins: 5.0,  blurb: "Solid one-time balance boost." },
+    { id: "pack_large",  name: "Large Pack",  emoji: "💎", priceUsd: 14.99, coins: 12.0, blurb: "Biggest one-time pack for serious shopping." }
+];
 
 
 // ============================================================
@@ -13310,6 +13327,179 @@ function claimMembershipMonthlyYield() {
  * Real $ billing requires Stripe (or similar) + parent/guardian for paid plans.
  * Until payment is connected, membership can be activated for testing the economy.
  */
+
+function openBuyAzoraCoins() {
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Please sign in or create an account before buying AzoraCoins.");
+        if (typeof openCreateAccount === "function") openCreateAccount();
+        return;
+    }
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc && acc.isGuest) {
+            alert("Guests cannot buy AzoraCoins. Create a free account first.");
+            if (typeof openCreateAccount === "function") openCreateAccount();
+            return;
+        }
+    } catch (e) {}
+    var el = document.getElementById("buyCoinsOverlay");
+    if (!el) {
+        // fallback to old membership overlay
+        if (typeof openMembership === "function") openMembership();
+        return;
+    }
+    el.style.display = "flex";
+    renderBuyAzoraCoinsPanel();
+    if (typeof claimMembershipMonthlyYield === "function") {
+        try { claimMembershipMonthlyYield(); } catch (e2) {}
+    }
+}
+
+function closeBuyAzoraCoins() {
+    var el = document.getElementById("buyCoinsOverlay");
+    if (el) el.style.display = "none";
+}
+
+function renderBuyAzoraCoinsPanel() {
+    var bal = document.getElementById("buyCoinsBalance");
+    if (bal && typeof getCoins === "function") bal.textContent = formatCoins(getCoins());
+    var status = document.getElementById("buyCoinsStatus");
+    var m = typeof getMembership === "function" ? getMembership() : null;
+    var activeId = m && m.tier ? m.tier : null;
+    if (status) {
+        if (activeId) {
+            var t = getMemberTierById(activeId);
+            status.textContent = t
+                ? ("Active subscription: " + t.name + " · " + formatCoins(t.monthlyCoins) + " coins / month")
+                : ("Active subscription: " + activeId);
+        } else {
+            status.textContent = "No active subscription. Pick a plan or a one-time coin pack.";
+        }
+    }
+
+    var subs = document.getElementById("buySubsList");
+    if (subs) {
+        var html = "";
+        AZORA_MEMBER_TIERS.forEach(function (tier) {
+            var isActive = activeId === tier.id;
+            html += '<div class="buy-card' + (isActive ? " active" : "") + '">';
+            html += '<div class="buy-card-top"><div class="buy-card-title">' + tier.emoji + " " + tier.name + "</div>";
+            html += '<div class="buy-card-price">$' + tier.priceUsd.toFixed(2) + " <span>/ mo</span></div></div>";
+            html += '<div class="buy-card-yield">' + formatCoins(tier.monthlyCoins) + " AzoraCoins every month</div>";
+            html += '<div class="buy-card-desc">' + tier.blurb + "</div>";
+            html += '<div class="buy-card-footer">';
+            if (isActive) {
+                html += '<button type="button" class="market-btn owned-btn" disabled>Current plan</button>';
+            } else {
+                html += '<button type="button" class="member-subscribe-btn" onclick="goToCheckout({type:\'subscription\',id:\'' + tier.id + '\'})">Subscribe</button>';
+            }
+            html += "</div></div>";
+        });
+        subs.innerHTML = html;
+    }
+
+    var packs = document.getElementById("buyPacksList");
+    if (packs) {
+        var ph = "";
+        AZORA_COIN_PACKS.forEach(function (pack) {
+            ph += '<div class="buy-card">';
+            ph += '<div class="buy-card-top"><div class="buy-card-title">' + pack.emoji + " " + pack.name + "</div>";
+            ph += '<div class="buy-card-price">$' + pack.priceUsd.toFixed(2) + " <span>once</span></div></div>";
+            ph += '<div class="buy-card-yield">+' + formatCoins(pack.coins) + " AzoraCoins (one-time)</div>";
+            ph += '<div class="buy-card-desc">' + pack.blurb + "</div>";
+            ph += '<div class="buy-card-footer">';
+            ph += '<button type="button" class="member-subscribe-btn" onclick="goToCheckout({type:\'pack\',id:\'' + pack.id + '\'})">Buy once</button>';
+            ph += "</div></div>";
+        });
+        packs.innerHTML = ph;
+    }
+}
+
+/** Send user to Azora Checkout (checkout.html) for real-money payment */
+function goToCheckout(opts) {
+    opts = opts || {};
+    var type = opts.type || "subscription";
+    var id = opts.id || "";
+    if (!id) {
+        alert("Please pick a plan or pack.");
+        return;
+    }
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Please sign in first.");
+        return;
+    }
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc && acc.isGuest) {
+            alert("Guests cannot buy AzoraCoins. Create an account first.");
+            return;
+        }
+    } catch (e) {}
+
+    // Build a clear summary so the player knows what they are about to buy
+    var label = id;
+    var priceText = "";
+    var detail = "";
+    if (type === "pack") {
+        var pack = null;
+        if (typeof AZORA_COIN_PACKS !== "undefined") {
+            for (var i = 0; i < AZORA_COIN_PACKS.length; i++) {
+                if (AZORA_COIN_PACKS[i].id === id) { pack = AZORA_COIN_PACKS[i]; break; }
+            }
+        }
+        if (pack) {
+            label = pack.name;
+            priceText = "$" + pack.priceUsd.toFixed(2) + " (one-time)";
+            detail = "+" + (typeof formatCoins === "function" ? formatCoins(pack.coins) : pack.coins) + " AzoraCoins once";
+        } else {
+            label = "Coin pack";
+            priceText = "one-time";
+            detail = "A one-time AzoraCoins purchase";
+        }
+    } else {
+        var tier = typeof getMemberTierById === "function" ? getMemberTierById(id) : null;
+        if (tier) {
+            label = tier.name;
+            priceText = "$" + tier.priceUsd.toFixed(2) + " / month";
+            detail = (typeof formatCoins === "function" ? formatCoins(tier.monthlyCoins) : tier.monthlyCoins) + " AzoraCoins every month";
+        } else {
+            label = "Membership";
+            priceText = "monthly";
+            detail = "A recurring subscription";
+        }
+    }
+
+    var msg =
+        "You are about to go to Azora Checkout.\n\n" +
+        "Item: " + label + "\n" +
+        "Price: " + priceText + "\n" +
+        detail + "\n\n" +
+        "Do you want to proceed?\n\n" +
+        "Press OK to continue to Checkout, or Cancel to stay here.";
+
+    if (!confirm(msg)) {
+        // User cancelled — do not leave the page
+        if (typeof showAzoraToast === "function") showAzoraToast("Purchase cancelled.");
+        return;
+    }
+
+    try {
+        sessionStorage.setItem("azoraCheckoutType", type);
+        sessionStorage.setItem("azoraCheckoutId", id);
+        localStorage.setItem("azoraCheckoutType", type);
+        localStorage.setItem("azoraCheckoutId", id);
+        if (type === "subscription") {
+            sessionStorage.setItem("azoraCheckoutTier", id);
+            localStorage.setItem("azoraCheckoutTier", id);
+        }
+    } catch (e2) {}
+
+    if (typeof closeBuyAzoraCoins === "function") closeBuyAzoraCoins();
+    if (typeof closeMembership === "function") closeMembership();
+    window.location.href = "checkout.html?type=" + encodeURIComponent(type) + "&id=" + encodeURIComponent(id);
+}
+
+
 function activateMembershipTier(tierId, opts) {
     if (typeof AZORA_TEMP_DISABLE_MEMBERS !== "undefined" && AZORA_TEMP_DISABLE_MEMBERS) {
         alert("Oops! Looks like this button is disabled!");
@@ -13337,13 +13527,8 @@ function activateMembershipTier(tierId, opts) {
         return;
     }
 
-    // Leave the game-style modal and open the clean checkout page (real money)
-    try {
-        sessionStorage.setItem("azoraCheckoutTier", tierId);
-        localStorage.setItem("azoraCheckoutTier", tierId);
-    } catch (e2) {}
-    if (typeof closeMembership === "function") closeMembership();
-    window.location.href = "checkout.html?tier=" + encodeURIComponent(tierId);
+    // Route through shared checkout helper
+    goToCheckout({ type: "subscription", id: tierId });
 }
 
 function cancelMembership() {
@@ -13359,6 +13544,9 @@ function cancelMembership() {
 }
 
 function openMembership() {
+    var buy = document.getElementById("buyCoinsOverlay");
+    if (buy) { openBuyAzoraCoins(); return; }
+
     if (typeof AZORA_TEMP_DISABLE_MEMBERS !== "undefined" && AZORA_TEMP_DISABLE_MEMBERS) {
         if (typeof showDisabledFeatureTip === "function") {
             var btn = document.getElementById("membershipBtn");
@@ -13436,6 +13624,10 @@ function renderMembershipPanel() {
 })();
 
 window.AZORA_MEMBER_TIERS = AZORA_MEMBER_TIERS;
+window.AZORA_COIN_PACKS = AZORA_COIN_PACKS;
+window.openBuyAzoraCoins = openBuyAzoraCoins;
+window.closeBuyAzoraCoins = closeBuyAzoraCoins;
+window.goToCheckout = goToCheckout;
 window.formatCoins = formatCoins;
 window.getMembership = getMembership;
 window.openMembership = openMembership;
@@ -13458,3 +13650,23 @@ window.renderMembershipPanel = renderMembershipPanel;
 })();
 
 
+
+
+// Grant one-time coin pack purchases after Checkout success
+(function claimPendingPurchasedCoins() {
+    function run() {
+        try {
+            if (localStorage.getItem("loggedIn") !== "true") return;
+            var pending = parseFloat(localStorage.getItem("azoraPendingPurchasedCoins") || "0") || 0;
+            if (pending <= 0) return;
+            if (typeof addCoins === "function") addCoins(pending);
+            localStorage.setItem("azoraPendingPurchasedCoins", "0");
+            if (typeof showAzoraToast === "function") {
+                showAzoraToast("+" + (typeof formatCoins === "function" ? formatCoins(pending) : pending) + " AzoraCoins from your purchase!");
+            }
+            if (typeof updateCoinsUI === "function") updateCoinsUI();
+        } catch (e) {}
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { setTimeout(run, 500); });
+    else setTimeout(run, 500);
+})();

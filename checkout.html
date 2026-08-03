@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkout — Azora Members</title>
+    <link rel="icon" href="logo.jpg">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #f4f6f8;
+            color: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px 16px 48px;
+        }
+        .wrap { width: 100%; max-width: 440px; }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 28px;
+            justify-content: center;
+        }
+        .brand img {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            object-fit: cover;
+        }
+        .brand span {
+            font-size: 1.15rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            color: #111;
+        }
+        .card {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+            overflow: hidden;
+        }
+        .card-head {
+            padding: 28px 28px 20px;
+            border-bottom: 1px solid #eef0f2;
+        }
+        .card-head h1 {
+            margin: 0 0 6px;
+            font-size: 1.35rem;
+            font-weight: 650;
+            letter-spacing: -0.03em;
+            color: #0f172a;
+        }
+        .card-head p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: #64748b;
+            line-height: 1.45;
+        }
+        .plan {
+            padding: 22px 28px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            border-bottom: 1px solid #eef0f2;
+        }
+        .plan-name {
+            font-weight: 600;
+            font-size: 1.05rem;
+            color: #0f172a;
+        }
+        .plan-meta {
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+        .plan-price {
+            text-align: right;
+            white-space: nowrap;
+        }
+        .plan-price .amt {
+            font-size: 1.35rem;
+            font-weight: 650;
+            letter-spacing: -0.02em;
+            color: #0f172a;
+        }
+        .plan-price .per {
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+        .secure {
+            padding: 16px 28px;
+            background: #f8fafc;
+            font-size: 0.8rem;
+            color: #64748b;
+            line-height: 1.45;
+            border-bottom: 1px solid #eef0f2;
+        }
+        .secure strong { color: #334155; }
+        .actions {
+            padding: 24px 28px 28px;
+        }
+        .btn-pay {
+            width: 100%;
+            border: none;
+            border-radius: 12px;
+            padding: 14px 18px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #fff;
+            background: #0f172a;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+        }
+        .btn-pay:hover { background: #1e2937; }
+        .btn-pay:active { transform: scale(0.98); }
+        .btn-pay:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+        .btn-ghost {
+            width: 100%;
+            margin-top: 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 12px 18px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #475569;
+            background: #fff;
+            cursor: pointer;
+        }
+        .btn-ghost:hover { background: #f8fafc; }
+        .note {
+            margin-top: 16px;
+            font-size: 0.78rem;
+            color: #94a3b8;
+            text-align: center;
+            line-height: 1.45;
+        }
+        .error {
+            display: none;
+            margin: 0 28px 16px;
+            padding: 12px 14px;
+            border-radius: 10px;
+            background: #fef2f2;
+            color: #b91c1c;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+        .error.show { display: block; }
+        .success-box {
+            display: none;
+            padding: 28px;
+            text-align: center;
+        }
+        .success-box.show { display: block; }
+        .success-box h2 {
+            margin: 0 0 8px;
+            font-size: 1.25rem;
+            color: #0f172a;
+        }
+        .success-box p {
+            margin: 0 0 20px;
+            color: #64748b;
+            font-size: 0.9rem;
+            line-height: 1.45;
+        }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div class="brand">
+        <img src="logo.jpg" alt="Azora">
+        <span>Azora</span>
+    </div>
+
+    <div class="card" id="checkoutCard">
+        <div class="card-head">
+            <h1 id="checkoutTitle">Complete your purchase</h1>
+            <p id="checkoutSub">Secure Azora Checkout. Real payment links connect when your parent finishes setup.</p>
+        </div>
+
+        <div class="plan">
+            <div>
+                <div class="plan-name" id="planName">—</div>
+                <div class="plan-meta" id="planMeta">—</div>
+            </div>
+            <div class="plan-price">
+                <div class="amt" id="planPrice">$—</div>
+                <div class="per" id="planPer">per month</div>
+            </div>
+        </div>
+
+        <div class="secure">
+            <strong>Payment is handled securely</strong> by our payment partner.
+            Azora never stores your card number on this site.
+            If you’re under 18, a parent or guardian should complete this purchase.
+        </div>
+
+        <div class="error" id="payError"></div>
+
+        <div class="actions">
+            <button type="button" class="btn-pay" id="payBtn" onclick="goToPayment()">Pay with card</button>
+            <button type="button" class="btn-ghost" onclick="goBack()">Back to Azora</button>
+            <p class="note" id="checkoutNote">Subscriptions renew monthly until canceled. Coin packs are charged once. Manage subscriptions from Buy AzoraCoins in Azora.</p>
+        </div>
+    </div>
+
+    <div class="card success-box" id="successBox">
+        <h2>You’re all set</h2>
+        <p id="successMsg">Your membership is active. Monthly AzoraCoins will be added automatically.</p>
+        <button type="button" class="btn-pay" onclick="goBack()">Return to Azora</button>
+    </div>
+</div>
+
+<script>
+// Paste real Stripe (or other) payment links here later — parent setup
+var AZORA_PAYMENT_LINKS = {
+    // subscriptions
+    bronze: "",
+    silver: "",
+    gold: "",
+    diamond: "",
+    obsidian: "",
+    // one-time packs
+    pack_tiny: "",
+    pack_small: "",
+    pack_medium: "",
+    pack_large: ""
+};
+
+var TIERS = {
+    bronze:   { name: "Bronze Member",   price: 1.99,  coins: 0.3,  blurb: "0.3 AzoraCoins each month", kind: "subscription" },
+    silver:   { name: "Silver Member",   price: 4.99,  coins: 0.7,  blurb: "0.7 AzoraCoins each month", kind: "subscription" },
+    gold:     { name: "Gold Member",     price: 9.99,  coins: 1.5,  blurb: "1.5 AzoraCoins each month", kind: "subscription" },
+    diamond:  { name: "Diamond Member",  price: 14.99, coins: 2.5,  blurb: "2.5 AzoraCoins each month", kind: "subscription" },
+    obsidian: { name: "Obsidian Member", price: 29.99, coins: 6.0,  blurb: "6.0 AzoraCoins each month", kind: "subscription" }
+};
+
+var PACKS = {
+    pack_tiny:   { name: "Tiny Pack",   price: 0.99,  coins: 0.5,  blurb: "One-time +0.5 AzoraCoins", kind: "pack" },
+    pack_small:  { name: "Small Pack",  price: 2.99,  coins: 1.8,  blurb: "One-time +1.8 AzoraCoins", kind: "pack" },
+    pack_medium: { name: "Medium Pack", price: 6.99,  coins: 5.0,  blurb: "One-time +5.0 AzoraCoins", kind: "pack" },
+    pack_large:  { name: "Large Pack",  price: 14.99, coins: 12.0, blurb: "One-time +12.0 AzoraCoins", kind: "pack" }
+};
+
+function qs(name) {
+    try { return new URLSearchParams(window.location.search).get(name); }
+    catch (e) { return null; }
+}
+
+function resolveItem() {
+    var type = qs("type") || "subscription";
+    var id = qs("id") || qs("tier") || "";
+    if (!id) {
+        try {
+            id = sessionStorage.getItem("azoraCheckoutId") || localStorage.getItem("azoraCheckoutId") || "";
+            type = sessionStorage.getItem("azoraCheckoutType") || localStorage.getItem("azoraCheckoutType") || type;
+        } catch (e) {}
+    }
+    if (!id && type === "subscription") {
+        try { id = sessionStorage.getItem("azoraCheckoutTier") || localStorage.getItem("azoraCheckoutTier") || "gold"; }
+        catch (e2) { id = "gold"; }
+    }
+    if (type === "pack" || PACKS[id]) {
+        var pack = PACKS[id];
+        if (pack) return { type: "pack", id: id, item: pack };
+    }
+    var tier = TIERS[id] || TIERS.gold;
+    var tid = TIERS[id] ? id : "gold";
+    return { type: "subscription", id: tid, item: tier };
+}
+
+function goBack() {
+    window.location.href = "index.html";
+}
+
+function activateLocalSubscription(tierId) {
+    try {
+        var tier = TIERS[tierId];
+        if (!tier) return;
+        localStorage.setItem("azoraMembership", JSON.stringify({
+            tier: tierId,
+            name: tier.name,
+            priceUsd: tier.price,
+            since: Date.now(),
+            lastYieldMonth: null,
+            paid: true
+        }));
+        localStorage.setItem("azoraMembershipPendingYield", "1");
+    } catch (e) {}
+}
+
+function activateLocalPack(packId) {
+    try {
+        var pack = PACKS[packId];
+        if (!pack) return;
+        // Grant coins on main app next load
+        var pending = 0;
+        try { pending = parseFloat(localStorage.getItem("azoraPendingPurchasedCoins") || "0") || 0; } catch (e) {}
+        pending += pack.coins;
+        localStorage.setItem("azoraPendingPurchasedCoins", String(pending));
+        localStorage.setItem("azoraLastPackPurchase", JSON.stringify({ id: packId, coins: pack.coins, at: Date.now() }));
+    } catch (e) {}
+}
+
+function showSuccess(resolved) {
+    document.getElementById("checkoutCard").style.display = "none";
+    var box = document.getElementById("successBox");
+    box.classList.add("show");
+    var item = resolved.item;
+    if (resolved.type === "pack") {
+        document.getElementById("successMsg").textContent =
+            "You bought " + item.name + ". +" + item.coins + " AzoraCoins will appear in your balance.";
+    } else {
+        document.getElementById("successMsg").textContent =
+            "Your " + item.name + " is active. You’ll receive " + item.coins + " AzoraCoins each month.";
+    }
+}
+
+function goToPayment() {
+    var resolved = resolveItem();
+    var err = document.getElementById("payError");
+    err.classList.remove("show");
+
+    if (!resolved || !resolved.item) {
+        err.textContent = "Unknown item. Go back and choose again from Buy AzoraCoins.";
+        err.classList.add("show");
+        return;
+    }
+
+    var id = resolved.id;
+    var link = (AZORA_PAYMENT_LINKS[id] || "").trim();
+
+    try {
+        sessionStorage.setItem("azoraCheckoutType", resolved.type);
+        sessionStorage.setItem("azoraCheckoutId", id);
+        localStorage.setItem("azoraCheckoutType", resolved.type);
+        localStorage.setItem("azoraCheckoutId", id);
+        if (resolved.type === "subscription") {
+            sessionStorage.setItem("azoraCheckoutTier", id);
+            localStorage.setItem("azoraCheckoutTier", id);
+        }
+    } catch (e) {}
+
+    if (link && /^https?:\/\//i.test(link)) {
+        window.location.href = link;
+        return;
+    }
+
+    err.innerHTML =
+        "Card payments are not connected yet.<br><br>" +
+        "This <strong>Checkout</strong> page is part of Azora. When your parent finishes the payment account, " +
+        "paste each Stripe (or PayPal) link into <code>AZORA_PAYMENT_LINKS</code> in <code>checkout.html</code>.<br><br>" +
+        "Until then, real money cannot be charged.";
+    err.classList.add("show");
+}
+
+(function init() {
+    var resolved = resolveItem();
+    var paid = qs("success") === "1" || qs("paid") === "1";
+
+    if (paid) {
+        if (resolved.type === "pack") activateLocalPack(resolved.id);
+        else activateLocalSubscription(resolved.id);
+        showSuccess(resolved);
+        return;
+    }
+
+    var item = resolved.item;
+    document.getElementById("planName").textContent = item.name;
+    document.getElementById("planMeta").textContent = item.blurb + (resolved.type === "subscription" ? " · Cancel anytime" : " · One-time");
+    document.getElementById("planPrice").textContent = "$" + item.price.toFixed(2);
+    document.getElementById("planPer").textContent = resolved.type === "pack" ? "one-time" : "per month";
+
+    var title = document.getElementById("checkoutTitle");
+    var sub = document.getElementById("checkoutSub");
+    if (title) title.textContent = resolved.type === "pack" ? "Buy coin pack" : "Complete your membership";
+    if (sub) sub.textContent = resolved.type === "pack"
+        ? "One-time purchase. Coins are added after payment succeeds."
+        : "Secure checkout. You’ll be charged monthly until you cancel.";
+})();
+</script>
+
+</body>
+</html>

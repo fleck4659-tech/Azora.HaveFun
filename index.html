@@ -291,6 +291,7 @@
             </button>
             <div class="coins-dropdown" id="coinsDropdown" aria-hidden="true">
                 <div class="coins-drop-row"><span>Balance</span><strong><span id="coinsDropBalance">0</span> 🪙</strong></div>
+                <button type="button" class="coins-drop-item coins-drop-buy" onclick="openBuyAzoraCoins(); closeCoinsDropdown();">Buy AzoraCoins</button>
                 <button type="button" class="coins-drop-item" onclick="openPendingCoins()">Pending AzoraCoins <span id="coinsDropPending">0</span></button>
                 <button type="button" class="coins-drop-item" onclick="openMarketplace(); closeCoinsDropdown();">Open Shop</button>
                 <button type="button" class="coins-drop-item" onclick="openInventory(); closeCoinsDropdown();">Open Inventory</button>
@@ -299,7 +300,6 @@
         </div>
         <button type="button" id="marketplaceBtn" class="topbar-shop-btn" onclick="openMarketplace()" title="Marketplace">🛒 Shop</button>
         <button type="button" id="inventoryBtn" class="topbar-shop-btn" onclick="openInventory()" title="Inventory">🎒 Bag</button>
-        <button type="button" id="membershipBtn" class="topbar-shop-btn azora-temp-disabled" onclick="openMembership()" title="Members (disabled for now)" aria-disabled="true">Members</button>
         <button id="publicFeedButton" class="topbar-feed-btn" onclick="openPublicFeed()">🎮 Feed</button>
         <button type="button" id="installAppBtn" class="install-app-btn" onclick="installAzoraApp()" title="Download Azora app">⬇️ Download Azora</button>
         <div id="guestButtons" class="topbar-guest-btns">
@@ -930,6 +930,35 @@ if ("serviceWorker" in navigator) {
     </div>
 </div>
 
+
+
+<!-- Buy AzoraCoins — subscriptions + one-time packs -->
+<div id="buyCoinsOverlay" class="overlay buy-coins-overlay" style="display:none;">
+    <div class="popup buy-coins-popup">
+        <div class="buy-coins-header">
+            <img src="logo.jpg" alt="" class="buy-coins-logo">
+            <h2>Buy AzoraCoins</h2>
+            <p class="buy-coins-sub">Subscriptions renew monthly. Coin packs are one-time.</p>
+        </div>
+        <div class="buy-coins-balance-row">
+            <span>Your balance</span>
+            <strong><span id="buyCoinsBalance">0</span> 🪙</strong>
+        </div>
+        <p id="buyCoinsStatus" class="buy-coins-status"></p>
+
+        <h3 class="buy-coins-section-title">Subscriptions <span>(billed every month)</span></h3>
+        <div id="buySubsList" class="buy-coins-list"></div>
+
+        <h3 class="buy-coins-section-title">Coin Packs <span>(one-time purchase)</span></h3>
+        <div id="buyPacksList" class="buy-coins-list"></div>
+
+        <div class="buy-coins-footer">
+            <button type="button" class="members-btn-text" onclick="cancelMembership()">Cancel subscription</button>
+            <button type="button" class="members-btn-secondary" onclick="closeBuyAzoraCoins()">Close</button>
+        </div>
+        <p class="buy-coins-note">Real payments use Azora Checkout. Payment processing will connect when your parent finishes account setup.</p>
+    </div>
+</div>
 
 <!-- Azora Members — clean membership picker -->
 <div id="membershipOverlay" class="overlay members-overlay" style="display:none;">
