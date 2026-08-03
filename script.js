@@ -3166,26 +3166,51 @@ function moderateAIAvatarPrompt(raw) {
 }
 
 function colorFromName(word) {
+    word = String(word || "").toLowerCase().trim();
     var map = {
-        red: "#ef4444", crimson: "#dc2626", maroon: "#991b1b",
-        orange: "#f97316", amber: "#f59e0b", gold: "#eab308", yellow: "#facc15",
-        lime: "#84cc16", green: "#22c55e", emerald: "#10b981", teal: "#14b8a6", cyan: "#06b6d4",
-        sky: "#0ea5e9", blue: "#3b82f6", indigo: "#6366f1", purple: "#a855f7", violet: "#8b5cf6",
-        pink: "#ec4899", rose: "#f43f5e", magenta: "#d946ef",
-        white: "#f8fafc", gray: "#94a3b8", grey: "#94a3b8", silver: "#cbd5e1",
-        black: "#1e293b", brown: "#92400e", tan: "#d2b48c", beige: "#e7d3b3",
-        navy: "#1e3a8a", mint: "#6ee7b7", coral: "#fb7185", peach: "#fdba74",
-        turquoise: "#2dd4bf", lavender: "#c4b5fd", aqua: "#22d3ee"
+        // reds
+        red: "#ef4444", crimson: "#dc2626", maroon: "#991b1b", scarlet: "#e11d48", ruby: "#be123c",
+        // oranges / yellows
+        orange: "#f97316", amber: "#f59e0b", gold: "#eab308", golden: "#eab308", yellow: "#facc15",
+        lemon: "#fde047", peach: "#fdba74", coral: "#fb7185",
+        // greens
+        lime: "#84cc16", green: "#22c55e", emerald: "#10b981", mint: "#6ee7b7", olive: "#65a30d",
+        forest: "#166534", jade: "#059669",
+        // blues / cyans
+        teal: "#14b8a6", cyan: "#06b6d4", aqua: "#22d3ee", turquoise: "#2dd4bf", sky: "#0ea5e9",
+        blue: "#3b82f6", navy: "#1e3a8a", indigo: "#6366f1", ocean: "#0284c7", ice: "#bae6fd",
+        // purples / pinks
+        purple: "#a855f7", violet: "#8b5cf6", lavender: "#c4b5fd", lilac: "#d8b4fe",
+        pink: "#ec4899", rose: "#f43f5e", magenta: "#d946ef", fuchsia: "#e879f9", hotpink: "#db2777",
+        // neutrals
+        white: "#f8fafc", cream: "#fef3c7", ivory: "#fffbeb", gray: "#94a3b8", grey: "#94a3b8",
+        silver: "#cbd5e1", slate: "#64748b", charcoal: "#334155", black: "#1e293b",
+        brown: "#92400e", tan: "#d2b48c", beige: "#e7d3b3", chocolate: "#7c2d12", bronze: "#b45309",
+        copper: "#c2410c", sand: "#e7d3b3",
+        // skin-ish blocky tones (friendly, not realistic)
+        skin: "#ffcc00", blonde: "#fde68a", blond: "#fde68a"
     };
     return map[word] || null;
 }
 
+/** Pull first known color word from a phrase chunk */
+function findColorInText(chunk) {
+    chunk = String(chunk || "").toLowerCase();
+    var words = chunk.match(/[a-z]+/g) || [];
+    // prefer later words ("bright blue") then earlier
+    for (var i = words.length - 1; i >= 0; i--) {
+        var c = colorFromName(words[i]);
+        if (c) return { color: c, name: words[i] };
+    }
+    return null;
+}
+
 /**
- * Local "AI" avatar designer — interprets natural language into colors, gender, and limb scales.
- * Not a cloud model; designed so almost any friendly description maps to a unique look.
+ * Keyword-script avatar designer (no external API).
+ * Reads gender, sizes, styles, and colors from the user's description.
  */
 function generateAvatarFromDescription(desc) {
-    var t = String(desc || "").toLowerCase();
+    var t = String(desc || "").toLowerCase().replace(/\s+/g, " ").trim();
     var out = {
         gender: "boy",
         colors: {
@@ -3201,126 +3226,352 @@ function generateAvatarFromDescription(desc) {
         summaryParts: []
     };
 
-    if (/\b(girl|female|woman|lady|she\/her)\b/.test(t)) {
+    function note(s) {
+        if (s && out.summaryParts.indexOf(s) === -1) out.summaryParts.push(s);
+    }
+    function setScale(key, val, label) {
+        var hi = key === "torso" ? 1.5 : 1.6;
+        out.scales[key] = clampAvatarScale(val, 0.6, hi);
+        if (label) note(label);
+    }
+    function paintArms(c) { out.colors.leftArm = c; out.colors.rightArm = c; }
+    function paintLegs(c) { out.colors.leftLeg = c; out.colors.rightLeg = c; }
+    function paintAll(c) {
+        out.colors.head = out.colors.torso = out.colors.leftArm = out.colors.rightArm =
+            out.colors.leftLeg = out.colors.rightLeg = c;
+    }
+
+    // —— Gender ——
+    if (/\b(girl|female|woman|lady|she|her|princess|queen)\b/.test(t)) {
         out.gender = "girl";
         out.hair = "#4a3728";
-        out.summaryParts.push("girl style");
-    } else if (/\b(boy|male|man|guy|he\/him)\b/.test(t)) {
+        note("girl");
+    } else if (/\b(boy|male|man|guy|he|him|king|prince)\b/.test(t)) {
         out.gender = "boy";
-        out.summaryParts.push("boy style");
+        note("boy");
     }
 
-    // Size keywords
-    function bump(key, val, label) {
-        out.scales[key] = clampAvatarScale(val, 0.6, key === "torso" ? 1.5 : 1.6);
-        out.summaryParts.push(label);
-    }
-    if (/\b(huge|giant|massive|big)\s+head\b|\bhead\s+(is\s+)?(huge|giant|big|large)\b|\blarge head\b|\bbig head\b/.test(t)) bump("head", 1.45, "big head");
-    else if (/\b(tiny|small|little|mini)\s+head\b|\bsmall head\b|\btiny head\b/.test(t)) bump("head", 0.7, "small head");
-    else if (/\b(normal|regular)\s+head\b/.test(t)) bump("head", 1, "normal head");
-
-    if (/\b(huge|giant|big|wide|bulky)\s+(torso|body|chest)\b|\bstrong body\b|\bbig body\b/.test(t)) bump("torso", 1.35, "big torso");
-    else if (/\b(tiny|small|slim|thin)\s+(torso|body|chest)\b|\bslim body\b/.test(t)) bump("torso", 0.75, "slim torso");
-
-    if (/\b(long|huge|giant|big|thick)\s+arms?\b|\barms?\s+(are\s+)?(long|huge|big)\b/.test(t)) bump("arms", 1.4, "long arms");
-    else if (/\b(short|tiny|small|thin)\s+arms?\b|\btiny arms\b/.test(t)) bump("arms", 0.7, "tiny arms");
-
-    if (/\b(long|huge|tall|big)\s+legs?\b|\blegs?\s+(are\s+)?(long|tall|huge)\b/.test(t)) bump("legs", 1.4, "long legs");
-    else if (/\b(short|tiny|small|stubby)\s+legs?\b|\btiny legs\b/.test(t)) bump("legs", 0.7, "short legs");
-
-    if (/\b(tall|towering)\b/.test(t)) {
-        out.scales.legs = clampAvatarScale(Math.max(out.scales.legs, 1.25), 0.6, 1.6);
-        out.scales.torso = clampAvatarScale(Math.max(out.scales.torso, 1.1), 0.6, 1.5);
-        out.summaryParts.push("tall build");
-    }
-    if (/\b(tiny|mini|small character|little avatar)\b/.test(t)) {
-        out.scales.head = clampAvatarScale(Math.min(out.scales.head, 0.85), 0.6, 1.6);
-        out.scales.torso = clampAvatarScale(Math.min(out.scales.torso, 0.8), 0.6, 1.5);
-        out.scales.arms = clampAvatarScale(Math.min(out.scales.arms, 0.85), 0.6, 1.6);
-        out.scales.legs = clampAvatarScale(Math.min(out.scales.legs, 0.85), 0.6, 1.6);
-        out.summaryParts.push("mini size");
-    }
-    if (/\b(robot|cyborg|mech)\b/.test(t)) {
-        out.colors.head = "#94a3b8";
-        out.colors.torso = "#64748b";
-        out.colors.leftArm = out.colors.rightArm = "#94a3b8";
-        out.colors.leftLeg = out.colors.rightLeg = "#475569";
-        out.scales.torso = Math.max(out.scales.torso, 1.15);
-        out.summaryParts.push("robot look");
-    }
-    if (/\b(ninja|shadow|dark hero)\b/.test(t)) {
-        out.colors.head = "#f5d0a9";
-        out.colors.torso = "#0f172a";
-        out.colors.leftArm = out.colors.rightArm = "#1e293b";
-        out.colors.leftLeg = out.colors.rightLeg = "#020617";
-        out.summaryParts.push("ninja colors");
-    }
-    if (/\b(hero|superhero)\b/.test(t)) {
-        out.colors.torso = "#dc2626";
-        out.colors.leftLeg = out.colors.rightLeg = "#1d4ed8";
-        out.summaryParts.push("hero colors");
-    }
-    if (/\brainbow\b/.test(t)) {
-        out.colors.head = "#facc15";
-        out.colors.torso = "#a855f7";
-        out.colors.leftArm = "#ef4444";
-        out.colors.rightArm = "#22c55e";
-        out.colors.leftLeg = "#3b82f6";
-        out.colors.rightLeg = "#f97316";
-        out.summaryParts.push("rainbow limbs");
-    }
-
-    // Generic color parsing: "pink torso", "blue head", "green arms", "teal legs"
-    var parts = [
-        { re: /\b([a-z]+)\s+(head|face|skin)\b/, slot: "head" },
-        { re: /\b([a-z]+)\s+(torso|body|shirt|chest)\b/, slot: "torso" },
-        { re: /\b([a-z]+)\s+arms?\b/, slot: "arms" },
-        { re: /\b([a-z]+)\s+legs?\b/, slot: "legs" }
+    // —— Built-in style packs (keywords) ——
+    var styles = [
+        {
+            re: /\b(robot|cyborg|android|mech|machine)\b/,
+            run: function () {
+                out.colors.head = "#94a3b8";
+                out.colors.torso = "#64748b";
+                paintArms("#94a3b8");
+                paintLegs("#475569");
+                setScale("torso", Math.max(out.scales.torso, 1.15), null);
+                note("robot");
+            }
+        },
+        {
+            re: /\b(ninja|shadow|stealth)\b/,
+            run: function () {
+                out.colors.head = "#f5d0a9";
+                out.colors.torso = "#0f172a";
+                paintArms("#1e293b");
+                paintLegs("#020617");
+                note("ninja");
+            }
+        },
+        {
+            re: /\b(superhero|hero|cape)\b/,
+            run: function () {
+                out.colors.torso = "#dc2626";
+                paintLegs("#1d4ed8");
+                paintArms("#f8fafc");
+                note("hero");
+            }
+        },
+        {
+            re: /\b(rainbow|colorful|multicolou?r)\b/,
+            run: function () {
+                out.colors.head = "#facc15";
+                out.colors.torso = "#a855f7";
+                out.colors.leftArm = "#ef4444";
+                out.colors.rightArm = "#22c55e";
+                out.colors.leftLeg = "#3b82f6";
+                out.colors.rightLeg = "#f97316";
+                note("rainbow");
+            }
+        },
+        {
+            re: /\b(fire|flame|lava|magma)\b/,
+            run: function () {
+                out.colors.head = "#fdba74";
+                out.colors.torso = "#ea580c";
+                paintArms("#f97316");
+                paintLegs("#7c2d12");
+                note("fire");
+            }
+        },
+        {
+            re: /\b(ice|frost|frozen|snow|winter)\b/,
+            run: function () {
+                out.colors.head = "#e0f2fe";
+                out.colors.torso = "#38bdf8";
+                paintArms("#bae6fd");
+                paintLegs("#0284c7");
+                note("ice");
+            }
+        },
+        {
+            re: /\b(nature|forest|leaf|plant|tree)\b/,
+            run: function () {
+                out.colors.head = "#fde68a";
+                out.colors.torso = "#16a34a";
+                paintArms("#86efac");
+                paintLegs("#166534");
+                note("nature");
+            }
+        },
+        {
+            re: /\b(ocean|sea|water|wave|beach)\b/,
+            run: function () {
+                out.colors.head = "#fef3c7";
+                out.colors.torso = "#0ea5e9";
+                paintArms("#67e8f9");
+                paintLegs("#0369a1");
+                note("ocean");
+            }
+        },
+        {
+            re: /\b(gold|golden|treasure|rich)\b/,
+            run: function () {
+                out.colors.head = "#fde68a";
+                out.colors.torso = "#eab308";
+                paintArms("#facc15");
+                paintLegs("#a16207");
+                note("gold");
+            }
+        },
+        {
+            re: /\b(shadow|dark|midnight|night)\b/,
+            run: function () {
+                out.colors.head = "#cbd5e1";
+                out.colors.torso = "#0f172a";
+                paintArms("#1e293b");
+                paintLegs("#020617");
+                note("dark");
+            }
+        },
+        {
+            re: /\b(candy|sweet|sugar|pastel)\b/,
+            run: function () {
+                out.colors.head = "#fecdd3";
+                out.colors.torso = "#f9a8d4";
+                paintArms("#fbcfe8");
+                paintLegs("#c4b5fd");
+                out.gender = out.gender || "girl";
+                note("candy");
+            }
+        },
+        {
+            re: /\b(neon|glow|bright neon)\b/,
+            run: function () {
+                out.colors.head = "#a3e635";
+                out.colors.torso = "#22d3ee";
+                paintArms("#e879f9");
+                paintLegs("#facc15");
+                note("neon");
+            }
+        },
+        {
+            re: /\b(knight|armor|armour|warrior)\b/,
+            run: function () {
+                out.colors.head = "#e2e8f0";
+                out.colors.torso = "#64748b";
+                paintArms("#94a3b8");
+                paintLegs("#475569");
+                setScale("torso", Math.max(out.scales.torso, 1.2), null);
+                note("knight");
+            }
+        },
+        {
+            re: /\b(ghost|spooky|boo)\b/,
+            run: function () {
+                paintAll("#f8fafc");
+                out.colors.torso = "#e2e8f0";
+                note("ghost");
+            }
+        },
+        {
+            re: /\b(builder|worker|construction)\b/,
+            run: function () {
+                out.colors.head = "#fde68a";
+                out.colors.torso = "#f59e0b";
+                paintArms("#fef3c7");
+                paintLegs("#1e3a8a");
+                note("builder");
+            }
+        },
+        {
+            re: /\b(sport|athlete|runner)\b/,
+            run: function () {
+                out.colors.torso = "#ef4444";
+                paintLegs("#ffffff");
+                paintArms("#ffcc00");
+                setScale("legs", Math.max(out.scales.legs, 1.15), null);
+                note("sporty");
+            }
+        },
+        {
+            re: /\b(royal|king|queen|crown)\b/,
+            run: function () {
+                out.colors.torso = "#7c3aed";
+                paintArms("#eab308");
+                paintLegs("#1e3a8a");
+                note("royal");
+            }
+        }
     ];
-    parts.forEach(function (p) {
-        var m = t.match(p.re);
-        if (!m) return;
-        var c = colorFromName(m[1]);
-        if (!c) return;
-        if (p.slot === "head") out.colors.head = c;
-        else if (p.slot === "torso") out.colors.torso = c;
-        else if (p.slot === "arms") { out.colors.leftArm = c; out.colors.rightArm = c; }
-        else if (p.slot === "legs") { out.colors.leftLeg = c; out.colors.rightLeg = c; }
-        out.summaryParts.push(m[1] + " " + p.slot);
-    });
-
-    // "all blue" / "entirely green"
-    var allM = t.match(/\b(?:all|entirely|full)\s+([a-z]+)\b/);
-    if (allM) {
-        var ac = colorFromName(allM[1]);
-        if (ac) {
-            out.colors.head = out.colors.torso = out.colors.leftArm = out.colors.rightArm = out.colors.leftLeg = out.colors.rightLeg = ac;
-            out.summaryParts.push("all " + allM[1]);
+    for (var si = 0; si < styles.length; si++) {
+        if (styles[si].re.test(t)) {
+            try { styles[si].run(); } catch (eS) {}
         }
     }
 
-    // Hair color
-    var hairM = t.match(/\b([a-z]+)\s+hair\b/);
-    if (hairM) {
-        var hc = colorFromName(hairM[1]);
-        if (hc) { out.hair = hc; out.summaryParts.push(hairM[1] + " hair"); }
+    // —— Size keywords ——
+    // Head
+    if (/\b(huge|giant|massive|enormous|big|large|oversized)\s+heads?\b|\bheads?\s+(is\s+)?(huge|giant|massive|big|large)\b|\bbig[- ]head\b/.test(t)) {
+        setScale("head", 1.5, "big head");
+    } else if (/\b(tiny|small|little|mini|micro)\s+heads?\b|\bsmall[- ]head\b|\btiny[- ]head\b/.test(t)) {
+        setScale("head", 0.68, "small head");
+    } else if (/\b(normal|regular|average)\s+heads?\b/.test(t)) {
+        setScale("head", 1, "normal head");
     }
 
-    // Light randomness so repeated prompts still vary a bit
+    // Torso / body
+    if (/\b(huge|giant|big|wide|bulky|thick|strong|buff)\s+(torsos?|bodys?|chests?)\b|\bbig\s+body\b|\bstrong\s+body\b/.test(t)) {
+        setScale("torso", 1.35, "big torso");
+    } else if (/\b(tiny|small|slim|thin|skinny|narrow)\s+(torsos?|bodys?|chests?)\b|\bslim\s+body\b/.test(t)) {
+        setScale("torso", 0.72, "slim torso");
+    }
+
+    // Arms
+    if (/\b(long|huge|giant|big|thick|muscular)\s+arms?\b|\barms?\s+(are\s+)?(long|huge|big|thick)\b/.test(t)) {
+        setScale("arms", 1.42, "long arms");
+    } else if (/\b(short|tiny|small|thin|skinny)\s+arms?\b|\btiny\s+arms?\b/.test(t)) {
+        setScale("arms", 0.68, "tiny arms");
+    }
+
+    // Legs
+    if (/\b(long|huge|tall|big|thick)\s+legs?\b|\blegs?\s+(are\s+)?(long|tall|huge|big)\b/.test(t)) {
+        setScale("legs", 1.42, "long legs");
+    } else if (/\b(short|tiny|small|stubby|little)\s+legs?\b|\btiny\s+legs?\b/.test(t)) {
+        setScale("legs", 0.68, "short legs");
+    }
+
+    // Whole-body size
+    if (/\b(tall|towering|lanky)\b/.test(t)) {
+        setScale("legs", Math.max(out.scales.legs, 1.28), "tall");
+        setScale("torso", Math.max(out.scales.torso, 1.08), null);
+    }
+    if (/\b(short character|short avatar|stocky)\b/.test(t)) {
+        setScale("legs", Math.min(out.scales.legs, 0.8), "stocky");
+        setScale("torso", Math.max(out.scales.torso, 1.1), null);
+    }
+    if (/\b(tiny|mini|little)\s+(character|avatar|person|body)\b|\bvery\s+small\b|\bminiature\b/.test(t)) {
+        setScale("head", Math.min(out.scales.head, 0.85), "mini");
+        setScale("torso", Math.min(out.scales.torso, 0.78), null);
+        setScale("arms", Math.min(out.scales.arms, 0.85), null);
+        setScale("legs", Math.min(out.scales.legs, 0.82), null);
+    }
+    if (/\b(giant|huge)\s+(character|avatar|person)\b|\bvery\s+big\b|\bmassive\s+avatar\b/.test(t)) {
+        setScale("head", Math.max(out.scales.head, 1.2), "giant");
+        setScale("torso", Math.max(out.scales.torso, 1.25), null);
+        setScale("arms", Math.max(out.scales.arms, 1.15), null);
+        setScale("legs", Math.max(out.scales.legs, 1.2), null);
+    }
+
+    // —— Color phrases: "pink torso", "blue head", "green arms", "teal legs" ——
+    var colorSlots = [
+        { re: /\b([a-z]+)\s+(heads?|faces?|skins?)\b/g, apply: function (c, n) { out.colors.head = c; note(n + " head"); } },
+        { re: /\b([a-z]+)\s+(torsos?|bodys?|shirts?|chests?|tops?)\b/g, apply: function (c, n) { out.colors.torso = c; note(n + " torso"); } },
+        { re: /\b([a-z]+)\s+arms?\b/g, apply: function (c, n) { paintArms(c); note(n + " arms"); } },
+        { re: /\b([a-z]+)\s+legs?\b/g, apply: function (c, n) { paintLegs(c); note(n + " legs"); } }
+    ];
+    colorSlots.forEach(function (slot) {
+        var re = slot.re;
+        re.lastIndex = 0;
+        var m;
+        while ((m = re.exec(t)) !== null) {
+            var c = colorFromName(m[1]);
+            if (c) slot.apply(c, m[1]);
+        }
+    });
+
+    // left/right specific limbs
+    var lr = t.match(/\bleft\s+arm\s+([a-z]+)\b|\b([a-z]+)\s+left\s+arm\b/);
+    if (lr) {
+        var lc = colorFromName(lr[1] || lr[2]);
+        if (lc) { out.colors.leftArm = lc; note("left arm color"); }
+    }
+    var rr = t.match(/\bright\s+arm\s+([a-z]+)\b|\b([a-z]+)\s+right\s+arm\b/);
+    if (rr) {
+        var rc = colorFromName(rr[1] || rr[2]);
+        if (rc) { out.colors.rightArm = rc; note("right arm color"); }
+    }
+    var ll = t.match(/\bleft\s+leg\s+([a-z]+)\b|\b([a-z]+)\s+left\s+leg\b/);
+    if (ll) {
+        var llc = colorFromName(ll[1] || ll[2]);
+        if (llc) { out.colors.leftLeg = llc; note("left leg color"); }
+    }
+    var rl = t.match(/\bright\s+leg\s+([a-z]+)\b|\b([a-z]+)\s+right\s+leg\b/);
+    if (rl) {
+        var rlc = colorFromName(rl[1] || rl[2]);
+        if (rlc) { out.colors.rightLeg = rlc; note("right leg color"); }
+    }
+
+    // "all blue" / "entirely green" / "full red"
+    var allM = t.match(/\b(?:all|entirely|full|everything)\s+([a-z]+)\b/);
+    if (allM) {
+        var ac = colorFromName(allM[1]);
+        if (ac) { paintAll(ac); note("all " + allM[1]); }
+    }
+
+    // "wearing blue" / "in a red shirt" style
+    var wear = t.match(/\b(?:wearing|in\s+a|with\s+a)\s+([a-z]+)\s+(shirt|top|hoodie|jacket)?/);
+    if (wear) {
+        var wc = colorFromName(wear[1]);
+        if (wc) { out.colors.torso = wc; note(wear[1] + " outfit"); }
+    }
+
+    // Hair color
+    var hairM = t.match(/\b([a-z]+)\s+hairs?\b|\bhairs?\s+(is\s+)?([a-z]+)\b/);
+    if (hairM) {
+        var hn = hairM[1] || hairM[3];
+        var hc = colorFromName(hn);
+        if (hc) { out.hair = hc; note(hn + " hair"); }
+    }
+    if (/\b(blonde|blond)\s+hair\b|\bhair\s+(is\s+)?(blonde|blond)\b/.test(t)) {
+        out.hair = "#fde68a";
+        note("blonde hair");
+    }
+
+    // Mismatched limbs keyword
+    if (/\b(mismatch|different arms|two[- ]tone arms|odd arms)\b/.test(t)) {
+        out.colors.leftArm = out.colors.leftArm || "#ef4444";
+        out.colors.rightArm = "#3b82f6";
+        note("mismatched arms");
+    }
+
+    // Soft seed jitter so same prompt can vary slightly if user retries
     var seed = 0;
     for (var i = 0; i < t.length; i++) seed = (seed * 31 + t.charCodeAt(i)) | 0;
-    var jitter = function (base, amt) {
+    function jitter(base, amt, hi) {
         var j = ((Math.abs(seed) % 100) / 100 - 0.5) * amt;
         seed = (seed * 17 + 13) | 0;
-        return clampAvatarScale(base + j, 0.6, 1.6);
-    };
-    if (!/\bhead\b/.test(t)) out.scales.head = jitter(out.scales.head, 0.08);
-    if (!/\barm\b/.test(t)) out.scales.arms = jitter(out.scales.arms, 0.08);
-    if (!/\bleg\b/.test(t)) out.scales.legs = jitter(out.scales.legs, 0.08);
+        return clampAvatarScale(base + j, 0.6, hi || 1.6);
+    }
+    // Only jitter scales the user did not mention
+    if (!/\bhead\b/.test(t)) out.scales.head = jitter(out.scales.head, 0.06);
+    if (!/\b(arm|arms)\b/.test(t)) out.scales.arms = jitter(out.scales.arms, 0.06);
+    if (!/\b(leg|legs)\b/.test(t)) out.scales.legs = jitter(out.scales.legs, 0.06);
+    if (!/\b(torso|body)\b/.test(t)) out.scales.torso = jitter(out.scales.torso, 0.05, 1.5);
 
-    // Unique summary
-    if (!out.summaryParts.length) out.summaryParts.push("custom blocky look");
-    out.summary = out.summaryParts.slice(0, 6).join(" · ");
+    if (!out.summaryParts.length) note("custom blocky look");
+    out.summary = out.summaryParts.slice(0, 8).join(" · ");
     return out;
 }
 
