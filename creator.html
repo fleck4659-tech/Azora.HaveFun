@@ -19,6 +19,13 @@
             border-radius: 8px; padding: 8px 12px; font-weight: 700; font-size: 12px;
         }
         button:hover { background: rgba(30,96,255,0.45); }
+        button.active-mode {
+            background: #1e60ff; border-color: #93c5fd;
+            box-shadow: 0 0 0 2px rgba(147,197,253,0.4);
+        }
+        button.test-on {
+            background: linear-gradient(180deg,#f59e0b,#d97706); border-color: #fbbf24; color: #111;
+        }
         #desktopError {
             display: none; position: fixed; inset: 0; background: #0d1117; color: #fff;
             z-index: 99999; flex-direction: column; justify-content: center; align-items: center;
@@ -48,7 +55,7 @@
         .game-chip.active { background: #1e60ff; border-color: #93c5fd; }
         .game-chip .vis { opacity: 0.85; font-size: 10px; }
         .studio-layout {
-            display: grid; grid-template-columns: 250px 1fr 290px;
+            display: grid; grid-template-columns: 250px 1fr 300px;
             gap: 10px; padding: 10px;
             height: calc(100vh - 56px - 60px);
         }
@@ -92,7 +99,9 @@
             min-height: 320px;
             height: 100%;
             background: #87ceeb;
+            cursor: default;
         }
+        #canvas3d.dragging { cursor: grabbing; }
         #canvas3d canvas {
             display: block;
             width: 100% !important;
@@ -118,10 +127,23 @@
         .property-row label { font-weight: 700; flex: 1; }
         .property-row input[type="number"],
         .property-row input[type="color"],
+        .property-row input[type="range"],
         .property-row select {
-            width: 96px; padding: 4px; border-radius: 4px; border: 1px solid #fff;
+            width: 110px; padding: 4px; border-radius: 4px; border: 1px solid #fff;
             background: rgba(255,255,255,0.12); color: #fff; text-align: center;
         }
+        .property-row input[type="range"] { width: 90px; }
+        .toggle-row {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 10px; font-size: 12px;
+        }
+        .toggle-row label { font-weight: 700; }
+        .toggle-btn {
+            min-width: 64px; padding: 5px 10px; border-radius: 999px; font-size: 11px;
+            border: 1px solid rgba(255,255,255,0.35);
+        }
+        .toggle-btn.on { background: #059669; border-color: #34d399; }
+        .toggle-btn.off { background: #7f1d1d; border-color: #f87171; }
         .mat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
         .mat-chip {
             padding: 8px 6px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3);
@@ -149,6 +171,38 @@
             border-radius: 8px; padding: 6px 10px; font-size: 11px; opacity: 0.9;
             pointer-events: none;
         }
+        /* Orientation cube (6 faces: +X -X +Y -Y +Z -Z) */
+        #orientCubeWrap {
+            position: absolute; right: 12px; top: 48px; width: 72px; height: 72px;
+            z-index: 20; perspective: 400px; user-select: none;
+        }
+        #orientCube {
+            width: 48px; height: 48px; margin: 12px auto 0;
+            position: relative; transform-style: preserve-3d;
+            transform: rotateX(-25deg) rotateY(35deg);
+            cursor: grab;
+        }
+        #orientCube:active { cursor: grabbing; }
+        .oc-face {
+            position: absolute; width: 48px; height: 48px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 900; font-size: 14px; color: #fff;
+            border: 1px solid rgba(255,255,255,0.7);
+            backface-visibility: hidden;
+            box-shadow: inset 0 0 12px rgba(0,0,0,0.25);
+        }
+        .oc-face.px { background: #dc2626; transform: rotateY(0deg) translateZ(24px); }
+        .oc-face.nx { background: #991b1b; transform: rotateY(180deg) translateZ(24px); }
+        .oc-face.py { background: #16a34a; transform: rotateX(90deg) translateZ(24px); }
+        .oc-face.ny { background: #166534; transform: rotateX(-90deg) translateZ(24px); }
+        .oc-face.pz { background: #2563eb; transform: rotateY(90deg) translateZ(24px); }
+        .oc-face.nz { background: #1e3a8a; transform: rotateY(-90deg) translateZ(24px); }
+        #testBanner {
+            display: none; position: absolute; left: 50%; top: 52px; transform: translateX(-50%);
+            z-index: 25; background: rgba(245,158,11,0.95); color: #111;
+            padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 800;
+            border: 1px solid #fff; pointer-events: none;
+        }
         @media (max-width: 900px) {
             .studio-layout { grid-template-columns: 1fr; height: auto; overflow: auto; }
             body { overflow: auto; }
@@ -171,6 +225,7 @@
 <div class="topbar" id="topbar">
     <h2>Azora Game Creator Studio</h2>
     <div class="actions">
+        <button id="testBtn" onclick="toggleTestMode()">▶ Test Game</button>
         <button id="saveProjectBtn" onclick="saveProject()">Save Workspace</button>
         <button onclick="publishCurrentGame()" style="background:linear-gradient(180deg,#34d399,#059669);color:#fff;border-color:#34d399;">Publish</button>
         <button onclick="handleBack()">Back to Azora</button>
@@ -196,7 +251,9 @@
 
         <div class="arrow-friend">
             <div class="panel-title" style="border:none;margin:0 0 6px;padding:0;"><span>Arrow Friend</span></div>
-            <div class="arrow-bubble" id="arrowBubble">Hi! Click <strong>+ Add Part</strong> to spawn a Glass part. Click the sky to unselect.</div>
+            <div class="arrow-bubble" id="arrowBubble">
+                <strong>Controls:</strong> Drag parts to move them. In Studio: <b>W/S</b> camera forward/back, <b>A/D</b> turn left/right. Press <b>Test Game</b> to play as your character.
+            </div>
             <div style="margin-top:8px;">
                 <div class="script-block" draggable="true" ondragstart="dragBlock(event, 'print(\"Hello Azora!\")')">print("Hello Azora!")</div>
                 <div class="script-block" draggable="true" ondragstart="dragBlock(event, 'wait(1)')">wait(1)</div>
@@ -210,12 +267,24 @@
             <div class="view-tab active" id="tab3D" onclick="switchView('3d')">3D View</div>
             <div class="view-tab" id="tabScript" onclick="switchView('script')">Script</div>
         </div>
-        <div id="canvas3d"></div>
+        <div id="canvas3d">
+            <div id="testBanner">TEST MODE — WASD move character · Space jump · Esc to stop</div>
+            <div id="orientCubeWrap" title="Drag to orbit camera · click a face to snap view">
+                <div id="orientCube">
+                    <div class="oc-face px" data-face="px">X</div>
+                    <div class="oc-face nx" data-face="nx">X</div>
+                    <div class="oc-face py" data-face="py">Y</div>
+                    <div class="oc-face ny" data-face="ny">Y</div>
+                    <div class="oc-face pz" data-face="pz">Z</div>
+                    <div class="oc-face nz" data-face="nz">Z</div>
+                </div>
+            </div>
+        </div>
         <div class="viewport-toolbar">
             <button type="button" onclick="unselectAll()">Unselect</button>
             <button type="button" onclick="addNewPart()">+ Part</button>
             <button type="button" onclick="resetCamera()">Reset Camera</button>
-            <span class="hint-mini" id="selectHint">Click a part to select · click empty space to unselect</span>
+            <span class="hint-mini" id="selectHint">Drag parts to move · W/S camera · A/D turn</span>
         </div>
         <div id="scriptEditorContainer" ondragover="event.preventDefault()" ondrop="handleBlockDrop(event)">
             <textarea id="codeArea" placeholder="// Write scripts here or drag blocks from Arrow Friend…"></textarea>
@@ -238,7 +307,7 @@
 <div id="statusLine">Booting Creator…</div>
 
 <script>
-/* ===== Azora Creator Studio (fixed init / sky / baseplate / parts) ===== */
+/* ===== Azora Creator Studio — drag, WASD camera, orient cube, test mode, touch/collide ===== */
 var scene, camera, renderer, ambientLight, directionalLight;
 var baseplateMesh = null, gridHelper = null, characterGroup = null;
 var raycaster = null, mouse = null, outlineHelper = null;
@@ -248,6 +317,34 @@ var selectedMaterialId = "Glass";
 var currentGameId = null;
 var animating = false;
 var studioForced = false;
+var isTestMode = false;
+
+// Camera (studio)
+var camYaw = Math.PI / 4;
+var camPitch = 0.45;
+var camDist = 32;
+var camTarget = new THREE.Vector3(0, 1, 0);
+var keys = {};
+
+// Drag state
+var isDraggingPart = false;
+var dragPart = null;
+var dragPlane = null;
+var dragOffset = new THREE.Vector3();
+var dragPointerId = null;
+
+// Orient cube
+var orientRotX = -25;
+var orientRotY = 35;
+var orientDragging = false;
+var orientLastX = 0, orientLastY = 0;
+
+// Character test movement
+var charVelY = 0;
+var charOnGround = true;
+var CHAR_SPEED = 10;
+var CHAR_JUMP = 9;
+var GRAVITY = 22;
 
 var MATERIALS = {
     Glass:    { name: "Glass",    color: 0x88ccee, opacity: 0.55, shininess: 120, transparent: true },
@@ -287,15 +384,8 @@ function arrowBubbleSpeak(html) {
 function enforceComputerOnly() {
     var err = document.getElementById("desktopError");
     if (!err) return;
-    if (studioForced) {
-        err.style.display = "none";
-        return;
-    }
-    if (window.innerWidth < 700) {
-        err.style.display = "flex";
-    } else {
-        err.style.display = "none";
-    }
+    if (studioForced) { err.style.display = "none"; return; }
+    err.style.display = (window.innerWidth < 700) ? "flex" : "none";
 }
 
 function forceContinueStudio() {
@@ -305,23 +395,26 @@ function forceContinueStudio() {
     setTimeout(bootStudio, 50);
 }
 
-function makeMaterial(matId, colorHex) {
+function makeMaterial(matId, colorHex, opacityOverride) {
     var def = MATERIALS[matId] || MATERIALS.Glass;
     var col = (colorHex != null) ? colorHex : def.color;
+    var opacity = (opacityOverride != null) ? opacityOverride : (def.opacity != null ? def.opacity : 1);
+    var transparent = opacity < 0.999 || !!def.transparent;
     try {
         var mat = new THREE.MeshPhongMaterial({
             color: col,
-            transparent: !!def.transparent,
-            opacity: def.opacity != null ? def.opacity : 1,
+            transparent: transparent,
+            opacity: opacity,
             shininess: def.shininess != null ? def.shininess : 80,
             specular: 0xbfbfbf,
             emissive: def.emissive || 0x000000,
-            side: THREE.DoubleSide
+            side: THREE.DoubleSide,
+            depthWrite: opacity > 0.85
         });
         mat.userData = { azoraMaterial: matId };
         return mat;
     } catch (e) {
-        return new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide });
+        return new THREE.MeshLambertMaterial({ color: col, transparent: transparent, opacity: opacity, side: THREE.DoubleSide });
     }
 }
 
@@ -349,7 +442,7 @@ function applyMaterialToPart(partId, matId) {
     if (!part || !part.mesh) return;
     var col = part.color ? new THREE.Color(part.color) : null;
     part.material = matId;
-    part.mesh.material = makeMaterial(matId, col ? col.getHex() : undefined);
+    part.mesh.material = makeMaterial(matId, col ? col.getHex() : undefined, part.transparency);
     if (col && part.mesh.material.color) part.mesh.material.color.copy(col);
     refreshPartProperties(partId);
     refreshHierarchyPartLabel(part);
@@ -372,6 +465,25 @@ function applySkySettings() {
     }
 }
 
+function updateCameraFromOrbit() {
+    if (!camera || isTestMode) return;
+    var x = camTarget.x + camDist * Math.sin(camYaw) * Math.cos(camPitch);
+    var y = camTarget.y + camDist * Math.sin(camPitch);
+    var z = camTarget.z + camDist * Math.cos(camYaw) * Math.cos(camPitch);
+    camera.position.set(x, y, z);
+    camera.lookAt(camTarget);
+    syncOrientCube();
+}
+
+function syncOrientCube() {
+    var cube = document.getElementById("orientCube");
+    if (!cube) return;
+    // Map camera yaw/pitch to cube rotation for visual feedback
+    orientRotY = (camYaw * 180 / Math.PI);
+    orientRotX = -20 - (camPitch * 40);
+    cube.style.transform = "rotateX(" + orientRotX + "deg) rotateY(" + orientRotY + "deg)";
+}
+
 function resizeRenderer() {
     var container = document.getElementById("canvas3d");
     if (!container || !renderer || !camera) return;
@@ -382,22 +494,21 @@ function resizeRenderer() {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h, false);
-    setStatus("Viewport " + w + "x" + h + " · parts: " + partsList.length);
+    var mode = isTestMode ? "TEST" : "Studio";
+    setStatus(mode + " · " + w + "x" + h + " · parts: " + partsList.length);
 }
 
 function init3DScene() {
     var container = document.getElementById("canvas3d");
-    if (!container) {
-        setStatus("Missing #canvas3d");
-        return false;
-    }
+    if (!container) { setStatus("Missing #canvas3d"); return false; }
     if (typeof THREE === "undefined") {
         setStatus("Three.js failed to load — check internet / CDN");
         arrowBubbleSpeak("Three.js did not load. Check your connection and refresh.");
         return false;
     }
 
-    while (container.firstChild) container.removeChild(container.firstChild);
+    // Keep orient cube + banner; remove only previous canvas
+    Array.prototype.slice.call(container.querySelectorAll("canvas")).forEach(function (c) { c.remove(); });
 
     scene = new THREE.Scene();
     applySkySettings();
@@ -408,14 +519,15 @@ function init3DScene() {
     if (w < 40) w = 640;
 
     camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 3000);
-    camera.position.set(18, 14, 24);
-    camera.lookAt(0, 1, 0);
+    camTarget = new THREE.Vector3(0, 1, 0);
+    updateCameraFromOrbit();
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setClearColor(0x87ceeb, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(w, h, false);
-    container.appendChild(renderer.domElement);
+    // insert canvas behind overlay widgets
+    container.insertBefore(renderer.domElement, container.firstChild);
 
     ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
@@ -426,12 +538,7 @@ function init3DScene() {
     fill.position.set(-12, 10, -8);
     scene.add(fill);
 
-    // BASEPLATE always present
-    var baseGeo = new THREE.BoxGeometry(
-        baseplateProps.sizeX,
-        baseplateProps.sizeY,
-        baseplateProps.sizeZ
-    );
+    var baseGeo = new THREE.BoxGeometry(baseplateProps.sizeX, baseplateProps.sizeY, baseplateProps.sizeZ);
     baseplateMesh = new THREE.Mesh(baseGeo, makeMaterial("Concrete", 0x3a4555));
     baseplateMesh.position.set(baseplateProps.posX, baseplateProps.posY, baseplateProps.posZ);
     baseplateMesh.userData.azoraKind = "baseplate";
@@ -459,20 +566,25 @@ function init3DScene() {
 
     raycaster = new THREE.Raycaster();
     mouse = new THREE.Vector2();
-    renderer.domElement.addEventListener("pointerdown", onViewportPointerDown);
+    dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+    var canvas = renderer.domElement;
+    canvas.addEventListener("pointerdown", onViewportPointerDown);
+    canvas.addEventListener("pointermove", onViewportPointerMove);
+    canvas.addEventListener("pointerup", onViewportPointerUp);
+    canvas.addEventListener("pointercancel", onViewportPointerUp);
+    canvas.addEventListener("wheel", onViewportWheel, { passive: false });
 
     if (!animating) {
         animating = true;
-        (function animate() {
+        var lastT = performance.now();
+        (function animate(now) {
             requestAnimationFrame(animate);
-            if (characterGroup && selectedNodeId !== "character") {
-                characterGroup.rotation.y += 0.004;
-            }
-            if (outlineHelper && selectedPartId && outlineHelper.update) {
-                try { outlineHelper.update(); } catch (e) {}
-            }
+            var dt = Math.min(0.05, (now - lastT) / 1000);
+            lastT = now;
+            updateStudio(dt);
             if (renderer && scene && camera) renderer.render(scene, camera);
-        })();
+        })(performance.now());
     }
 
     setTimeout(resizeRenderer, 30);
@@ -480,21 +592,130 @@ function init3DScene() {
     setTimeout(resizeRenderer, 400);
 
     setStatus("Studio ready · sky + baseplate loaded");
-    arrowBubbleSpeak("Scene ready! Sky and baseplate are here. Click <strong>+ Add Part</strong> to build.");
+    arrowBubbleSpeak("Scene ready! Drag parts to move. <b>W/S</b> camera, <b>A/D</b> turn. Hit <b>Test Game</b> to play.");
     return true;
 }
 
-function onViewportPointerDown(ev) {
-    if (!renderer || !camera || !raycaster) return;
+function updateStudio(dt) {
+    if (isTestMode) {
+        updateTestCharacter(dt);
+        return;
+    }
+
+    // Studio camera WASD
+    var moved = false;
+    var turnSpeed = 1.6 * dt;
+    var moveSpeed = 18 * dt;
+    if (keys["a"] || keys["arrowleft"]) { camYaw += turnSpeed; moved = true; }
+    if (keys["d"] || keys["arrowright"]) { camYaw -= turnSpeed; moved = true; }
+
+    // Forward/back along camera look on XZ plane
+    var fx = Math.sin(camYaw);
+    var fz = Math.cos(camYaw);
+    if (keys["w"] || keys["arrowup"]) {
+        camTarget.x += fx * moveSpeed;
+        camTarget.z += fz * moveSpeed;
+        moved = true;
+    }
+    if (keys["s"] || keys["arrowdown"]) {
+        camTarget.x -= fx * moveSpeed;
+        camTarget.z -= fz * moveSpeed;
+        moved = true;
+    }
+    if (moved) updateCameraFromOrbit();
+
+    if (characterGroup && selectedNodeId !== "character" && !isDraggingPart) {
+        characterGroup.rotation.y += 0.004;
+    }
+    if (outlineHelper && selectedPartId && outlineHelper.update) {
+        try { outlineHelper.update(); } catch (e) {}
+    }
+}
+
+function updateTestCharacter(dt) {
+    if (!characterGroup || !camera) return;
+    var yaw = characterGroup.rotation.y;
+    var forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    var right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    var move = new THREE.Vector3();
+
+    if (keys["w"] || keys["arrowup"]) move.add(forward);
+    if (keys["s"] || keys["arrowdown"]) move.sub(forward);
+    if (keys["a"] || keys["arrowleft"]) move.sub(right);
+    if (keys["d"] || keys["arrowright"]) move.add(right);
+
+    if (move.lengthSq() > 0) {
+        move.normalize().multiplyScalar(CHAR_SPEED * dt);
+        characterGroup.position.x += move.x;
+        characterGroup.position.z += move.z;
+    }
+
+    // Jump
+    if ((keys[" "] || keys["space"]) && charOnGround) {
+        charVelY = CHAR_JUMP;
+        charOnGround = false;
+    }
+    charVelY -= GRAVITY * dt;
+    characterGroup.position.y += charVelY * dt;
+
+    // Ground at y = 1.2 (feet on baseplate top ~0)
+    var groundY = 1.2;
+    if (characterGroup.position.y <= groundY) {
+        characterGroup.position.y = groundY;
+        charVelY = 0;
+        charOnGround = true;
+    }
+
+    // Simple collide with canCollide parts (AABB push-out on XZ)
+    partsList.forEach(function (p) {
+        if (!p.canCollide || !p.mesh) return;
+        var box = new THREE.Box3().setFromObject(p.mesh);
+        var cpos = characterGroup.position;
+        // character approx radius
+        var r = 0.9;
+        var closest = new THREE.Vector3(
+            Math.max(box.min.x, Math.min(cpos.x, box.max.x)),
+            Math.max(box.min.y, Math.min(cpos.y, box.max.y)),
+            Math.max(box.min.z, Math.min(cpos.z, box.max.z))
+        );
+        var dx = cpos.x - closest.x;
+        var dz = cpos.z - closest.z;
+        var distSq = dx * dx + dz * dz;
+        if (distSq < r * r && cpos.y < box.max.y + 0.5 && cpos.y > box.min.y - 1) {
+            var dist = Math.sqrt(distSq) || 0.001;
+            var push = (r - dist) + 0.01;
+            cpos.x += (dx / dist) * push;
+            cpos.z += (dz / dist) * push;
+        }
+    });
+
+    // Camera follows behind character
+    var back = 10;
+    var height = 6;
+    camera.position.set(
+        characterGroup.position.x - Math.sin(yaw) * back,
+        characterGroup.position.y + height,
+        characterGroup.position.z - Math.cos(yaw) * back
+    );
+    camera.lookAt(characterGroup.position.x, characterGroup.position.y + 1.2, characterGroup.position.z);
+}
+
+function getPointerNDC(ev) {
     var rect = renderer.domElement.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
     mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+}
+
+function onViewportPointerDown(ev) {
+    if (!renderer || !camera || !raycaster || isTestMode) return;
+    if (ev.button !== 0) return;
+    getPointerNDC(ev);
     raycaster.setFromCamera(mouse, camera);
 
     var meshes = partsList.map(function (p) { return p.mesh; }).filter(Boolean);
     if (baseplateMesh) meshes.push(baseplateMesh);
     var hits = raycaster.intersectObjects(meshes, false);
+
     if (hits.length) {
         var mesh = hits[0].object;
         if (mesh === baseplateMesh) {
@@ -502,12 +723,120 @@ function onViewportPointerDown(ev) {
             return;
         }
         var part = partsList.find(function (p) { return p.mesh === mesh; });
-        if (part) selectPartNode(part.id);
+        if (part) {
+            selectPartNode(part.id);
+            // Start drag on horizontal plane at part height
+            isDraggingPart = true;
+            dragPart = part;
+            dragPointerId = ev.pointerId;
+            try { renderer.domElement.setPointerCapture(ev.pointerId); } catch (e) {}
+            document.getElementById("canvas3d").classList.add("dragging");
+            dragPlane.setFromNormalAndCoplanarPoint(
+                new THREE.Vector3(0, 1, 0),
+                part.mesh.position.clone()
+            );
+            var hitPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(dragPlane, hitPoint);
+            if (hitPoint) dragOffset.copy(part.mesh.position).sub(hitPoint);
+            setStatus("Dragging " + part.id);
+            return;
+        }
     } else {
         unselectAll();
     }
 }
 
+function onViewportPointerMove(ev) {
+    if (!isDraggingPart || !dragPart || !dragPart.mesh || isTestMode) return;
+    if (dragPointerId != null && ev.pointerId !== dragPointerId) return;
+    getPointerNDC(ev);
+    raycaster.setFromCamera(mouse, camera);
+    var hitPoint = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(dragPlane, hitPoint)) {
+        var next = hitPoint.add(dragOffset);
+        dragPart.mesh.position.x = next.x;
+        dragPart.mesh.position.z = next.z;
+        // keep Y unless Shift held (then free Y via vertical plane approx - skip for simplicity)
+        dragPart.pos.x = dragPart.mesh.position.x;
+        dragPart.pos.y = dragPart.mesh.position.y;
+        dragPart.pos.z = dragPart.mesh.position.z;
+        if (outlineHelper) setOutline(dragPart.mesh);
+        // live update pos fields if open
+        var px = document.getElementById("pPx");
+        var py = document.getElementById("pPy");
+        var pz = document.getElementById("pPz");
+        if (px && selectedPartId === dragPart.id) {
+            px.value = dragPart.pos.x.toFixed(2);
+            if (py) py.value = dragPart.pos.y.toFixed(2);
+            if (pz) pz.value = dragPart.pos.z.toFixed(2);
+        }
+    }
+}
+
+function onViewportPointerUp(ev) {
+    if (!isDraggingPart) return;
+    if (dragPointerId != null && ev.pointerId !== dragPointerId) return;
+    isDraggingPart = false;
+    if (dragPart) setStatus("Moved " + dragPart.id);
+    dragPart = null;
+    dragPointerId = null;
+    document.getElementById("canvas3d").classList.remove("dragging");
+    try { renderer.domElement.releasePointerCapture(ev.pointerId); } catch (e) {}
+}
+
+function onViewportWheel(ev) {
+    if (isTestMode) return;
+    ev.preventDefault();
+    camDist = Math.max(6, Math.min(120, camDist + ev.deltaY * 0.02));
+    updateCameraFromOrbit();
+}
+
+/* ===== Orientation cube ===== */
+function initOrientCube() {
+    var cube = document.getElementById("orientCube");
+    var wrap = document.getElementById("orientCubeWrap");
+    if (!cube || !wrap) return;
+
+    wrap.addEventListener("pointerdown", function (ev) {
+        if (isTestMode) return;
+        // face click?
+        var face = ev.target && ev.target.dataset && ev.target.dataset.face;
+        if (face) {
+            snapCameraToFace(face);
+            return;
+        }
+        orientDragging = true;
+        orientLastX = ev.clientX;
+        orientLastY = ev.clientY;
+        try { wrap.setPointerCapture(ev.pointerId); } catch (e) {}
+    });
+    wrap.addEventListener("pointermove", function (ev) {
+        if (!orientDragging || isTestMode) return;
+        var dx = ev.clientX - orientLastX;
+        var dy = ev.clientY - orientLastY;
+        orientLastX = ev.clientX;
+        orientLastY = ev.clientY;
+        camYaw -= dx * 0.01;
+        camPitch = Math.max(-1.2, Math.min(1.4, camPitch + dy * 0.01));
+        updateCameraFromOrbit();
+    });
+    wrap.addEventListener("pointerup", function () { orientDragging = false; });
+    wrap.addEventListener("pointercancel", function () { orientDragging = false; });
+}
+
+function snapCameraToFace(face) {
+    // Snap orbit yaw/pitch to axis views
+    if (face === "px") { camYaw = Math.PI / 2; camPitch = 0.15; }
+    else if (face === "nx") { camYaw = -Math.PI / 2; camPitch = 0.15; }
+    else if (face === "pz") { camYaw = 0; camPitch = 0.15; }
+    else if (face === "nz") { camYaw = Math.PI; camPitch = 0.15; }
+    else if (face === "py") { camYaw = 0; camPitch = 1.4; }
+    else if (face === "ny") { camYaw = 0; camPitch = -1.2; }
+    updateCameraFromOrbit();
+    setStatus("View snapped: " + face.toUpperCase());
+}
+
+/* ===== Selection / parts ===== */
 function setOutline(mesh) {
     clearOutline();
     if (!mesh || !scene) return;
@@ -549,7 +878,7 @@ function unselectAll() {
     document.getElementById("propertiesTitle").textContent = "Properties";
     document.getElementById("propertiesContent").innerHTML = "Nothing selected. Click a part or Hierarchy item.";
     var hint = document.getElementById("selectHint");
-    if (hint) hint.textContent = "Click a part to select · click empty space to unselect";
+    if (hint) hint.textContent = "Drag parts to move · W/S camera · A/D turn";
 }
 
 function resizePartOneEnd(part, axis, newSize) {
@@ -564,6 +893,7 @@ function resizePartOneEnd(part, axis, newSize) {
 }
 
 function addNewPart() {
+    if (isTestMode) { alert("Stop Test Mode first."); return; }
     if (!scene) {
         setStatus("Scene missing — rebooting…");
         if (!init3DScene()) {
@@ -573,7 +903,7 @@ function addNewPart() {
     }
     var id = "Part_" + (partsList.length + 1);
     var geo = new THREE.BoxGeometry(2, 2, 2);
-    var mat = makeMaterial(selectedMaterialId || "Glass", 0x88ccee);
+    var mat = makeMaterial(selectedMaterialId || "Glass", 0x88ccee, 0.55);
     var mesh = new THREE.Mesh(geo, mat);
     mesh.position.set((Math.random() * 8 - 4), 1.5 + Math.random() * 2, (Math.random() * 8 - 4));
     mesh.userData.azoraPartId = id;
@@ -585,7 +915,10 @@ function addNewPart() {
         size: { x: 2, y: 2, z: 2 },
         pos: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
         color: "#88ccee",
-        material: selectedMaterialId || "Glass"
+        material: selectedMaterialId || "Glass",
+        transparency: 0.55,
+        canTouch: true,
+        canCollide: true
     };
     partsList.push(partObj);
 
@@ -598,7 +931,7 @@ function addNewPart() {
 
     selectPartNode(id);
     setStatus("Added " + id);
-    arrowBubbleSpeak("Spawned <strong>" + id + "</strong> with " + partObj.material + ". Size grows from one end only.");
+    arrowBubbleSpeak("Spawned <strong>" + id + "</strong>. Drag it to move. Tune transparency, CanTouch, CanCollide on the right.");
 }
 
 function refreshHierarchyPartLabel(part) {
@@ -607,6 +940,7 @@ function refreshHierarchyPartLabel(part) {
 }
 
 function selectPartNode(id) {
+    if (isTestMode) return;
     document.querySelectorAll(".hierarchy-item").forEach(function (item) { item.classList.remove("selected"); });
     var h = document.getElementById("hierarchy_" + id);
     if (h) h.classList.add("selected");
@@ -617,20 +951,30 @@ function selectPartNode(id) {
     setOutline(part.mesh);
     refreshPartProperties(id);
     var hint = document.getElementById("selectHint");
-    if (hint) hint.textContent = "Selected " + id + " · light-blue outline · click empty to unselect";
+    if (hint) hint.textContent = "Selected " + id + " · drag to move · light-blue outline";
 }
 
 function refreshPartProperties(id) {
     var part = partsList.find(function (p) { return p.id === id; });
     if (!part) return;
+    if (part.transparency == null) part.transparency = 1;
+    if (part.canTouch == null) part.canTouch = true;
+    if (part.canCollide == null) part.canCollide = true;
+
     var matOpts = Object.keys(MATERIALS).map(function (m) {
         return '<option value="' + m + '"' + (part.material === m ? " selected" : "") + ">" + m + "</option>";
     }).join("");
+
+    var tPct = Math.round((part.transparency != null ? part.transparency : 1) * 100);
+
     document.getElementById("propertiesTitle").textContent = "Properties - " + id;
     document.getElementById("propertiesContent").innerHTML =
-        '<p class="hint-mini">Size grows from the <strong>positive end only</strong> (other face stays put).</p>' +
+        '<p class="hint-mini">Drag the part in the viewport to move it. Size grows from one end only.</p>' +
         '<div class="property-row"><label>Color</label><input type="color" id="pColor" value="' + part.color + '" oninput="updatePartProperty(\'' + id + '\',\'color\',this.value)"></div>' +
         '<div class="property-row"><label>Material</label><select id="pMat" onchange="updatePartProperty(\'' + id + '\',\'material\',this.value)">' + matOpts + '</select></div>' +
+        '<div class="property-row"><label>Transparency</label><input type="range" min="0" max="100" value="' + tPct + '" oninput="updatePartProperty(\'' + id + '\',\'transparency\',this.value)"><span id="tLabel">' + tPct + '%</span></div>' +
+        '<div class="toggle-row"><label>Can Touch</label><button type="button" class="toggle-btn ' + (part.canTouch ? "on" : "off") + '" onclick="togglePartFlag(\'' + id + '\',\'canTouch\')">' + (part.canTouch ? "ON" : "OFF") + '</button></div>' +
+        '<div class="toggle-row"><label>Can Collide</label><button type="button" class="toggle-btn ' + (part.canCollide ? "on" : "off") + '" onclick="togglePartFlag(\'' + id + '\',\'canCollide\')">' + (part.canCollide ? "ON" : "OFF") + '</button></div>' +
         '<div class="property-row"><label>Size X</label><input type="number" step="0.1" id="pSx" value="' + part.size.x + '" oninput="updatePartProperty(\'' + id + '\',\'sx\',this.value)"></div>' +
         '<div class="property-row"><label>Size Y</label><input type="number" step="0.1" id="pSy" value="' + part.size.y + '" oninput="updatePartProperty(\'' + id + '\',\'sy\',this.value)"></div>' +
         '<div class="property-row"><label>Size Z</label><input type="number" step="0.1" id="pSz" value="' + part.size.z + '" oninput="updatePartProperty(\'' + id + '\',\'sz\',this.value)"></div>' +
@@ -639,6 +983,14 @@ function refreshPartProperties(id) {
         '<div class="property-row"><label>Pos Z</label><input type="number" step="0.1" id="pPz" value="' + Number(part.pos.z).toFixed(2) + '" oninput="updatePartProperty(\'' + id + '\',\'pz\',this.value)"></div>' +
         '<button type="button" onclick="deleteSelectedPart()" style="width:100%;margin-top:6px;background:#7f1d1d;">Delete Part</button>' +
         '<button type="button" onclick="unselectAll()" style="width:100%;margin-top:6px;">Unselect</button>';
+}
+
+function togglePartFlag(id, flag) {
+    var part = partsList.find(function (p) { return p.id === id; });
+    if (!part) return;
+    part[flag] = !part[flag];
+    refreshPartProperties(id);
+    setStatus(id + " " + flag + " = " + (part[flag] ? "ON" : "OFF"));
 }
 
 function updatePartProperty(id, property, val) {
@@ -650,6 +1002,13 @@ function updatePartProperty(id, property, val) {
     } else if (property === "material") {
         applyMaterialToPart(id, val);
         return;
+    } else if (property === "transparency") {
+        var t = Math.max(0, Math.min(100, parseFloat(val) || 0)) / 100;
+        part.transparency = t;
+        var col = part.color ? new THREE.Color(part.color).getHex() : undefined;
+        part.mesh.material = makeMaterial(part.material || "Glass", col, t);
+        var lab = document.getElementById("tLabel");
+        if (lab) lab.textContent = Math.round(t * 100) + "%";
     } else if (property === "sx") {
         resizePartOneEnd(part, "x", val);
     } else if (property === "sy") {
@@ -667,7 +1026,7 @@ function updatePartProperty(id, property, val) {
 }
 
 function deleteSelectedPart() {
-    if (!selectedPartId) return;
+    if (!selectedPartId || isTestMode) return;
     var idx = partsList.findIndex(function (p) { return p.id === selectedPartId; });
     if (idx < 0) return;
     var part = partsList[idx];
@@ -688,6 +1047,7 @@ function switchView(view) {
 }
 
 function selectNode(node) {
+    if (isTestMode) return;
     document.querySelectorAll(".hierarchy-item").forEach(function (item) { item.classList.remove("selected"); });
     selectedPartId = null;
     selectedNodeId = node;
@@ -705,7 +1065,8 @@ function selectNode(node) {
         document.getElementById("propertiesTitle").textContent = "Properties - Workspace";
         document.getElementById("propertiesContent").innerHTML =
             '<p class="hint-mini">Your game world. Add parts, edit sky, and publish when ready.</p>' +
-            '<p>Parts: <strong>' + partsList.length + '</strong></p>';
+            '<p>Parts: <strong>' + partsList.length + '</strong></p>' +
+            '<p class="hint-mini"><b>W/S</b> move camera · <b>A/D</b> turn · drag parts · Test to play</p>';
     } else if (node === "sky") {
         document.getElementById("propertiesTitle").textContent = "Properties - Sky / Atmosphere";
         document.getElementById("propertiesContent").innerHTML =
@@ -727,7 +1088,7 @@ function selectNode(node) {
     } else if (node === "character") {
         document.getElementById("propertiesTitle").textContent = "Properties - Character";
         document.getElementById("propertiesContent").innerHTML =
-            '<p class="hint-mini">Preview avatar in the world. Customize colors on the main Azora avatar page.</p>';
+            '<p class="hint-mini">Preview avatar. In <b>Test Mode</b> you control this character with WASD + Space.</p>';
         if (characterGroup) setOutline(characterGroup);
     }
 }
@@ -752,11 +1113,52 @@ function updateBaseplate() {
 }
 
 function resetCamera() {
-    if (!camera) return;
-    camera.position.set(18, 14, 24);
-    camera.lookAt(0, 1, 0);
+    if (isTestMode) return;
+    camYaw = Math.PI / 4;
+    camPitch = 0.45;
+    camDist = 32;
+    camTarget.set(0, 1, 0);
+    updateCameraFromOrbit();
 }
 
+/* ===== Test mode ===== */
+function toggleTestMode() {
+    if (!scene || !characterGroup) {
+        alert("Scene not ready yet.");
+        return;
+    }
+    isTestMode = !isTestMode;
+    var btn = document.getElementById("testBtn");
+    var banner = document.getElementById("testBanner");
+    var orient = document.getElementById("orientCubeWrap");
+
+    if (isTestMode) {
+        if (btn) { btn.textContent = "⏹ Stop Test"; btn.classList.add("test-on"); }
+        if (banner) banner.style.display = "block";
+        if (orient) orient.style.display = "none";
+        unselectAll();
+        clearOutline();
+        // reset character pose
+        characterGroup.position.set(0, 1.2, 0);
+        characterGroup.rotation.y = 0;
+        charVelY = 0;
+        charOnGround = true;
+        setStatus("TEST MODE — WASD move · Space jump · Esc stop");
+        arrowBubbleSpeak("<strong>Test Mode:</strong> WASD move your character, Space to jump. Parts with CanCollide ON will block you. Esc or Stop Test to exit.");
+    } else {
+        if (btn) { btn.textContent = "▶ Test Game"; btn.classList.remove("test-on"); }
+        if (banner) banner.style.display = "none";
+        if (orient) orient.style.display = "block";
+        characterGroup.position.set(0, 1.2, 0);
+        characterGroup.rotation.y = 0;
+        updateCameraFromOrbit();
+        setStatus("Studio mode");
+        arrowBubbleSpeak("Back to Studio. Drag parts, edit properties, then Test again.");
+    }
+    resizeRenderer();
+}
+
+/* ===== Games list / publish ===== */
 function getCreatorGames() {
     try { return JSON.parse(localStorage.getItem("azoraCreatorGames") || "[]"); }
     catch (e) { return []; }
@@ -781,16 +1183,11 @@ function renderGamesList() {
     }).join("");
 }
 function createNewGame() {
+    if (isTestMode) toggleTestMode();
     var name = prompt("Game name?", "My Azora Game");
     if (!name) return;
     var games = getCreatorGames();
-    var g = {
-        id: "game_" + Date.now(),
-        name: name,
-        visibility: "private",
-        createdAt: Date.now(),
-        parts: []
-    };
+    var g = { id: "game_" + Date.now(), name: name, visibility: "private", createdAt: Date.now(), parts: [] };
     games.unshift(g);
     saveCreatorGames(games);
     currentGameId = g.id;
@@ -823,7 +1220,10 @@ function saveProject() {
     var g = games.find(function (x) { return x.id === currentGameId; });
     if (!g) return;
     g.parts = partsList.map(function (p) {
-        return { id: p.id, size: p.size, pos: p.pos, color: p.color, material: p.material };
+        return {
+            id: p.id, size: p.size, pos: p.pos, color: p.color, material: p.material,
+            transparency: p.transparency, canTouch: p.canTouch, canCollide: p.canCollide
+        };
     });
     g.sky = JSON.parse(JSON.stringify(skySettings));
     g.baseplate = JSON.parse(JSON.stringify(baseplateProps));
@@ -884,8 +1284,27 @@ function bootStudio() {
     enforceComputerOnly();
     initMaterialsGrid();
     renderGamesList();
+    initOrientCube();
     var games = getCreatorGames();
     if (games[0]) currentGameId = games[0].id;
+
+    window.addEventListener("keydown", function (e) {
+        var k = (e.key || "").toLowerCase();
+        keys[k] = true;
+        if (k === " ") keys["space"] = true;
+        if (k === "escape" && isTestMode) toggleTestMode();
+        // prevent page scroll on space / arrows while in studio
+        if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].indexOf(k) >= 0) {
+            if (document.activeElement && document.activeElement.tagName === "INPUT") return;
+            if (document.activeElement && document.activeElement.tagName === "TEXTAREA") return;
+            e.preventDefault();
+        }
+    });
+    window.addEventListener("keyup", function (e) {
+        var k = (e.key || "").toLowerCase();
+        keys[k] = false;
+        if (k === " ") keys["space"] = false;
+    });
 
     function tryInit(attempt) {
         var ok = init3DScene();
@@ -897,6 +1316,7 @@ function bootStudio() {
         if (ok) {
             selectNode("workspace");
             resizeRenderer();
+            updateCameraFromOrbit();
         }
     }
     requestAnimationFrame(function () {
