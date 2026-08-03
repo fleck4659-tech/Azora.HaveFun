@@ -3100,6 +3100,21 @@ function onAvatarScaleInput() {
     applyAvatarScales(readAvatarScaleInputs());
 }
 
+function resetAvatarScales() {
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Log in to customize avatar sizes.");
+        return;
+    }
+    var defaults = { head: 1, torso: 1, arms: 1, legs: 1 };
+    setAvatarScaleInputs(defaults);
+    applyAvatarScales(defaults);
+    if (typeof showAzoraToast === "function") showAzoraToast("Limb sizes reset to default");
+    try {
+        if (typeof playClickSound === "function") playClickSound();
+    } catch (e) {}
+}
+window.resetAvatarScales = resetAvatarScales;
+
 function snapshotCurrentAvatarState() {
     var colors = readAvatarColorInputs();
     var scales = readAvatarScaleInputs();
@@ -3592,6 +3607,164 @@ function setAIAvatarProgress(on, pct, label) {
     if (text) text.textContent = label || "Designing…";
 }
 
+
+/** —— AI Avatar modal 3D preview (separate mini scene) —— */
+var _aiPrev = {
+    renderer: null,
+    scene: null,
+    camera: null,
+    group: null,
+    meshes: null,
+    raf: 0,
+    spinning: true
+};
+
+function disposeAIAvatarPreview() {
+    try {
+        if (_aiPrev.raf) cancelAnimationFrame(_aiPrev.raf);
+        _aiPrev.raf = 0;
+        var box = document.getElementById("aiAvatarPreviewCanvas");
+        if (box) {
+            while (box.firstChild) box.removeChild(box.firstChild);
+        }
+        if (_aiPrev.renderer) {
+            try { _aiPrev.renderer.dispose(); } catch (e) {}
+        }
+    } catch (e) {}
+    _aiPrev.renderer = null;
+    _aiPrev.scene = null;
+    _aiPrev.camera = null;
+    _aiPrev.group = null;
+    _aiPrev.meshes = null;
+}
+
+function ensureAIAvatarPreview() {
+    if (typeof THREE === "undefined") return false;
+    var box = document.getElementById("aiAvatarPreviewCanvas");
+    if (!box) return false;
+    if (_aiPrev.renderer && _aiPrev.scene && box.contains(_aiPrev.renderer.domElement)) {
+        return true;
+    }
+    disposeAIAvatarPreview();
+    var w = Math.max(box.clientWidth || 280, 160);
+    var h = Math.max(box.clientHeight || 200, 160);
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f172a);
+    var camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 50);
+    camera.position.set(0, 1.05, 4.2);
+    camera.lookAt(0, 0.55, 0);
+    var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(w, h, false);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    box.appendChild(renderer.domElement);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    var sun = new THREE.DirectionalLight(0xffffff, 0.7);
+    sun.position.set(3, 8, 5);
+    scene.add(sun);
+
+    function boxMesh(ww, hh, dd, hex) {
+        var m = new THREE.Mesh(
+            new THREE.BoxGeometry(ww, hh, dd),
+            new THREE.MeshLambertMaterial({ color: hex })
+        );
+        return m;
+    }
+    var group = new THREE.Group();
+    var head = boxMesh(0.65, 0.65, 0.65, 0xffcc00);
+    head.position.y = 1.12;
+    var torso = boxMesh(0.85, 1.0, 0.45, 0x1e60ff);
+    torso.position.y = 0.3;
+    var la = boxMesh(0.35, 1.0, 0.35, 0xffcc00);
+    la.position.set(-0.62, 0.3, 0);
+    var ra = boxMesh(0.35, 1.0, 0.35, 0xffcc00);
+    ra.position.set(0.62, 0.3, 0);
+    var ll = boxMesh(0.35, 1.0, 0.35, 0x00ebd4);
+    ll.position.set(-0.22, -0.7, 0);
+    var rl = boxMesh(0.35, 1.0, 0.35, 0x00ebd4);
+    rl.position.set(0.22, -0.7, 0);
+    group.add(head); group.add(torso); group.add(la); group.add(ra); group.add(ll); group.add(rl);
+    scene.add(group);
+
+    _aiPrev.renderer = renderer;
+    _aiPrev.scene = scene;
+    _aiPrev.camera = camera;
+    _aiPrev.group = group;
+    _aiPrev.meshes = { head: head, torso: torso, leftArm: la, rightArm: ra, leftLeg: ll, rightLeg: rl };
+    _aiPrev.spinning = true;
+
+    function tick() {
+        _aiPrev.raf = requestAnimationFrame(tick);
+        if (_aiPrev.group && _aiPrev.spinning) _aiPrev.group.rotation.y += 0.02;
+        if (_aiPrev.renderer && _aiPrev.scene && _aiPrev.camera) {
+            _aiPrev.renderer.render(_aiPrev.scene, _aiPrev.camera);
+        }
+    }
+    tick();
+    return true;
+}
+
+function paintAIPreviewState(state) {
+    if (!state) return false;
+    if (!ensureAIAvatarPreview()) return false;
+    var m = _aiPrev.meshes;
+    if (!m) return false;
+    var c = state.colors || {};
+    var s = state.scales || { head: 1, torso: 1, arms: 1, legs: 1 };
+    function col(hex, fallback) {
+        try {
+            return new THREE.Color(hex || fallback);
+        } catch (e) {
+            return new THREE.Color(fallback);
+        }
+    }
+    try {
+        m.head.material.color.copy(col(c.head, "#ffcc00"));
+        m.torso.material.color.copy(col(c.torso, "#1e60ff"));
+        m.leftArm.material.color.copy(col(c.leftArm, "#ffcc00"));
+        m.rightArm.material.color.copy(col(c.rightArm, "#ffcc00"));
+        m.leftLeg.material.color.copy(col(c.leftLeg, "#00ebd4"));
+        m.rightLeg.material.color.copy(col(c.rightLeg, "#00ebd4"));
+
+        var h = clampAvatarScale(s.head, 0.6, 1.6);
+        var t = clampAvatarScale(s.torso, 0.6, 1.5);
+        var a = clampAvatarScale(s.arms, 0.6, 1.6);
+        var l = clampAvatarScale(s.legs, 0.6, 1.6);
+
+        m.head.scale.set(h, h, h);
+        m.head.position.y = 0.3 + 0.5 * t + 0.32 * h + 0.18;
+        m.torso.scale.set(t, t, t * 0.98);
+        m.torso.position.y = 0.3;
+        var armX = 0.42 * t + 0.22 * a;
+        m.leftArm.scale.set(a, a, a);
+        m.rightArm.scale.set(a, a, a);
+        m.leftArm.position.set(-armX, 0.3, 0);
+        m.rightArm.position.set(armX, 0.3, 0);
+        var legX = 0.18 * t + 0.06;
+        m.leftLeg.scale.set(l, l, l);
+        m.rightLeg.scale.set(l, l, l);
+        m.leftLeg.position.set(-legX, -0.55 * l - 0.15, 0);
+        m.rightLeg.position.set(legX, -0.55 * l - 0.15, 0);
+
+        // Resize renderer if needed
+        var box = document.getElementById("aiAvatarPreviewCanvas");
+        if (box && _aiPrev.renderer && _aiPrev.camera) {
+            var w = Math.max(box.clientWidth || 280, 160);
+            var hh = Math.max(box.clientHeight || 200, 160);
+            _aiPrev.renderer.setSize(w, hh, false);
+            _aiPrev.camera.aspect = w / hh;
+            _aiPrev.camera.updateProjectionMatrix();
+        }
+        return true;
+    } catch (e) {
+        console.warn("[Azora] paintAIPreviewState", e);
+        return false;
+    }
+}
+
+window.paintAIPreviewState = paintAIPreviewState;
+window.ensureAIAvatarPreview = ensureAIAvatarPreview;
+window.disposeAIAvatarPreview = disposeAIAvatarPreview;
+
 function openAIAvatarGenerator() {
     if (localStorage.getItem("loggedIn") !== "true") {
         alert("Log in or create an account to use AI Avatar Generator.");
@@ -3616,6 +3789,7 @@ function closeAIAvatarGenerator() {
         _aiAvatarPending = null;
         _aiAvatarSnapshot = null;
     }
+    try { disposeAIAvatarPreview(); } catch (eD) {}
     var ov = document.getElementById("aiAvatarOverlay");
     if (ov) ov.style.display = "none";
     _aiAvatarBusy = false;
@@ -3670,18 +3844,35 @@ function startAIAvatarGenerate() {
         try {
             var result = generateAvatarFromDescription(mod.text);
             _aiAvatarPending = result;
-            // Live preview on the 3D avatar
-            applyAvatarStateObject({
+            var stateObj = {
                 colors: result.colors,
                 scales: result.scales,
                 gender: result.gender,
                 hair: result.hair
-            });
+            };
+            // Live preview on main customizer avatar
+            applyAvatarStateObject(stateObj);
+            // Force mesh paint + scales again (overlay used to hide this)
+            try {
+                if (typeof applyColorsToMeshes === "function") applyColorsToMeshes(result.colors);
+                if (typeof applyAvatarScales === "function") applyAvatarScales(result.scales);
+            } catch (eForce) {}
             setAIAvatarProgress(true, 100, "Done!");
-            showAIAvatarStatus("ok", "Preview ready — Apply to keep or Reject to undo.");
+            showAIAvatarStatus("ok", "3D preview ready — Apply to keep or Reject to undo.");
             var sum = document.getElementById("aiAvatarSummary");
             if (sum) sum.textContent = "Result: " + (result.summary || "custom avatar");
             if (resBox) resBox.style.display = "block";
+            // Dedicated spinning 3D preview inside the popup
+            try {
+                setTimeout(function () {
+                    paintAIPreviewState(stateObj);
+                }, 30);
+                setTimeout(function () {
+                    paintAIPreviewState(stateObj);
+                }, 120);
+            } catch (ePrev) {
+                console.warn("[Azora] preview", ePrev);
+            }
         } catch (e) {
             console.warn("[Azora] AI avatar gen", e);
             showAIAvatarStatus("rejected", "Something went wrong. Try another description.");
