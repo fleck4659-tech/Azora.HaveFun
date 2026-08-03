@@ -13,7 +13,7 @@
     <link rel="manifest" href="manifest-azora.json">
     <link rel="apple-touch-icon" href="logo.jpg">
     <link rel="icon" href="logo.jpg">
-    <link rel="stylesheet" href="style.css?v=59.2">
+    <link rel="stylesheet" href="style.css?v=60.0">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -413,7 +413,7 @@
         <p>Welcome to the official Azora website! This website is currently under construction. More features will be added soon!</p>
         <h3>Coming Soon</h3>
         <p>More website features are currently being developed.</p>
-        <p><strong>Temporary:</strong> Create a Game and AzaFn are paused while we finish <em>Norm Games</em> — including the official <strong>Azora Roleplay</strong> world you can Join below.</p>
+        <p><strong>Create a Game is back!</strong> Open Creator Studio to build and publish. AzaFn is still paused while we finish more Norm Games — including official <strong>Azora Roleplay</strong> below.</p>
     </div>
     <h2>About Azora</h2>
     <p>Azora is a community-focused platform where you can build games, customize avatars, make friends, and explore creations made by players around the world. We're committed to keeping Azora friendly, creative, and fun for everyone.</p>
@@ -514,7 +514,7 @@
             </div>
         </div>
         <button onclick="window.open('https://www.roblox.com/users/9744531169/profile','_blank')">Roblox Profile</button>
-        <button id="createGameBtn" class="azora-temp-disabled" type="button" aria-disabled="true" onclick="handleDisabledFeatureClick(event, this)">🛠️ Create a Game</button>
+        <button id="createGameBtn" type="button" onclick="handleCreateClick(event)">🛠️ Create a Game</button>
     </div>
 </div>
 
@@ -874,7 +874,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=59.7"></script>
+<script src="script.js?v=60.0"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {

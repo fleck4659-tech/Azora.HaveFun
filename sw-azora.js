@@ -1,5 +1,5 @@
 /* Azora main app service worker — v48.2 */
-var CACHE = "azora-app-v59-3-house-mtl";
+var CACHE = "azora-app-v60-0-creator";
 var ASSETS = [
   "./", "./index.html", "./checkout.html", "./style.css",
   "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./female_smile.png", "./cartoonish_smile.png", "./crying.png", "./greedy_smile.png", "./mysterious.png", "./red_mysterious.png", "./robotic.png", "./sad_tears.png", "./simple_smile.png", "./tears_of_joy.png", "./wide_mouth.png", "./female_hair.webp", "./Mossy.mp3",

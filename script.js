@@ -26,7 +26,7 @@ const database = {
 
 let currentSearchTab = "users";
 
-var AZORA_TEMP_DISABLE_CREATE = true;
+var AZORA_TEMP_DISABLE_CREATE = false;
 var AZORA_TEMP_DISABLE_MEMBERS = true; // Members / subscriptions off for now
 
 
@@ -12639,11 +12639,11 @@ function grantAllOfficialItemsToOwner() {
     var isOwner = false;
     try {
         if (typeof isAzoraOwner === "function" && isAzoraOwner()) isOwner = true;
-        if (!isOwner && typeof isOwnerUsername === "function") {
-            var acc = null;
-            try { acc = JSON.parse(localStorage.getItem("azoraAccount") || "null"); } catch (eA) {}
-            if (acc && isOwnerUsername(acc.username)) isOwner = true;
-        }
+        var acc = null;
+        try { acc = JSON.parse(localStorage.getItem("azoraAccount") || "null"); } catch (eA) {}
+        if (acc && String(acc.username || "").toLowerCase() === "azora") isOwner = true;
+        if (!isOwner && typeof isOwnerUsername === "function" && acc && isOwnerUsername(acc.username)) isOwner = true;
+        if (!isOwner && localStorage.getItem("loggedIn") === "true" && acc && acc.isOwner) isOwner = true;
     } catch (e) {}
     if (!isOwner) return;
     var inv = getInventory();
@@ -12845,6 +12845,12 @@ function getMarketCategory() {
     var el = document.getElementById("marketCategory");
     return (el && el.value) ? el.value : "hair";
 }
+
+function getInventoryCategory() {
+    var el = document.getElementById("inventoryCategory");
+    return (el && el.value) ? el.value : "hair";
+}
+window.getInventoryCategory = getInventoryCategory;
 
 
 /** —— User T-Shirts (free upload, priced by creator, 10% to Azora) —— */
@@ -13099,26 +13105,41 @@ function renderMarketplace() {
 function renderInventory() {
     var list = document.getElementById("inventoryList");
     if (!list) return;
-    // Keep owner inventory filled with every official item
-    try { if (typeof grantAllOfficialItemsToOwner === "function") grantAllOfficialItemsToOwner(); } catch (eG) {}
+    try {
+        if (typeof grantDefaultHairForGender === "function") grantDefaultHairForGender();
+        if (typeof grantAllOfficialItemsToOwner === "function") grantAllOfficialItemsToOwner();
+    } catch (eG) {}
     var inv = getInventory();
-    var category = getInventoryCategory();
+    if (!inv.equipped) inv.equipped = { hair: null, face: null, shirt: null };
+    var category = (typeof getInventoryCategory === "function") ? getInventoryCategory() : "hair";
     var equippedHair = inv.equipped.hair;
     var equippedFace = inv.equipped.face;
     var equippedShirt = inv.equipped.shirt;
     var html = "";
     var shown = 0;
 
-    // Build display id list: inventory items + (for owner) full official catalog
+    // Owner (or username Azora): show full official catalog always
     var displayIds = (inv.items || []).slice();
+    var treatAsOwner = false;
     try {
-        if (typeof isAzoraOwner === "function" && isAzoraOwner() && typeof getAllOfficialCatalogIds === "function") {
+        if (typeof isAzoraOwner === "function" && isAzoraOwner()) treatAsOwner = true;
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc && String(acc.username || "").toLowerCase() === "azora") treatAsOwner = true;
+    } catch (eO) {}
+    try {
+        if (treatAsOwner && typeof getAllOfficialCatalogIds === "function") {
             getAllOfficialCatalogIds().forEach(function (id) {
                 if (id && displayIds.indexOf(id) === -1) displayIds.push(id);
             });
+            // Also persist so bag stays filled next open
+            getAllOfficialCatalogIds().forEach(function (id) {
+                if (id && inv.items.indexOf(id) === -1) inv.items.push(id);
+            });
+            if (typeof saveInventory === "function") saveInventory(inv);
         }
     } catch (eD) {}
 
+    // If still empty for non-owner, at least show free defaults already granted
     displayIds.forEach(function (id) {
         var isFace = isFaceItemId(id);
         var isShirt = String(id).indexOf("shirt_") === 0;
