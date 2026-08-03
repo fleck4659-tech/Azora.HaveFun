@@ -377,6 +377,14 @@
             <div style="flex:1;"><label>Left Leg:</label><input type="color" id="colorLeftLeg" value="#00ebd4" oninput="updateAvatarColors()" onchange="updateAvatarColors()"></div>
             <div style="flex:1;"><label>Right Leg:</label><input type="color" id="colorRightLeg" value="#00ebd4" oninput="updateAvatarColors()" onchange="updateAvatarColors()"></div>
         </div>
+        <div class="avatar-scale-panel" id="avatarScalePanel">
+            <div class="avatar-scale-title">Limb &amp; head size</div>
+            <label class="avatar-scale-row">Head <input type="range" id="scaleHead" min="0.6" max="1.6" step="0.05" value="1" oninput="onAvatarScaleInput()"></label>
+            <label class="avatar-scale-row">Torso <input type="range" id="scaleTorso" min="0.6" max="1.5" step="0.05" value="1" oninput="onAvatarScaleInput()"></label>
+            <label class="avatar-scale-row">Arms <input type="range" id="scaleArms" min="0.6" max="1.6" step="0.05" value="1" oninput="onAvatarScaleInput()"></label>
+            <label class="avatar-scale-row">Legs <input type="range" id="scaleLegs" min="0.6" max="1.6" step="0.05" value="1" oninput="onAvatarScaleInput()"></label>
+        </div>
+        <button type="button" id="aiAvatarBtn" class="ai-avatar-btn" onclick="openAIAvatarGenerator()">✨ AI Generate Avatar</button>
         <button onclick="saveAvatar()" id="saveAvatarBtn">Save Avatar</button>
         <p id="guestAvatarLock" style="display:none;color:#ffcc00;font-size:12px;font-weight:bold;text-align:center;margin-top:8px;">
             🔒 Log in or create an account to customize your avatar.<br>
@@ -787,6 +795,39 @@
 
 
 <!-- Azora AI Image Generator (heavily moderated) -->
+
+<div id="aiAvatarOverlay" class="overlay" style="display:none;">
+    <div class="popup ai-avatar-popup" style="max-width:min(380px,calc(100vw - 20px));text-align:left;">
+        <h2 style="text-align:center;margin-top:0;">✨ AI Avatar Generator</h2>
+        <p class="ai-img-policy">Describe the avatar you want. Azora stays family-friendly — no violence, gore, or inappropriate requests.</p>
+        <label class="settings-label" for="aiAvatarPrompt">Describe your avatar</label>
+        <textarea id="aiAvatarPrompt" class="ai-image-prompt" maxlength="350" placeholder="Example: girl with a big head, pink torso, long teal legs, and tiny arms"></textarea>
+        <div class="ai-avatar-examples">
+            <button type="button" class="ai-avatar-ex" onclick="fillAIAvatarExample('cool blue hero with a large head')">Blue hero</button>
+            <button type="button" class="ai-avatar-ex" onclick="fillAIAvatarExample('girl with pink body, small head, long arms')">Pink girl</button>
+            <button type="button" class="ai-avatar-ex" onclick="fillAIAvatarExample('robot with gray skin, huge torso, short legs')">Robot</button>
+            <button type="button" class="ai-avatar-ex" onclick="fillAIAvatarExample('rainbow arms and legs with a yellow head')">Rainbow</button>
+        </div>
+        <div class="ai-img-status" id="aiAvatarStatus" style="display:none;"></div>
+        <div class="ai-img-progress-wrap" id="aiAvatarProgressWrap" style="display:none;">
+            <div class="ai-img-progress"><div class="ai-img-progress-fill" id="aiAvatarProgressFill"></div></div>
+            <span id="aiAvatarProgressText">Designing…</span>
+        </div>
+        <div id="aiAvatarResultBox" class="ai-avatar-result" style="display:none;">
+            <p id="aiAvatarSummary" class="ai-avatar-summary"></p>
+            <p class="ai-avatar-hint">Preview is on your 3D avatar. Choose Apply to keep it, or Reject to undo.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                <button type="button" id="aiAvatarApplyBtn" onclick="applyAIAvatarResult()" style="flex:1;background:linear-gradient(180deg,#34d399,#059669);color:#fff;">Apply</button>
+                <button type="button" id="aiAvatarRejectBtn" onclick="rejectAIAvatarResult()" style="flex:1;background:linear-gradient(180deg,#f87171,#dc2626);color:#fff;">Reject</button>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
+            <button type="button" id="aiAvatarGenerateBtn" onclick="startAIAvatarGenerate()" style="flex:1;background:linear-gradient(180deg,#c4b5fd,#7c3aed);color:#fff;">Generate</button>
+            <button type="button" onclick="closeAIAvatarGenerator()" style="flex:1;">Close</button>
+        </div>
+    </div>
+</div>
+
 <div id="aiImageOverlay" class="overlay" style="display:none;">
     <div class="popup ai-image-popup" style="max-width:min(360px,calc(100vw - 20px));text-align:left;">
         <h2 style="text-align:center;margin-top:0;">🎨 AI Image Generator</h2>
@@ -812,7 +853,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=59.2"></script>
+<script src="script.js?v=59.3"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {
@@ -913,7 +954,7 @@ if ("serviceWorker" in navigator) {
         <h2 style="text-align:center;margin:0 0 8px;">Upload T-Shirt</h2>
         <p style="text-align:center;margin:0 0 12px;opacity:0.85;font-size:0.85rem;">
             Free to upload. Image goes on the <strong>front of the torso</strong>.
-            You set the price — when someone buys it, you get <strong>90%</strong> and Azora gets <strong>10%</strong>.
+            You set the price. Sales from <strong>0.05–0.09</strong> are <strong>tax-free</strong> (you keep 100%). From <strong>0.10+</strong>, the split is <strong>90%</strong> to you and <strong>10%</strong> to Azora.
         </p>
         <label style="display:block;margin-bottom:8px;font-size:0.85rem;">Name
             <input id="tshirtNameInput" type="text" maxlength="40" placeholder="Cool Logo Tee" style="width:100%;margin-top:4px;">

@@ -3535,3 +3535,83 @@ html[data-azora-shell="app"] .download-azora-overlay {
     opacity: 0.8;
     padding: 16px 8px;
 }
+
+
+/* —— AI Avatar + limb scales —— */
+.avatar-scale-panel {
+    margin: 10px 0 8px;
+    padding: 10px;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.18);
+    border: 1px solid rgba(255,255,255,0.14);
+}
+.avatar-scale-title {
+    font-size: 0.78rem;
+    font-weight: 800;
+    margin-bottom: 6px;
+    opacity: 0.95;
+}
+.avatar-scale-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin: 4px 0;
+}
+.avatar-scale-row input[type="range"] {
+    flex: 1;
+    min-width: 0;
+    accent-color: #7c3aed;
+}
+.ai-avatar-btn {
+    width: 100%;
+    margin: 6px 0 8px 0 !important;
+    padding: 10px 12px !important;
+    border-radius: 12px !important;
+    border: none !important;
+    background: linear-gradient(135deg, #a78bfa, #1e60ff) !important;
+    color: #fff !important;
+    font-weight: 800 !important;
+    box-shadow: 0 4px 12px rgba(124,58,237,0.35);
+}
+.ai-avatar-btn:hover { filter: brightness(1.06); }
+.ai-avatar-popup { max-height: min(78vh, 560px); overflow-y: auto; }
+.ai-avatar-examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0 4px;
+}
+.ai-avatar-ex {
+    padding: 6px 10px !important;
+    margin: 0 !important;
+    font-size: 0.72rem !important;
+    border-radius: 999px !important;
+    background: rgba(124,58,237,0.18) !important;
+    border: 1px solid rgba(167,139,250,0.45) !important;
+    color: inherit !important;
+}
+.ai-avatar-result {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 12px;
+    background: rgba(16,185,129,0.12);
+    border: 1px solid rgba(52,211,153,0.35);
+}
+.ai-avatar-summary {
+    font-size: 0.82rem;
+    font-weight: 700;
+    margin: 0 0 6px;
+    line-height: 1.35;
+}
+.ai-avatar-hint {
+    font-size: 0.72rem;
+    opacity: 0.85;
+    margin: 0;
+    line-height: 1.35;
+}
+#aiAvatarOverlay .popup {
+    max-width: min(380px, calc(100vw - 20px));
+}

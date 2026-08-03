@@ -2684,14 +2684,21 @@ function applyGuestAvatarLock(locked) {
         saveBtn.style.display = locked ? "none" : "block";
         saveBtn.disabled = !!locked;
     }
-    ["colorHead","colorTorso","colorLeftArm","colorRightArm","colorLeftLeg","colorRightLeg"].forEach(function (id) {
+    ["colorHead","colorTorso","colorLeftArm","colorRightArm","colorLeftLeg","colorRightLeg",
+     "scaleHead","scaleTorso","scaleArms","scaleLegs"].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) {
             el.disabled = !!locked;
-            // Guests / logged-out: block interaction even if CSS fails
             el.style.pointerEvents = locked ? "none" : "";
         }
     });
+    var aiBtn = document.getElementById("aiAvatarBtn");
+    if (aiBtn) {
+        aiBtn.style.display = locked ? "none" : "block";
+        aiBtn.disabled = !!locked;
+    }
+    var scalePanel = document.getElementById("avatarScalePanel");
+    if (scalePanel) scalePanel.style.display = locked ? "none" : "block";
 }
 
 function isAvatarUnlocked() {
@@ -2883,6 +2890,8 @@ function saveAvatar() {
     if (!equippedHair) {
         equippedHair = (account.avatar && account.avatar.hairStyle) || (genderNow === "girl" ? "hair_girl_default" : "hair_boy_none");
     }
+    var scalesNow = { head: 1, torso: 1, arms: 1, legs: 1 };
+    try { if (typeof readAvatarScaleInputs === "function") scalesNow = readAvatarScaleInputs(); } catch (eSc) {}
     account.avatar = {
         head: validated.head,
         torso: validated.torso,
@@ -2893,7 +2902,8 @@ function saveAvatar() {
         hair: (account.avatar && account.avatar.hair) || (genderNow === "girl" ? "#4a3728" : "#3b2f2f"),
         hairStyle: equippedHair,
         gender: genderNow,
-        face: genderNow === "girl" ? "female" : "male"
+        face: genderNow === "girl" ? "female" : "male",
+        scales: scalesNow
     };
     // Keep inventory equipped in sync with saved avatar
     try {
@@ -2973,6 +2983,12 @@ function loadAvatarFromStorage() {
                     avatar.head, avatar.torso, avatar.leftArm, avatar.rightArm, avatar.leftLeg, avatar.rightLeg
                 );
                 applyColorsToMeshes(validated);
+                try {
+                    if (avatar.scales && typeof setAvatarScaleInputs === "function") {
+                        setAvatarScaleInputs(avatar.scales);
+                        if (typeof applyAvatarScales === "function") applyAvatarScales(avatar.scales);
+                    }
+                } catch (eScLoad) {}
             }
         }
     } catch (e) {
@@ -2984,6 +3000,511 @@ function loadAvatarFromStorage() {
         paintAvatarDefaults();
     }
 }
+
+
+/** —— Avatar limb / head scales —— */
+var AVATAR_SCALE_DEFAULTS = { head: 1, torso: 1, arms: 1, legs: 1 };
+var _aiAvatarSnapshot = null;
+var _aiAvatarPending = null;
+var _aiAvatarBusy = false;
+
+function clampAvatarScale(n, lo, hi) {
+    n = Number(n);
+    if (isNaN(n)) n = 1;
+    if (n < lo) n = lo;
+    if (n > hi) n = hi;
+    return Math.round(n * 100) / 100;
+}
+
+function readAvatarScaleInputs() {
+    function v(id, d) {
+        var el = document.getElementById(id);
+        if (!el) return d;
+        return clampAvatarScale(el.value, 0.6, 1.6);
+    }
+    return {
+        head: v("scaleHead", 1),
+        torso: clampAvatarScale((document.getElementById("scaleTorso") || {}).value || 1, 0.6, 1.5),
+        arms: v("scaleArms", 1),
+        legs: v("scaleLegs", 1)
+    };
+}
+
+function setAvatarScaleInputs(scales) {
+    scales = scales || AVATAR_SCALE_DEFAULTS;
+    var map = {
+        scaleHead: scales.head != null ? scales.head : 1,
+        scaleTorso: scales.torso != null ? scales.torso : 1,
+        scaleArms: scales.arms != null ? scales.arms : 1,
+        scaleLegs: scales.legs != null ? scales.legs : 1
+    };
+    Object.keys(map).forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.value = String(map[id]);
+    });
+}
+
+function applyAvatarScales(scales) {
+    if (typeof THREE === "undefined") return false;
+    if (!headMesh || !torsoMesh || !leftArmMesh || !rightArmMesh || !leftLegMesh || !rightLegMesh) return false;
+    scales = scales || readAvatarScaleInputs();
+    var h = clampAvatarScale(scales.head, 0.6, 1.6);
+    var t = clampAvatarScale(scales.torso, 0.6, 1.5);
+    var a = clampAvatarScale(scales.arms, 0.6, 1.6);
+    var l = clampAvatarScale(scales.legs, 0.6, 1.6);
+
+    try {
+        headMesh.scale.set(h, h, h);
+        // Keep head roughly stacked on torso
+        headMesh.position.y = 0.3 + 0.5 * t + 0.32 * h + 0.18;
+
+        if (faceGroup) {
+            faceGroup.scale.set(h, h, h);
+            faceGroup.position.y = headMesh.position.y;
+        }
+        // Hair follows head if present
+        try {
+            if (avatarCharacterGroup) {
+                avatarCharacterGroup.children.forEach(function (ch) {
+                    if (ch && ch.name === "avatarHair") {
+                        ch.scale.set(h, h, h);
+                        ch.position.y = headMesh.position.y - 1.12;
+                    }
+                });
+            }
+        } catch (eH) {}
+
+        torsoMesh.scale.set(t, t, t * 0.98);
+        torsoMesh.position.y = 0.3;
+
+        var armX = 0.42 * t + 0.22 * a;
+        leftArmMesh.scale.set(a, a, a);
+        rightArmMesh.scale.set(a, a, a);
+        leftArmMesh.position.set(-armX, 0.3, 0);
+        rightArmMesh.position.set(armX, 0.3, 0);
+
+        var legX = 0.18 * t + 0.06;
+        leftLegMesh.scale.set(l, l, l);
+        rightLegMesh.scale.set(l, l, l);
+        leftLegMesh.position.set(-legX, -0.55 * l - 0.15, 0);
+        rightLegMesh.position.set(legX, -0.55 * l - 0.15, 0);
+        return true;
+    } catch (e) {
+        console.warn("[Azora] applyAvatarScales", e);
+        return false;
+    }
+}
+
+function onAvatarScaleInput() {
+    if (localStorage.getItem("loggedIn") !== "true") return;
+    applyAvatarScales(readAvatarScaleInputs());
+}
+
+function snapshotCurrentAvatarState() {
+    var colors = readAvatarColorInputs();
+    var scales = readAvatarScaleInputs();
+    var gender = "boy";
+    try {
+        var gEl = document.querySelector('input[name="avatarGenderCustom"]:checked');
+        if (gEl) gender = gEl.value === "girl" ? "girl" : "boy";
+        else if (typeof getAvatarGender === "function") gender = getAvatarGender();
+    } catch (e) {}
+    var hair = "#3b2f2f";
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc && acc.avatar && acc.avatar.hair) hair = acc.avatar.hair;
+    } catch (e2) {}
+    return { colors: colors, scales: scales, gender: gender, hair: hair };
+}
+
+function applyAvatarStateObject(state, opts) {
+    opts = opts || {};
+    if (!state) return;
+    if (state.colors) setAvatarColorInputs(state.colors);
+    if (state.scales) setAvatarScaleInputs(state.scales);
+    if (state.gender) {
+        try {
+            var radios = document.querySelectorAll('input[name="avatarGenderCustom"]');
+            radios.forEach(function (r) {
+                r.checked = (r.value === state.gender);
+            });
+        } catch (e) {}
+    }
+    if (localStorage.getItem("loggedIn") === "true") {
+        try {
+            if (typeof updateAvatarColors === "function") updateAvatarColors();
+        } catch (e2) {}
+        try { applyAvatarScales(state.scales || readAvatarScaleInputs()); } catch (e3) {}
+        try {
+            if (typeof applyGenderVisualsToCustomizer === "function") {
+                var cols = state.colors || readAvatarColorInputs();
+                cols.hair = state.hair || cols.hair || "#3b2f2f";
+                applyGenderVisualsToCustomizer(state.gender || "boy", cols);
+            }
+        } catch (e4) {}
+    }
+}
+
+/** Family-safe check for avatar prompts */
+function moderateAIAvatarPrompt(raw) {
+    var t = String(raw || "").toLowerCase().replace(/\s+/g, " ").trim();
+    if (!t) return { ok: false, message: "Please describe the avatar you want." };
+    if (t.length < 3) return { ok: false, message: "Description is too short." };
+    var banned = [
+        "nude", "naked", "nsfw", "sex", "porn", "xxx", "gore", "blood", "kill", "murder",
+        "suicide", "hate", "racist", "terror", "weapon", "gun", "drug", "onlyfans"
+    ];
+    for (var i = 0; i < banned.length; i++) {
+        if (t.indexOf(banned[i]) !== -1) {
+            return {
+                ok: false,
+                message: "This prompt was rejected. Keep avatar ideas friendly and appropriate for Azora."
+            };
+        }
+    }
+    return { ok: true, text: t };
+}
+
+function colorFromName(word) {
+    var map = {
+        red: "#ef4444", crimson: "#dc2626", maroon: "#991b1b",
+        orange: "#f97316", amber: "#f59e0b", gold: "#eab308", yellow: "#facc15",
+        lime: "#84cc16", green: "#22c55e", emerald: "#10b981", teal: "#14b8a6", cyan: "#06b6d4",
+        sky: "#0ea5e9", blue: "#3b82f6", indigo: "#6366f1", purple: "#a855f7", violet: "#8b5cf6",
+        pink: "#ec4899", rose: "#f43f5e", magenta: "#d946ef",
+        white: "#f8fafc", gray: "#94a3b8", grey: "#94a3b8", silver: "#cbd5e1",
+        black: "#1e293b", brown: "#92400e", tan: "#d2b48c", beige: "#e7d3b3",
+        navy: "#1e3a8a", mint: "#6ee7b7", coral: "#fb7185", peach: "#fdba74",
+        turquoise: "#2dd4bf", lavender: "#c4b5fd", aqua: "#22d3ee"
+    };
+    return map[word] || null;
+}
+
+/**
+ * Local "AI" avatar designer — interprets natural language into colors, gender, and limb scales.
+ * Not a cloud model; designed so almost any friendly description maps to a unique look.
+ */
+function generateAvatarFromDescription(desc) {
+    var t = String(desc || "").toLowerCase();
+    var out = {
+        gender: "boy",
+        colors: {
+            head: "#ffcc00",
+            torso: "#1e60ff",
+            leftArm: "#ffcc00",
+            rightArm: "#ffcc00",
+            leftLeg: "#00ebd4",
+            rightLeg: "#00ebd4"
+        },
+        scales: { head: 1, torso: 1, arms: 1, legs: 1 },
+        hair: "#3b2f2f",
+        summaryParts: []
+    };
+
+    if (/\b(girl|female|woman|lady|she\/her)\b/.test(t)) {
+        out.gender = "girl";
+        out.hair = "#4a3728";
+        out.summaryParts.push("girl style");
+    } else if (/\b(boy|male|man|guy|he\/him)\b/.test(t)) {
+        out.gender = "boy";
+        out.summaryParts.push("boy style");
+    }
+
+    // Size keywords
+    function bump(key, val, label) {
+        out.scales[key] = clampAvatarScale(val, 0.6, key === "torso" ? 1.5 : 1.6);
+        out.summaryParts.push(label);
+    }
+    if (/\b(huge|giant|massive|big)\s+head\b|\bhead\s+(is\s+)?(huge|giant|big|large)\b|\blarge head\b|\bbig head\b/.test(t)) bump("head", 1.45, "big head");
+    else if (/\b(tiny|small|little|mini)\s+head\b|\bsmall head\b|\btiny head\b/.test(t)) bump("head", 0.7, "small head");
+    else if (/\b(normal|regular)\s+head\b/.test(t)) bump("head", 1, "normal head");
+
+    if (/\b(huge|giant|big|wide|bulky)\s+(torso|body|chest)\b|\bstrong body\b|\bbig body\b/.test(t)) bump("torso", 1.35, "big torso");
+    else if (/\b(tiny|small|slim|thin)\s+(torso|body|chest)\b|\bslim body\b/.test(t)) bump("torso", 0.75, "slim torso");
+
+    if (/\b(long|huge|giant|big|thick)\s+arms?\b|\barms?\s+(are\s+)?(long|huge|big)\b/.test(t)) bump("arms", 1.4, "long arms");
+    else if (/\b(short|tiny|small|thin)\s+arms?\b|\btiny arms\b/.test(t)) bump("arms", 0.7, "tiny arms");
+
+    if (/\b(long|huge|tall|big)\s+legs?\b|\blegs?\s+(are\s+)?(long|tall|huge)\b/.test(t)) bump("legs", 1.4, "long legs");
+    else if (/\b(short|tiny|small|stubby)\s+legs?\b|\btiny legs\b/.test(t)) bump("legs", 0.7, "short legs");
+
+    if (/\b(tall|towering)\b/.test(t)) {
+        out.scales.legs = clampAvatarScale(Math.max(out.scales.legs, 1.25), 0.6, 1.6);
+        out.scales.torso = clampAvatarScale(Math.max(out.scales.torso, 1.1), 0.6, 1.5);
+        out.summaryParts.push("tall build");
+    }
+    if (/\b(tiny|mini|small character|little avatar)\b/.test(t)) {
+        out.scales.head = clampAvatarScale(Math.min(out.scales.head, 0.85), 0.6, 1.6);
+        out.scales.torso = clampAvatarScale(Math.min(out.scales.torso, 0.8), 0.6, 1.5);
+        out.scales.arms = clampAvatarScale(Math.min(out.scales.arms, 0.85), 0.6, 1.6);
+        out.scales.legs = clampAvatarScale(Math.min(out.scales.legs, 0.85), 0.6, 1.6);
+        out.summaryParts.push("mini size");
+    }
+    if (/\b(robot|cyborg|mech)\b/.test(t)) {
+        out.colors.head = "#94a3b8";
+        out.colors.torso = "#64748b";
+        out.colors.leftArm = out.colors.rightArm = "#94a3b8";
+        out.colors.leftLeg = out.colors.rightLeg = "#475569";
+        out.scales.torso = Math.max(out.scales.torso, 1.15);
+        out.summaryParts.push("robot look");
+    }
+    if (/\b(ninja|shadow|dark hero)\b/.test(t)) {
+        out.colors.head = "#f5d0a9";
+        out.colors.torso = "#0f172a";
+        out.colors.leftArm = out.colors.rightArm = "#1e293b";
+        out.colors.leftLeg = out.colors.rightLeg = "#020617";
+        out.summaryParts.push("ninja colors");
+    }
+    if (/\b(hero|superhero)\b/.test(t)) {
+        out.colors.torso = "#dc2626";
+        out.colors.leftLeg = out.colors.rightLeg = "#1d4ed8";
+        out.summaryParts.push("hero colors");
+    }
+    if (/\brainbow\b/.test(t)) {
+        out.colors.head = "#facc15";
+        out.colors.torso = "#a855f7";
+        out.colors.leftArm = "#ef4444";
+        out.colors.rightArm = "#22c55e";
+        out.colors.leftLeg = "#3b82f6";
+        out.colors.rightLeg = "#f97316";
+        out.summaryParts.push("rainbow limbs");
+    }
+
+    // Generic color parsing: "pink torso", "blue head", "green arms", "teal legs"
+    var parts = [
+        { re: /\b([a-z]+)\s+(head|face|skin)\b/, slot: "head" },
+        { re: /\b([a-z]+)\s+(torso|body|shirt|chest)\b/, slot: "torso" },
+        { re: /\b([a-z]+)\s+arms?\b/, slot: "arms" },
+        { re: /\b([a-z]+)\s+legs?\b/, slot: "legs" }
+    ];
+    parts.forEach(function (p) {
+        var m = t.match(p.re);
+        if (!m) return;
+        var c = colorFromName(m[1]);
+        if (!c) return;
+        if (p.slot === "head") out.colors.head = c;
+        else if (p.slot === "torso") out.colors.torso = c;
+        else if (p.slot === "arms") { out.colors.leftArm = c; out.colors.rightArm = c; }
+        else if (p.slot === "legs") { out.colors.leftLeg = c; out.colors.rightLeg = c; }
+        out.summaryParts.push(m[1] + " " + p.slot);
+    });
+
+    // "all blue" / "entirely green"
+    var allM = t.match(/\b(?:all|entirely|full)\s+([a-z]+)\b/);
+    if (allM) {
+        var ac = colorFromName(allM[1]);
+        if (ac) {
+            out.colors.head = out.colors.torso = out.colors.leftArm = out.colors.rightArm = out.colors.leftLeg = out.colors.rightLeg = ac;
+            out.summaryParts.push("all " + allM[1]);
+        }
+    }
+
+    // Hair color
+    var hairM = t.match(/\b([a-z]+)\s+hair\b/);
+    if (hairM) {
+        var hc = colorFromName(hairM[1]);
+        if (hc) { out.hair = hc; out.summaryParts.push(hairM[1] + " hair"); }
+    }
+
+    // Light randomness so repeated prompts still vary a bit
+    var seed = 0;
+    for (var i = 0; i < t.length; i++) seed = (seed * 31 + t.charCodeAt(i)) | 0;
+    var jitter = function (base, amt) {
+        var j = ((Math.abs(seed) % 100) / 100 - 0.5) * amt;
+        seed = (seed * 17 + 13) | 0;
+        return clampAvatarScale(base + j, 0.6, 1.6);
+    };
+    if (!/\bhead\b/.test(t)) out.scales.head = jitter(out.scales.head, 0.08);
+    if (!/\barm\b/.test(t)) out.scales.arms = jitter(out.scales.arms, 0.08);
+    if (!/\bleg\b/.test(t)) out.scales.legs = jitter(out.scales.legs, 0.08);
+
+    // Unique summary
+    if (!out.summaryParts.length) out.summaryParts.push("custom blocky look");
+    out.summary = out.summaryParts.slice(0, 6).join(" · ");
+    return out;
+}
+
+function showAIAvatarStatus(kind, msg) {
+    var el = document.getElementById("aiAvatarStatus");
+    if (!el) return;
+    el.style.display = "block";
+    el.className = "ai-img-status " + (kind || "");
+    el.textContent = msg || "";
+}
+
+function setAIAvatarProgress(on, pct, label) {
+    var wrap = document.getElementById("aiAvatarProgressWrap");
+    var fill = document.getElementById("aiAvatarProgressFill");
+    var text = document.getElementById("aiAvatarProgressText");
+    if (wrap) wrap.style.display = on ? "block" : "none";
+    if (fill) fill.style.width = Math.max(0, Math.min(100, pct || 0)) + "%";
+    if (text) text.textContent = label || "Designing…";
+}
+
+function openAIAvatarGenerator() {
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Log in or create an account to use AI Avatar Generator.");
+        if (typeof openCreateAccount === "function") openCreateAccount();
+        return;
+    }
+    var ov = document.getElementById("aiAvatarOverlay");
+    if (!ov) return;
+    ov.style.display = "flex";
+    var res = document.getElementById("aiAvatarResultBox");
+    if (res) res.style.display = "none";
+    showAIAvatarStatus("", "");
+    var st = document.getElementById("aiAvatarStatus");
+    if (st) st.style.display = "none";
+    setAIAvatarProgress(false, 0);
+}
+
+function closeAIAvatarGenerator() {
+    // If preview pending and not applied, reject on close
+    if (_aiAvatarPending && _aiAvatarSnapshot) {
+        applyAvatarStateObject(_aiAvatarSnapshot);
+        _aiAvatarPending = null;
+        _aiAvatarSnapshot = null;
+    }
+    var ov = document.getElementById("aiAvatarOverlay");
+    if (ov) ov.style.display = "none";
+    _aiAvatarBusy = false;
+}
+
+function fillAIAvatarExample(text) {
+    var el = document.getElementById("aiAvatarPrompt");
+    if (el) el.value = text;
+}
+
+function startAIAvatarGenerate() {
+    if (_aiAvatarBusy) return;
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Log in to generate an avatar.");
+        return;
+    }
+    var promptEl = document.getElementById("aiAvatarPrompt");
+    var raw = promptEl ? promptEl.value : "";
+    var mod = moderateAIAvatarPrompt(raw);
+    if (!mod.ok) {
+        showAIAvatarStatus("rejected", mod.message);
+        setAIAvatarProgress(true, 100, "Rejected");
+        setTimeout(function () { setAIAvatarProgress(false, 0); }, 800);
+        return;
+    }
+
+    _aiAvatarBusy = true;
+    var btn = document.getElementById("aiAvatarGenerateBtn");
+    if (btn) btn.disabled = true;
+    var resBox = document.getElementById("aiAvatarResultBox");
+    if (resBox) resBox.style.display = "none";
+
+    // Snapshot current avatar so Reject can restore
+    _aiAvatarSnapshot = snapshotCurrentAvatarState();
+    _aiAvatarPending = null;
+
+    showAIAvatarStatus("", "");
+    var st = document.getElementById("aiAvatarStatus");
+    if (st) st.style.display = "none";
+    setAIAvatarProgress(true, 8, "Reading your idea…");
+
+    var start = Date.now();
+    var duration = 2800 + Math.floor(Math.random() * 1400); // ~3–4s feel
+    var timer = setInterval(function () {
+        var p = Math.min(95, ((Date.now() - start) / duration) * 100);
+        var label = p < 30 ? "Reading your idea…" : (p < 65 ? "Shaping limbs & colors…" : "Almost ready…");
+        setAIAvatarProgress(true, p, label);
+    }, 120);
+
+    setTimeout(function () {
+        clearInterval(timer);
+        try {
+            var result = generateAvatarFromDescription(mod.text);
+            _aiAvatarPending = result;
+            // Live preview on the 3D avatar
+            applyAvatarStateObject({
+                colors: result.colors,
+                scales: result.scales,
+                gender: result.gender,
+                hair: result.hair
+            });
+            setAIAvatarProgress(true, 100, "Done!");
+            showAIAvatarStatus("ok", "Preview ready — Apply to keep or Reject to undo.");
+            var sum = document.getElementById("aiAvatarSummary");
+            if (sum) sum.textContent = "Result: " + (result.summary || "custom avatar");
+            if (resBox) resBox.style.display = "block";
+        } catch (e) {
+            console.warn("[Azora] AI avatar gen", e);
+            showAIAvatarStatus("rejected", "Something went wrong. Try another description.");
+            if (_aiAvatarSnapshot) applyAvatarStateObject(_aiAvatarSnapshot);
+            _aiAvatarPending = null;
+            _aiAvatarSnapshot = null;
+        }
+        _aiAvatarBusy = false;
+        if (btn) btn.disabled = false;
+        setTimeout(function () { setAIAvatarProgress(false, 0); }, 600);
+    }, duration);
+}
+
+function applyAIAvatarResult() {
+    if (!_aiAvatarPending) {
+        showAIAvatarStatus("rejected", "Generate an avatar first.");
+        return;
+    }
+    // Keep current preview; clear snapshot so close won't revert
+    var kept = _aiAvatarPending;
+    _aiAvatarSnapshot = null;
+    _aiAvatarPending = null;
+    applyAvatarStateObject({
+        colors: kept.colors,
+        scales: kept.scales,
+        gender: kept.gender,
+        hair: kept.hair
+    });
+    // Persist hair color onto account avatar shell (save still required)
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc) {
+            acc.avatar = acc.avatar || {};
+            acc.avatar.hair = kept.hair || acc.avatar.hair;
+            acc.avatar.scales = kept.scales;
+            acc.avatar.head = kept.colors.head;
+            acc.avatar.torso = kept.colors.torso;
+            acc.avatar.leftArm = kept.colors.leftArm;
+            acc.avatar.rightArm = kept.colors.rightArm;
+            acc.avatar.leftLeg = kept.colors.leftLeg;
+            acc.avatar.rightLeg = kept.colors.rightLeg;
+            acc.avatar.gender = kept.gender;
+            acc.gender = kept.gender;
+            localStorage.setItem("azoraAccount", JSON.stringify(acc));
+        }
+    } catch (e) {}
+    showAIAvatarStatus("ok", "Applied! Press Save Avatar to keep it forever.");
+    var resBox = document.getElementById("aiAvatarResultBox");
+    if (resBox) resBox.style.display = "none";
+    if (typeof showAzoraToast === "function") showAzoraToast("AI avatar applied — Save Avatar to lock it in!");
+}
+
+function rejectAIAvatarResult() {
+    if (_aiAvatarSnapshot) {
+        applyAvatarStateObject(_aiAvatarSnapshot);
+    }
+    _aiAvatarPending = null;
+    _aiAvatarSnapshot = null;
+    showAIAvatarStatus("ok", "Rejected — your previous avatar is back.");
+    var resBox = document.getElementById("aiAvatarResultBox");
+    if (resBox) resBox.style.display = "none";
+    if (typeof showAzoraToast === "function") showAzoraToast("AI avatar rejected");
+}
+
+window.onAvatarScaleInput = onAvatarScaleInput;
+window.applyAvatarScales = applyAvatarScales;
+window.openAIAvatarGenerator = openAIAvatarGenerator;
+window.closeAIAvatarGenerator = closeAIAvatarGenerator;
+window.startAIAvatarGenerate = startAIAvatarGenerate;
+window.applyAIAvatarResult = applyAIAvatarResult;
+window.rejectAIAvatarResult = rejectAIAvatarResult;
+window.fillAIAvatarExample = fillAIAvatarExample;
+window.generateAvatarFromDescription = generateAvatarFromDescription;
+
 
 function wireAvatarColorInputs() {
     ["colorHead","colorTorso","colorLeftArm","colorRightArm","colorLeftLeg","colorRightLeg"].forEach(function (id) {
@@ -10794,8 +11315,101 @@ function formatCoins(n) {
 
 
 /** —— Azora economy: per-account coins, platform cut, pending sales —— */
-var AZORA_PLATFORM_FEE = 0.10; // 10% to official Azora, 90% to seller
+var AZORA_PLATFORM_FEE = 0.10; // 10% to official Azora, 90% to seller (only at 0.10+)
+var AZORA_TAX_FREE_MAX = 0.09; // 0.05–0.09 (and below 0.10) are tax-free
+var AZORA_SPLIT_MIN = 0.10;    // 90/10 split activates at exactly 0.10 AzoraCoins
 var AZORA_OWNER_STARTING_COINS = 2642.62;
+/** Official global launch date for platform-age airdrops (UTC). */
+var AZORA_PLATFORM_LAUNCH_MS = Date.UTC(2026, 1, 1); // Feb 1, 2026
+var AZORA_AIRDROP_EVERY_MONTHS = 5;
+var AZORA_AIRDROP_AMOUNT = 0.50;
+
+/**
+ * Sale split rules:
+ * - price < 0.10  → tax-free (creator 100%, platform 0)
+ * - price >= 0.10 → 90% creator, 10% Azora
+ * Example: 0.10 sale → seller 0.09, Azora 0.01
+ */
+function computeSaleSplit(price) {
+    price = Math.round((Number(price) || 0) * 1000) / 1000;
+    if (price <= 0) return { price: 0, fee: 0, seller: 0, taxFree: true };
+    if (price < AZORA_SPLIT_MIN) {
+        return { price: price, fee: 0, seller: price, taxFree: true };
+    }
+    var fee = Math.round(price * AZORA_PLATFORM_FEE * 1000) / 1000;
+    // Keep fee readable at 2–3 decimals; never zero once split is active
+    if (fee < 0.01) fee = 0.01;
+    if (fee > price) fee = price;
+    var seller = Math.round((price - fee) * 1000) / 1000;
+    return { price: price, fee: fee, seller: seller, taxFree: false };
+}
+
+function describeSaleSplit(price) {
+    var s = computeSaleSplit(price);
+    if (s.taxFree) return "Tax-free sale — creator keeps 100%";
+    return "90/10 split — creator " + (typeof formatCoins === "function" ? formatCoins(s.seller) : s.seller) +
+        " · Azora " + (typeof formatCoins === "function" ? formatCoins(s.fee) : s.fee);
+}
+
+/** Whole months since official platform launch. */
+function getPlatformAgeMonths() {
+    try {
+        var launch = new Date(AZORA_PLATFORM_LAUNCH_MS);
+        var now = new Date();
+        var months = (now.getUTCFullYear() - launch.getUTCFullYear()) * 12 +
+            (now.getUTCMonth() - launch.getUTCMonth());
+        if (now.getUTCDate() < launch.getUTCDate()) months -= 1;
+        return Math.max(0, months);
+    } catch (e) { return 0; }
+}
+
+/** How many 5-month airdrop milestones have fully elapsed. */
+function getAirdropMilestoneCount() {
+    return Math.floor(getPlatformAgeMonths() / AZORA_AIRDROP_EVERY_MONTHS);
+}
+
+function getAirdropsClaimedCount() {
+    try {
+        var n = parseInt(localStorage.getItem("azoraAirdropsClaimed") || "0", 10);
+        return isNaN(n) ? 0 : Math.max(0, n);
+    } catch (e) { return 0; }
+}
+
+function setAirdropsClaimedCount(n) {
+    try { localStorage.setItem("azoraAirdropsClaimed", String(Math.max(0, n | 0))); } catch (e) {}
+}
+
+/**
+ * Global platform airdrop: every 5 months of platform age,
+ * every player receives +0.50 AzoraCoins (auto on load/login).
+ */
+function checkPlatformAirdrop() {
+    try {
+        var logged = localStorage.getItem("loggedIn");
+        if (logged !== "true" && logged !== "guest") return;
+        var due = getAirdropMilestoneCount();
+        var claimed = getAirdropsClaimedCount();
+        if (due <= claimed) return;
+        var missed = due - claimed;
+        var total = Math.round(missed * AZORA_AIRDROP_AMOUNT * 1000) / 1000;
+        if (total > 0 && typeof addCoins === "function") {
+            addCoins(total);
+            var msg = missed === 1
+                ? ("+0.50 AzoraCoins platform airdrop! 🎉 (" + due + "× 5-month milestone)")
+                : ("+" + (typeof formatCoins === "function" ? formatCoins(total) : total) +
+                    " AzoraCoins from " + missed + " platform airdrops! 🎉");
+            if (typeof showAzoraToast === "function") showAzoraToast(msg);
+        }
+        setAirdropsClaimedCount(due);
+    } catch (e) {
+        console.warn("[Azora] airdrop", e);
+    }
+}
+
+window.computeSaleSplit = computeSaleSplit;
+window.describeSaleSplit = describeSaleSplit;
+window.checkPlatformAirdrop = checkPlatformAirdrop;
+window.getPlatformAgeMonths = getPlatformAgeMonths;
 
 function getActiveAccount() {
     try {
@@ -10898,7 +11512,7 @@ function recordSale(opts) {
             id: "sale_" + ts + "_p",
             toUser: AZORA_OWNER_NAME,
             fromUser: buyer,
-            itemName: itemName + " (10% platform fee)",
+            itemName: itemName + " (platform fee)",
             amount: Math.round(opts.amountToPlatform * 1000) / 1000,
             fee: true,
             collected: false,
@@ -11080,6 +11694,10 @@ function checkDailyLoginReward() {
         // Membership yield can still auto-check
         if (typeof claimMembershipMonthlyYield === "function") {
             try { claimMembershipMonthlyYield(); } catch (e2) {}
+        }
+        // Global 5-month platform airdrops
+        if (typeof checkPlatformAirdrop === "function") {
+            try { checkPlatformAirdrop(); } catch (e3) {}
         }
         refreshFunTopbar();
     } catch (e) {
@@ -11352,23 +11970,28 @@ function buyMarketplaceItem(itemId) {
         if (a && a.username) buyerName = a.isGuest ? ("Guest " + (a.userId || "")) : a.username;
     } catch (e) {}
 
+    var splitNote = "";
     if (isShirt) {
-        // 90% seller pending, 10% Azora pending
-        var fee = Math.round(price * AZORA_PLATFORM_FEE * 1000) / 1000;
-        var sellerCut = Math.round((price - fee) * 1000) / 1000;
+        // Tax-free under 0.10; 90/10 starting at 0.10
+        var split = computeSaleSplit(price);
         recordSale({
             sellerName: item.creator || "Creator",
             buyerName: buyerName,
             itemName: item.name || "T-Shirt",
-            amountToSeller: sellerCut,
-            amountToPlatform: fee
+            amountToSeller: split.seller,
+            amountToPlatform: split.fee
         });
+        if (price > 0) {
+            splitNote = split.taxFree
+                ? " (tax-free for creator)"
+                : (" (creator +" + formatCoins(split.seller) + ", Azora +" + formatCoins(split.fee) + ")");
+        }
     } else if (price > 0) {
         // Official catalog By Azora → 100% to Azora pending
         creditOfficialCatalogSale(price, buyerName, item.name || itemId);
     }
 
-    showAzoraToast("Bought " + (item.name || "item") + "! Check Inventory to equip.");
+    showAzoraToast("Bought " + (item.name || "item") + "!" + splitNote + " Check Inventory to equip.");
     renderMarketplace();
     renderInventory();
     try { renderCoinsDropdown(); } catch (e3) {}
@@ -11565,7 +12188,7 @@ function submitCreateTShirt() {
     if (inv.items.indexOf(id) === -1) inv.items.push(id);
     saveInventory(inv);
     closeCreateTShirt();
-    showAzoraToast("T-Shirt uploaded! It is free to list — buyers pay your price (Azora takes 10%).");
+    showAzoraToast("T-Shirt uploaded! Free to list. Sales under 0.10 are tax-free; 0.10+ use a 90/10 split.");
     try {
         var cat = document.getElementById("marketCategory");
         if (cat) cat.value = "shirts";
@@ -11657,7 +12280,7 @@ function renderMarketplace() {
             html += '<div class="market-face-info">';
             html += '<div class="market-card-title">' + (item.name || "T-Shirt") + '</div>';
             html += '<div class="market-card-meta">T-Shirts · <span class="by-creator">By ' + by + '</span></div>';
-            html += '<div class="market-card-desc">Front of torso · Azora takes 10% of sales</div>';
+            html += '<div class="market-card-desc">Front of torso · Under 0.10 tax-free · 0.10+ is 90/10</div>';
             html += '</div></div>';
             html += '<div class="market-card-footer"><span class="market-price">' + priceLabel + '</span>';
             if (owned) html += ownedBtn();
