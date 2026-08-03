@@ -13,7 +13,7 @@
     <link rel="manifest" href="manifest-azora.json">
     <link rel="apple-touch-icon" href="logo.jpg">
     <link rel="icon" href="logo.jpg">
-    <link rel="stylesheet" href="style.css?v=59.0">
+    <link rel="stylesheet" href="style.css?v=59.2">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -275,11 +275,14 @@
     We apologize for the inconvenience and appreciate your patience.
 </div>
 
+<div class="topbar-shell">
 <div class="topbar">
-    <a href="https://www.youtube.com/@Official_Azora" target="_blank">
-        <img src="logo.jpg" alt="Azora Logo" class="logo">
-    </a>
-    <h2>Azora</h2>
+    <div class="topbar-left">
+        <a href="https://www.youtube.com/@Official_Azora" target="_blank" class="topbar-logo-link">
+            <img src="logo.jpg" alt="Azora Logo" class="logo">
+        </a>
+        <h2 class="topbar-title">Azora</h2>
+    </div>
     <div class="topbar-right">
         <span id="azoraPlayModeBadge" class="azora-play-mode-badge online" title="Connection status">Play Azora Online</span>
         <div class="currency-display coins-menu-wrap" id="coinsMenuWrap">
@@ -297,25 +300,46 @@
         <button type="button" id="marketplaceBtn" class="topbar-shop-btn" onclick="openMarketplace()" title="Marketplace">🛒 Shop</button>
         <button type="button" id="inventoryBtn" class="topbar-shop-btn" onclick="openInventory()" title="Inventory">🎒 Bag</button>
         <button type="button" id="membershipBtn" class="topbar-shop-btn azora-temp-disabled" onclick="openMembership()" title="Members (disabled for now)" aria-disabled="true">Members</button>
+        <button id="publicFeedButton" class="topbar-feed-btn" onclick="openPublicFeed()">🎮 Feed</button>
+        <button type="button" id="installAppBtn" class="install-app-btn" onclick="installAzoraApp()" title="Download Azora app">⬇️ Download Azora</button>
+        <div id="guestButtons" class="topbar-guest-btns">
+            <button type="button" onclick="openCreateAccount()">Create Account</button>
+            <button type="button" onclick="openLogin()">Log In</button>
+            <button type="button" id="topbarGuestBtn" onclick="continueAsGuest()">Continue as Guest</button>
+        </div>
     </div>
-    <button id="publicFeedButton" onclick="openPublicFeed()" style="margin:0;">🎮 Feed</button>
-    <button type="button" id="installAppBtn" class="install-app-btn" onclick="installAzoraApp()" title="Download Azora app">⬇️ Download Azora</button>
-    <div id="guestButtons" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <button onclick="openCreateAccount()" style="margin:0;">Create Account</button>
-        <button onclick="openLogin()" style="margin:0;">Log In</button>
-        <button type="button" id="topbarGuestBtn" onclick="continueAsGuest()" style="margin:0;background:linear-gradient(180deg,#64748b,#475569);color:#fff;border:2px solid #94a3b8;">Continue as Guest</button>
+</div>
+<div id="userPanel" class="topbar-menu" style="display:none;">
+    <div class="topbar-fun-left" id="topbarFunLeft">
+        <button type="button" id="dailyGiftBtn" class="fun-chip fun-chip-gift" onclick="claimDailyGift()" title="Claim your daily gift">
+            <span class="fun-chip-ico">🎁</span>
+            <span class="fun-chip-text"><strong id="dailyGiftLabel">Daily Gift</strong><small id="dailyGiftSub">Tap to claim</small></span>
+        </button>
+        <button type="button" id="surpriseGameBtn" class="fun-chip fun-chip-play" onclick="surpriseNormGame()" title="Join a random Norm Game">
+            <span class="fun-chip-ico">🎲</span>
+            <span class="fun-chip-text"><strong>Surprise Me</strong><small>Random game</small></span>
+        </button>
+        <div class="fun-chip fun-chip-streak" id="streakChip" title="Login streak">
+            <span class="fun-chip-ico">🔥</span>
+            <span class="fun-chip-text"><strong>Streak</strong><small><span id="streakCount">0</span> days</small></span>
+        </div>
+        <div class="fun-tip" id="funTipChip" title="Tip of the moment">
+            <span class="fun-tip-ico">💡</span>
+            <span class="fun-tip-text" id="funTipText">Explore Norm Games and meet new friends!</span>
+        </div>
     </div>
-    <div id="userPanel" style="display:none;">
-        <button id="searchButton" onclick="openSearch()">🔍 Search</button>
+    <div class="topbar-fun-right" id="topbarFunRight">
+        <button id="searchButton" type="button" onclick="openSearch()">🔍 Search</button>
         <button id="azafnButton" class="azora-temp-disabled" type="button" aria-disabled="true" onclick="handleDisabledFeatureClick(event, this)">🤖 AzaFn</button>
-        <button id="aiImageButton" type="button" onclick="openAIImageGenerator()" style="margin:0;">🎨 AI Images</button>
-        <button id="chatButton" onclick="openChatPanel()">💬 Chat</button>
-        <button id="notifButton" class="notif-bell-btn" onclick="toggleNotifPanel()">
+        <button id="aiImageButton" type="button" onclick="openAIImageGenerator()">🎨 AI Images</button>
+        <button id="chatButton" type="button" onclick="openChatPanel()">💬 Chat</button>
+        <button id="notifButton" class="notif-bell-btn" type="button" onclick="toggleNotifPanel()">
             🔔<span id="notifBadge" class="notif-badge" style="display:none;">0</span>
         </button>
-        <button id="profileButton" onclick="openMyProfile()">👤 Username</button>
-        <button id="settingsButton" onclick="openSettings()">⚙️ Settings</button>
+        <button id="profileButton" type="button" onclick="openMyProfile()">👤 Username</button>
+        <button id="settingsButton" type="button" onclick="openSettings()">⚙️ Settings</button>
     </div>
+</div>
 </div>
 
 <div class="community-banner">
@@ -450,6 +474,15 @@
                     <span class="norm-game-meta">3D · Multiplayer · Expand · Moneys $</span>
                 </div>
                 <button type="button" class="norm-join-btn" onclick="joinNormGame('planet-empire')">Join</button>
+            </article>
+            <article class="norm-game-card" data-game-id="azora-house">
+                <div class="norm-game-icon">🏠</div>
+                <div class="norm-game-info">
+                    <h4>Azora House</h4>
+                    <p><span class="by-creator">By Azora</span>. Explore a detailed house. Walk the yard and hang out with friends.</p>
+                    <span class="norm-game-meta">3D · House · Multiplayer · Chat</span>
+                </div>
+                <button type="button" class="norm-join-btn" onclick="joinNormGame('azora-house')">Join</button>
             </article>
         </div>
         <h3 class="azora-games-sub">Quick Games</h3>
@@ -779,7 +812,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=59.0"></script>
+<script src="script.js?v=59.2"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {

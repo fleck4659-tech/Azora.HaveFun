@@ -1,9 +1,11 @@
-/* Azora main app service worker — v48.1 */
-var CACHE = "azora-app-v59-0-economy";
+/* Azora main app service worker — v48.2 */
+var CACHE = "azora-app-v59-3-house-mtl";
 var ASSETS = [
   "./", "./index.html", "./checkout.html", "./style.css",
   "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./female_smile.png", "./cartoonish_smile.png", "./crying.png", "./greedy_smile.png", "./mysterious.png", "./red_mysterious.png", "./robotic.png", "./sad_tears.png", "./simple_smile.png", "./tears_of_joy.png", "./wide_mouth.png", "./female_hair.webp", "./Mossy.mp3",
-  "./grass.jpg", "./road.jpg", "./concrete.jpg", "./wood1.jpg", "./wood2.jpg", "./wood3.jpg", "./leaf.jpg", "./skybox.jpg", "./marble.png", "./walking.mp3", "./jumping.mp3", "./character_reset.mp3", "./notifcation.mp3", "./click_buttons.mp3"
+  "./grass.jpg", "./road.jpg", "./concrete.jpg", "./wood1.jpg", "./wood2.jpg", "./wood3.jpg", "./leaf.jpg", "./skybox.jpg", "./marble.png",
+  "./House.obj", "./House.mtl",
+  "./walking.mp3", "./jumping.mp3", "./character_reset.mp3", "./notifcation.mp3", "./click_buttons.mp3"
 ];
 self.addEventListener("install", function (e) {
   e.waitUntil(

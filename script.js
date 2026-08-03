@@ -1,4 +1,4 @@
-console.log("%c[Azora] script.js v59.0 Economy TShirts","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v59.2 House + topbar","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -1180,6 +1180,7 @@ function ensureGuestButtonsVisible() {
     if (loggedIn === "true" || loggedIn === "guest") {
         if (gb) gb.style.setProperty("display", "none", "important");
         if (up) up.style.setProperty("display", "flex", "important");
+        try { if (typeof refreshFunTopbar === "function") refreshFunTopbar(); } catch (eF) {}
     } else {
         // Logged out → ALWAYS show Create Account, Log In, Continue as Guest
         if (gb) gb.style.setProperty("display", "flex", "important");
@@ -7326,6 +7327,15 @@ var NORM_GAMES = {
         world: "empire",
         avatarMode: "human",
         roomPath: "/azoraNormRooms/planet-empire/players"
+    },
+    "azora-house": {
+        id: "azora-house",
+        title: "Azora House",
+        owner: "Azora",
+        dimensions: "3D",
+        world: "house",
+        avatarMode: "human",
+        roomPath: "/azoraNormRooms/azora-house/players"
     }
 };
 
@@ -7799,6 +7809,8 @@ function joinNormGame(gameId) {
         id: def.id,
         title: def.title,
         roomPath: def.roomPath,
+        world: def.world || "city",
+        avatarMode: def.avatarMode || "human",
         startedAt: Date.now()
     };
     // Planet Empire HUD / expand control
@@ -8617,6 +8629,332 @@ function buildNormCity(scene, tex) {
 }
 
 /** Alternate Norm Game worlds (park, parkour, cafe, islands) */
+
+/** Minimal OBJ loader — centers model, floor at y=0 */
+function loadAzoraObjModel(url, onDone, onError) {
+    // Multi-material OBJ + optional MTL loader (solid Kd colors; texture maps optional)
+    function parseMtl(text) {
+        var mats = {};
+        var cur = null;
+        var lines = String(text || "").split(/\r?\n/);
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+            if (!line || line.charAt(0) === "#") continue;
+            var sp = line.split(/\s+/);
+            var tag = sp[0].toLowerCase();
+            if (tag === "newmtl" && sp[1]) {
+                cur = sp[1];
+                mats[cur] = { color: 0xc4b49a, opacity: 1 };
+            } else if (cur && (tag === "kd" || tag === "ka") && sp.length >= 4) {
+                var r = Math.max(0, Math.min(1, parseFloat(sp[1])));
+                var g = Math.max(0, Math.min(1, parseFloat(sp[2])));
+                var b = Math.max(0, Math.min(1, parseFloat(sp[3])));
+                // Prefer Kd (diffuse); Ka is fine as fallback if Kd missing
+                if (tag === "kd" || mats[cur].color === 0xc4b49a) {
+                    mats[cur].color = (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
+                }
+            } else if (cur && tag === "d" && sp[1]) {
+                var op = parseFloat(sp[1]);
+                if (!isNaN(op)) mats[cur].opacity = op;
+            }
+        }
+        return mats;
+    }
+
+    function parseObjMulti(text, matTable) {
+        var positions = [], normals = [], uvs = [];
+        // groups keyed by material name
+        var groups = {};
+        var currentMtl = "_default";
+        function ensureGroup(name) {
+            if (!groups[name]) {
+                groups[name] = { pos: [], norm: [], uv: [] };
+            }
+            return groups[name];
+        }
+        function addFaceVertex(token, g) {
+            var parts = token.split("/");
+            var vi = parseInt(parts[0], 10);
+            var ti = parts.length > 1 && parts[1] !== "" ? parseInt(parts[1], 10) : 0;
+            var ni = parts.length > 2 && parts[2] !== "" ? parseInt(parts[2], 10) : 0;
+            if (vi < 0) vi = positions.length + vi + 1;
+            if (ti < 0) ti = uvs.length + ti + 1;
+            if (ni < 0) ni = normals.length + ni + 1;
+            var p = positions[vi - 1];
+            if (!p) return;
+            g.pos.push(p[0], p[1], p[2]);
+            if (ni && normals[ni - 1]) {
+                var n = normals[ni - 1];
+                g.norm.push(n[0], n[1], n[2]);
+            } else g.norm.push(0, 1, 0);
+            if (ti && uvs[ti - 1]) {
+                var t = uvs[ti - 1];
+                g.uv.push(t[0], t[1]);
+            } else g.uv.push(0, 0);
+        }
+        var lines = String(text || "").split(/\r?\n/);
+        var mtllibName = null;
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+            if (!line || line.charAt(0) === "#") continue;
+            var sp = line.split(/\s+/);
+            var tag = sp[0];
+            if (tag === "mtllib" && sp[1]) {
+                mtllibName = sp[1];
+            } else if (tag === "usemtl" && sp[1]) {
+                currentMtl = sp[1];
+            } else if (tag === "v" && sp.length >= 4) {
+                positions.push([parseFloat(sp[1]), parseFloat(sp[2]), parseFloat(sp[3])]);
+            } else if (tag === "vn" && sp.length >= 4) {
+                normals.push([parseFloat(sp[1]), parseFloat(sp[2]), parseFloat(sp[3])]);
+            } else if (tag === "vt" && sp.length >= 3) {
+                uvs.push([parseFloat(sp[1]), parseFloat(sp[2])]);
+            } else if (tag === "f" && sp.length >= 4) {
+                var g = ensureGroup(currentMtl);
+                for (var k = 1; k + 2 < sp.length; k++) {
+                    addFaceVertex(sp[1], g);
+                    addFaceVertex(sp[k + 1], g);
+                    addFaceVertex(sp[k + 2], g);
+                }
+            }
+        }
+        return { groups: groups, mtllibName: mtllibName };
+    }
+
+    function buildGroup(parsed, matTable) {
+        var root = new THREE.Group();
+        root.name = "azoraHouse";
+        var allMin = [Infinity, Infinity, Infinity];
+        var allMax = [-Infinity, -Infinity, -Infinity];
+        var meshes = [];
+        var keys = Object.keys(parsed.groups);
+        if (!keys.length) return null;
+
+        for (var i = 0; i < keys.length; i++) {
+            var key = keys[i];
+            var g = parsed.groups[key];
+            if (!g.pos.length) continue;
+            var geo = new THREE.BufferGeometry();
+            geo.setAttribute("position", new THREE.Float32BufferAttribute(g.pos, 3));
+            if (g.norm.length === g.pos.length) {
+                geo.setAttribute("normal", new THREE.Float32BufferAttribute(g.norm, 3));
+            } else geo.computeVertexNormals();
+            if (g.uv.length === (g.pos.length / 3) * 2) {
+                geo.setAttribute("uv", new THREE.Float32BufferAttribute(g.uv, 2));
+            }
+            geo.computeBoundingBox();
+            var bb = geo.boundingBox;
+            if (bb) {
+                allMin[0] = Math.min(allMin[0], bb.min.x);
+                allMin[1] = Math.min(allMin[1], bb.min.y);
+                allMin[2] = Math.min(allMin[2], bb.min.z);
+                allMax[0] = Math.max(allMax[0], bb.max.x);
+                allMax[1] = Math.max(allMax[1], bb.max.y);
+                allMax[2] = Math.max(allMax[2], bb.max.z);
+            }
+            var info = (matTable && matTable[key]) || { color: 0xc4b49a, opacity: 1 };
+            var mat = new THREE.MeshLambertMaterial({
+                color: info.color,
+                side: THREE.DoubleSide,
+                transparent: info.opacity < 0.999,
+                opacity: info.opacity
+            });
+            var mesh = new THREE.Mesh(geo, mat);
+            mesh.name = key;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            meshes.push(mesh);
+            root.add(mesh);
+        }
+        if (!meshes.length) return null;
+
+        // Center on XZ, sit on ground (Y min -> 0) by offsetting each mesh
+        // so callers can safely do group.position.set(0,0,0) without undoing center.
+        var cx = (allMin[0] + allMax[0]) / 2;
+        var cy = allMin[1];
+        var cz = (allMin[2] + allMax[2]) / 2;
+        for (var mi = 0; mi < meshes.length; mi++) {
+            meshes[mi].position.x -= cx;
+            meshes[mi].position.y -= cy;
+            meshes[mi].position.z -= cz;
+        }
+
+        // Scale house to a comfortable avatar size (~14 units wide)
+        var spanX = allMax[0] - allMin[0];
+        var spanZ = allMax[2] - allMin[2];
+        var span = Math.max(spanX, spanZ, 1);
+        var target = 14;
+        var scale = target / span;
+        if (scale < 0.02) scale = 0.02;
+        if (scale > 2) scale = 2;
+        root.scale.set(scale, scale, scale);
+        root.position.set(0, 0, 0);
+
+        return root;
+    }
+
+    function resolveMtlUrl(objUrl, mtllibName) {
+        var base = objUrl.replace(/[^\/\\]*$/, "");
+        var name = mtllibName || "House.mtl";
+        return [
+            base + name,
+            name,
+            "./" + name,
+            "House.mtl",
+            "./House.mtl"
+        ];
+    }
+
+    function fetchText(u) {
+        return fetch(u, { cache: "force-cache" }).then(function (r) {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.text();
+        }).catch(function () {
+            return new Promise(function (resolve, reject) {
+                try {
+                    var xhr = new XMLHttpRequest();
+                    xhr.open("GET", u, true);
+                    xhr.onload = function () {
+                        if (xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300)) {
+                            resolve(xhr.responseText);
+                        } else reject(new Error("XHR " + xhr.status));
+                    };
+                    xhr.onerror = function () { reject(new Error("XHR network")); };
+                    xhr.send();
+                } catch (e) { reject(e); }
+            });
+        });
+    }
+
+    function tryMtlList(list, idx, parsed, done) {
+        if (idx >= list.length) {
+            done(buildGroup(parsed, {}));
+            return;
+        }
+        fetchText(list[idx]).then(function (mtlText) {
+            var mats = parseMtl(mtlText);
+            done(buildGroup(parsed, mats));
+        }).catch(function () {
+            tryMtlList(list, idx + 1, parsed, done);
+        });
+    }
+
+    function finishWithObj(objText) {
+        var parsed = parseObjMulti(objText, null);
+        if (!parsed || !Object.keys(parsed.groups).length) {
+            if (onError) onError(new Error("Empty OBJ"));
+            return;
+        }
+        var mtlUrls = resolveMtlUrl(url, parsed.mtllibName);
+        tryMtlList(mtlUrls, 0, parsed, function (root) {
+            if (!root) {
+                if (onError) onError(new Error("No meshes"));
+                return;
+            }
+            if (onDone) onDone(root);
+        });
+    }
+
+    try {
+        fetchText(url)
+            .then(function (text) { finishWithObj(text); })
+            .catch(function (err) { if (onError) onError(err); });
+    } catch (e) { if (onError) onError(e); }
+}
+
+function buildHouseWorld(scene, tex) {
+    if (!scene || typeof THREE === "undefined") return;
+
+    var groundMat = new THREE.MeshLambertMaterial({ color: 0x5a9e3a });
+    try {
+        if (tex && tex.grass) {
+            groundMat.map = tex.grass;
+            tex.grass.wrapS = tex.grass.wrapT = THREE.RepeatWrapping;
+            tex.grass.repeat.set(16, 16);
+            groundMat.needsUpdate = true;
+        }
+    } catch (e) {}
+    var ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    var pathMat = new THREE.MeshLambertMaterial({ color: 0x8a8a8a });
+    try {
+        if (tex && tex.road) {
+            pathMat.map = tex.road;
+            tex.road.wrapS = tex.road.wrapT = THREE.RepeatWrapping;
+            tex.road.repeat.set(2, 6);
+            pathMat.needsUpdate = true;
+        }
+    } catch (e2) {}
+    var path = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.08, 18), pathMat);
+    path.position.set(0, 0.04, 12);
+    path.receiveShadow = true;
+    scene.add(path);
+
+    var pad = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.4, 1.4, 0.1, 20),
+        new THREE.MeshLambertMaterial({ color: 0x4a90e2 })
+    );
+    pad.position.set(0, 0.06, 16);
+    scene.add(pad);
+
+    var placeholder = new THREE.Group();
+    placeholder.name = "housePlaceholder";
+    var box = new THREE.Mesh(
+        new THREE.BoxGeometry(12, 8, 10),
+        new THREE.MeshLambertMaterial({ color: 0xb08968, transparent: true, opacity: 0.35 })
+    );
+    box.position.y = 4;
+    placeholder.add(box);
+    scene.add(placeholder);
+
+    var urls = ["House.obj", "./House.obj"];
+    var tried = 0;
+    function tryLoad() {
+        if (tried >= urls.length) {
+            console.warn("[Azora] House.obj could not load — placeholder only.");
+            return;
+        }
+        var url = urls[tried++];
+        loadAzoraObjModel(url, function (mesh) {
+            try { if (placeholder.parent) placeholder.parent.remove(placeholder); } catch (e) {}
+            mesh.position.set(0, 0, 0);
+            scene.add(mesh);
+        }, function () { tryLoad(); });
+    }
+    tryLoad();
+
+    function yardTree(x, z) {
+        var trunk = new THREE.Mesh(
+            new THREE.BoxGeometry(0.45, 2.0, 0.45),
+            new THREE.MeshLambertMaterial({ color: 0x6b4226 })
+        );
+        trunk.position.set(x, 1.0, z);
+        scene.add(trunk);
+        var leaves = new THREE.Mesh(
+            new THREE.BoxGeometry(2.2, 2.2, 2.2),
+            new THREE.MeshLambertMaterial({ color: 0x3dcf5a })
+        );
+        leaves.position.set(x, 2.6, z);
+        scene.add(leaves);
+    }
+    yardTree(-12, 8);
+    yardTree(14, 6);
+    yardTree(-10, -8);
+    yardTree(12, -10);
+}
+
+function getNormSpawnForWorld(worldType) {
+    worldType = worldType || ((_normSession && _normSession.world) || "city");
+    if (worldType === "house") return { x: 0, z: 16 };
+    if (worldType === "empire") return { x: 0, z: 8 };
+    return { x: 0, z: 0 };
+}
+
+
 function buildNormWorldByType(scene, tex, worldType) {
     if (!scene || typeof THREE === "undefined") return;
     tex = tex || {};
@@ -8625,6 +8963,12 @@ function buildNormWorldByType(scene, tex, worldType) {
     // Planet Empire — huge open world
     if (worldType === "empire") {
         buildEmpireWorld(scene, tex);
+        return;
+    }
+
+    // Azora House — House.obj
+    if (worldType === "house") {
+        buildHouseWorld(scene, tex);
         return;
     }
 
@@ -9320,7 +9664,10 @@ function startNormGameWorld(def) {
 
 
     _normLocalMesh = makeNormAvatarForCurrentGame(getNormAvatarColors());
-    placeNormAvatarOnGround(_normLocalMesh, 0, 0, 0);
+    var _sp = (typeof getNormSpawnForWorld === "function")
+        ? getNormSpawnForWorld((_normSession && _normSession.world) || "city")
+        : { x: 0, z: 0 };
+    placeNormAvatarOnGround(_normLocalMesh, _sp.x, _sp.z, 0);
     _normScene.add(_normLocalMesh);
     _normRemoteMeshes = {};
 
@@ -10703,25 +11050,136 @@ function updateCoinsUI() {
     } catch (e) {}
 }
 
-/** Daily login reward — 10 AzoraCoins once per calendar day */
+/** Daily login reward helpers */
 function getTodayKey() {
     var d = new Date();
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
+function getYesterdayKey() {
+    var d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function getLoginStreak() {
+    try {
+        return Math.max(0, parseInt(localStorage.getItem("azoraLoginStreak") || "0", 10) || 0);
+    } catch (e) { return 0; }
+}
+
+function isDailyGiftClaimedToday() {
+    try {
+        return (localStorage.getItem("azoraLastDailyClaim") || "") === getTodayKey();
+    } catch (e) { return false; }
+}
+
+/** Called on login / app load — does NOT auto-grant coins anymore; UI button claims. */
 function checkDailyLoginReward() {
     try {
-        if (localStorage.getItem("loggedIn") !== "true") return;
+        // Membership yield can still auto-check
+        if (typeof claimMembershipMonthlyYield === "function") {
+            try { claimMembershipMonthlyYield(); } catch (e2) {}
+        }
+        refreshFunTopbar();
+    } catch (e) {
+        console.warn("[Azora] daily check", e);
+    }
+}
+
+function claimDailyGift() {
+    try {
+        var logged = localStorage.getItem("loggedIn");
+        if (!logged || logged === "") {
+            showAzoraToast("Log in or continue as Guest to claim your gift!");
+            return;
+        }
         var today = getTodayKey();
         var last = localStorage.getItem("azoraLastDailyClaim") || "";
-        if (last === today) return; // already claimed today
+        if (last === today) {
+            showAzoraToast("You already claimed today's gift. Come back tomorrow!");
+            refreshFunTopbar();
+            return;
+        }
+        var yesterday = getYesterdayKey();
+        var streak = getLoginStreak();
+        if (last === yesterday) streak += 1;
+        else streak = 1;
+        localStorage.setItem("azoraLoginStreak", String(streak));
         localStorage.setItem("azoraLastDailyClaim", today);
-        addCoins(0.05);
-        showAzoraToast("+0.05 AzoraCoins! Daily login reward 🪙");
-        // Also claim membership monthly yield if due
-        if (typeof claimMembershipMonthlyYield === "function") claimMembershipMonthlyYield();
+
+        // Small reward that scales a little with streak (still low economy)
+        var reward = 0.05;
+        if (streak >= 7) reward = 0.12;
+        else if (streak >= 3) reward = 0.08;
+        if (typeof addCoins === "function") addCoins(reward);
+        showAzoraToast("+" + reward.toFixed(2) + " AzoraCoins! 🔥 " + streak + "-day streak");
+        if (typeof playClickSound === "function") try { playClickSound(); } catch (e3) {}
+        else if (typeof playUiClick === "function") try { playUiClick(); } catch (e4) {}
+        refreshFunTopbar();
     } catch (e) {
-        console.warn("[Azora] daily claim", e);
+        console.warn("[Azora] claim daily", e);
+    }
+}
+
+var AZORA_FUN_TIPS = [
+    "Explore Norm Games and meet new friends!",
+    "Customize your avatar colors, then hit Save Avatar.",
+    "Try Surprise Me for a random Norm Game.",
+    "Chat with your AI companion anytime.",
+    "Buy faces & hair in the Shop with AzoraCoins.",
+    "Claim your Daily Gift every day to grow your streak!",
+    "Guests can play games — create an account to save progress.",
+    "Open Feed for quick scrollable games.",
+    "Visit Azora House to walk around the model home.",
+    "Block & Report keep Azora friendly for everyone."
+];
+
+function pickFunTip() {
+    try {
+        var i = Math.floor(Math.random() * AZORA_FUN_TIPS.length);
+        return AZORA_FUN_TIPS[i];
+    } catch (e) {
+        return "Have fun on Azora!";
+    }
+}
+
+function refreshFunTopbar() {
+    try {
+        var claimed = isDailyGiftClaimedToday();
+        var btn = document.getElementById("dailyGiftBtn");
+        var label = document.getElementById("dailyGiftLabel");
+        var sub = document.getElementById("dailyGiftSub");
+        if (btn) {
+            if (claimed) btn.classList.add("claimed");
+            else btn.classList.remove("claimed");
+        }
+        if (label) label.textContent = claimed ? "Gift Claimed" : "Daily Gift";
+        if (sub) sub.textContent = claimed ? "See you tomorrow" : "Tap to claim";
+
+        var streakEl = document.getElementById("streakCount");
+        if (streakEl) streakEl.textContent = String(getLoginStreak());
+
+        var tipEl = document.getElementById("funTipText");
+        if (tipEl && !tipEl.getAttribute("data-set")) {
+            tipEl.textContent = pickFunTip();
+            tipEl.setAttribute("data-set", "1");
+        }
+    } catch (e) {}
+}
+
+function surpriseNormGame() {
+    try {
+        var ids = ["azora-roleplay", "become-a-cat", "parkour-plains", "cozy-cafe", "sky-islands", "planet-empire", "azora-house"];
+        var pick = ids[Math.floor(Math.random() * ids.length)];
+        showAzoraToast("Rolling a surprise game…");
+        setTimeout(function () {
+            if (typeof joinNormGame === "function") joinNormGame(pick);
+            else showAzoraToast("Could not open that game yet.");
+        }, 450);
+        if (typeof playClickSound === "function") try { playClickSound(); } catch (e2) {}
+    } catch (e) {
+        console.warn("[Azora] surprise game", e);
     }
 }
 
@@ -10741,6 +11199,30 @@ function showAzoraToast(msg) {
         }, 3500);
     } catch (e) {}
 }
+
+// Keep fun topbar fresh when panel becomes visible
+(function bindFunTopbarBoot() {
+    if (window._azoraFunTopbarBound) return;
+    window._azoraFunTopbarBound = true;
+    function boot() {
+        try { refreshFunTopbar(); } catch (e) {}
+        // Rotate tip every 20s
+        setInterval(function () {
+            var tipEl = document.getElementById("funTipText");
+            if (tipEl) {
+                tipEl.removeAttribute("data-set");
+                tipEl.textContent = pickFunTip();
+                tipEl.setAttribute("data-set", "1");
+            }
+        }, 20000);
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+    else boot();
+})();
+
+window.claimDailyGift = claimDailyGift;
+window.surpriseNormGame = surpriseNormGame;
+window.refreshFunTopbar = refreshFunTopbar;
 
 function getInventory() {
     try {
