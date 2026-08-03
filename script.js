@@ -1420,14 +1420,19 @@ function setLoggedInAccount(account) {
         if (typeof account.coins !== "number" || isNaN(account.coins) || account.coins < AZORA_OWNER_STARTING_COINS) {
             account.coins = AZORA_OWNER_STARTING_COINS;
         }
-        // Owner owns every official catalog item
-        try { if (typeof grantAllOfficialItemsToOwner === "function") grantAllOfficialItemsToOwner(); } catch (eOwn) {}
     }
     if (account && typeof account.coins === "number") {
         try { localStorage.setItem("azoraCoins", String(account.coins)); } catch (eC) {}
     }
+    // Save session FIRST so isAzoraOwner() works for grants below
     localStorage.setItem("azoraAccount", JSON.stringify(account));
     localStorage.setItem("loggedIn", "true");
+    // Owner owns every official catalog item (must run after session is saved)
+    try {
+        if (account && (account.isOwner || (typeof isOwnerUsername === "function" && isOwnerUsername(account.username)))) {
+            if (typeof grantAllOfficialItemsToOwner === "function") grantAllOfficialItemsToOwner();
+        }
+    } catch (eOwn) {}
     try { if (typeof updateCoinsUI === "function") updateCoinsUI(); if (typeof checkDailyLoginReward === "function") checkDailyLoginReward(); if (typeof grantDefaultHairForGender === "function") grantDefaultHairForGender(); } catch (eMkt) {}
     try {
         if (typeof refreshCloudSocial === "function") setTimeout(function () { refreshCloudSocial(); }, 500);
@@ -2726,6 +2731,11 @@ function applyGuestAvatarLock(locked) {
         histBtn.style.display = locked ? "none" : "block";
         histBtn.disabled = !!locked;
     }
+    var defBtn = document.getElementById("resetDefaultAvatarBtn");
+    if (defBtn) {
+        defBtn.style.display = locked ? "none" : "block";
+        defBtn.disabled = !!locked;
+    }
     var scalePanel = document.getElementById("avatarScalePanel");
     if (scalePanel) scalePanel.style.display = locked ? "none" : "block";
 }
@@ -3301,6 +3311,89 @@ function resetAvatarScales() {
     } catch (e) {}
 }
 window.resetAvatarScales = resetAvatarScales;
+
+/** Full reset to Azora's classic default avatar (boy starter look + default sizes). */
+function resetToDefaultAvatar() {
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Log in or create an account to reset your avatar.");
+        if (typeof openCreateAccount === "function") openCreateAccount();
+        return;
+    }
+    // Official Azora default — the classic starter avatar
+    var def = {
+        gender: "boy",
+        head: "#ffcc00",
+        torso: "#1e60ff",
+        leftArm: "#ffcc00",
+        rightArm: "#ffcc00",
+        leftLeg: "#00ebd4",
+        rightLeg: "#00ebd4",
+        hair: "#3b2f2f",
+        face: "male",
+        scales: { head: 1, torso: 1, arms: 1, legs: 1 }
+    };
+    try {
+        if (typeof defaultAvatarForGender === "function") {
+            var base = defaultAvatarForGender("boy");
+            if (base) {
+                def.head = base.head || def.head;
+                def.torso = base.torso || def.torso;
+                def.leftArm = base.leftArm || def.leftArm;
+                def.rightArm = base.rightArm || def.rightArm;
+                def.leftLeg = base.leftLeg || def.leftLeg;
+                def.rightLeg = base.rightLeg || def.rightLeg;
+                def.hair = base.hair || def.hair;
+                def.face = base.face || def.face;
+                def.gender = base.gender || "boy";
+            }
+        }
+    } catch (e0) {}
+
+    try {
+        if (typeof applyAvatarStateObject === "function") {
+            applyAvatarStateObject({
+                colors: {
+                    head: def.head,
+                    torso: def.torso,
+                    leftArm: def.leftArm,
+                    rightArm: def.rightArm,
+                    leftLeg: def.leftLeg,
+                    rightLeg: def.rightLeg
+                },
+                scales: def.scales,
+                gender: def.gender,
+                hair: def.hair
+            });
+        } else {
+            if (typeof setAvatarColorInputs === "function") setAvatarColorInputs(def);
+            if (typeof setAvatarScaleInputs === "function") setAvatarScaleInputs(def.scales);
+            if (typeof updateAvatarColors === "function") updateAvatarColors();
+            if (typeof applyAvatarScales === "function") applyAvatarScales(def.scales);
+        }
+        // Prefer default boy face / no special hair style
+        try {
+            var inv = (typeof getInventory === "function") ? getInventory() : null;
+            if (inv) {
+                inv.equipped = inv.equipped || {};
+                inv.equipped.face = "face_smile";
+                inv.equipped.hair = "hair_boy_none";
+                if (typeof saveInventory === "function") saveInventory(inv);
+            }
+        } catch (eInv) {}
+    } catch (e) {
+        console.warn("[Azora] resetToDefaultAvatar", e);
+    }
+
+    if (typeof showAzoraToast === "function") {
+        showAzoraToast("Reset to Azora default avatar — Save to keep it");
+    } else {
+        alert("Avatar reset to Azora default. Press Save Avatar to keep it.");
+    }
+    try {
+        if (typeof playClickSound === "function") playClickSound();
+    } catch (e2) {}
+}
+window.resetToDefaultAvatar = resetToDefaultAvatar;
 
 function snapshotCurrentAvatarState() {
     var colors = readAvatarColorInputs();
@@ -12543,13 +12636,37 @@ function getAllOfficialCatalogIds() {
 }
 
 function grantAllOfficialItemsToOwner() {
-    if (typeof isAzoraOwner === "function" && !isAzoraOwner()) return;
+    var isOwner = false;
+    try {
+        if (typeof isAzoraOwner === "function" && isAzoraOwner()) isOwner = true;
+        if (!isOwner && typeof isOwnerUsername === "function") {
+            var acc = null;
+            try { acc = JSON.parse(localStorage.getItem("azoraAccount") || "null"); } catch (eA) {}
+            if (acc && isOwnerUsername(acc.username)) isOwner = true;
+        }
+    } catch (e) {}
+    if (!isOwner) return;
     var inv = getInventory();
     var ids = getAllOfficialCatalogIds();
+    var changed = false;
     ids.forEach(function (id) {
-        if (inv.items.indexOf(id) === -1) inv.items.push(id);
+        if (id && inv.items.indexOf(id) === -1) {
+            inv.items.push(id);
+            changed = true;
+        }
     });
-    saveInventory(inv);
+    // Defaults equipped so inventory isn't "empty looking" with nothing selected
+    if (!inv.equipped) inv.equipped = { hair: null, face: null, shirt: null };
+    if (!inv.equipped.hair) {
+        inv.equipped.hair = "hair_boy_none";
+        changed = true;
+    }
+    if (!inv.equipped.face) {
+        inv.equipped.face = "face_smile";
+        changed = true;
+    }
+    if (changed) saveInventory(inv);
+    else saveInventory(inv); // still persist shape
 }
 
 function ownsItem(itemId) {
@@ -12982,6 +13099,8 @@ function renderMarketplace() {
 function renderInventory() {
     var list = document.getElementById("inventoryList");
     if (!list) return;
+    // Keep owner inventory filled with every official item
+    try { if (typeof grantAllOfficialItemsToOwner === "function") grantAllOfficialItemsToOwner(); } catch (eG) {}
     var inv = getInventory();
     var category = getInventoryCategory();
     var equippedHair = inv.equipped.hair;
@@ -12990,7 +13109,17 @@ function renderInventory() {
     var html = "";
     var shown = 0;
 
-    inv.items.forEach(function (id) {
+    // Build display id list: inventory items + (for owner) full official catalog
+    var displayIds = (inv.items || []).slice();
+    try {
+        if (typeof isAzoraOwner === "function" && isAzoraOwner() && typeof getAllOfficialCatalogIds === "function") {
+            getAllOfficialCatalogIds().forEach(function (id) {
+                if (id && displayIds.indexOf(id) === -1) displayIds.push(id);
+            });
+        }
+    } catch (eD) {}
+
+    displayIds.forEach(function (id) {
         var isFace = isFaceItemId(id);
         var isShirt = String(id).indexOf("shirt_") === 0;
         if (category === "faces" && !isFace) return;
@@ -13084,6 +13213,7 @@ function renderInventory() {
 
 function openMarketplace() {
     grantDefaultHairForGender();
+    try { if (typeof grantAllOfficialItemsToOwner === "function") grantAllOfficialItemsToOwner(); } catch (e) {}
     var el = document.getElementById("marketplaceOverlay");
     if (el) el.style.display = "flex";
     renderMarketplace();
@@ -13097,6 +13227,7 @@ function closeMarketplace() {
 
 function openInventory() {
     grantDefaultHairForGender();
+    try { if (typeof grantAllOfficialItemsToOwner === "function") grantAllOfficialItemsToOwner(); } catch (e) {}
     var el = document.getElementById("inventoryOverlay");
     if (el) el.style.display = "flex";
     renderInventory();

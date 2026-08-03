@@ -3720,3 +3720,17 @@ html[data-azora-shell="app"] .download-azora-overlay {
     font-size: 0.72rem;
     opacity: 0.85;
 }
+
+.reset-default-avatar-btn {
+    width: 100%;
+    margin: 4px 0 8px 0 !important;
+    padding: 9px 12px !important;
+    border-radius: 12px !important;
+    border: 1px solid rgba(255,255,255,0.3) !important;
+    background: linear-gradient(180deg, rgba(100,116,139,0.55), rgba(51,65,85,0.7)) !important;
+    color: #fff !important;
+    font-weight: 800 !important;
+}
+.reset-default-avatar-btn:hover {
+    filter: brightness(1.08);
+}
