@@ -19,10 +19,6 @@
             border-radius: 8px; padding: 8px 12px; font-weight: 700; font-size: 12px;
         }
         button:hover { background: rgba(30,96,255,0.45); }
-        button.active-mode {
-            background: #1e60ff; border-color: #93c5fd;
-            box-shadow: 0 0 0 2px rgba(147,197,253,0.4);
-        }
         button.test-on {
             background: linear-gradient(180deg,#f59e0b,#d97706); border-color: #fbbf24; color: #111;
         }
@@ -55,7 +51,7 @@
         .game-chip.active { background: #1e60ff; border-color: #93c5fd; }
         .game-chip .vis { opacity: 0.85; font-size: 10px; }
         .studio-layout {
-            display: grid; grid-template-columns: 250px 1fr 300px;
+            display: grid; grid-template-columns: 260px 1fr 300px;
             gap: 10px; padding: 10px;
             height: calc(100vh - 56px - 60px);
         }
@@ -93,20 +89,11 @@
         }
         .view-tab.active { background: #1e60ff; }
         #canvas3d {
-            position: relative;
-            flex: 1 1 auto;
-            width: 100%;
-            min-height: 320px;
-            height: 100%;
-            background: #87ceeb;
-            cursor: default;
+            position: relative; flex: 1 1 auto; width: 100%;
+            min-height: 320px; height: 100%; background: #87ceeb; cursor: default;
         }
         #canvas3d.dragging { cursor: grabbing; }
-        #canvas3d canvas {
-            display: block;
-            width: 100% !important;
-            height: 100% !important;
-        }
+        #canvas3d canvas { display: block; width: 100% !important; height: 100% !important; }
         .viewport-toolbar {
             flex-shrink: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
             padding: 8px; background: rgba(0,0,0,0.45); border-top: 1px solid rgba(255,255,255,0.15);
@@ -152,6 +139,14 @@
         }
         .mat-chip:hover { background: rgba(30,96,255,0.45); }
         .mat-chip.active { border-color: #93c5fd; box-shadow: 0 0 0 2px rgba(147,197,253,0.5); }
+        .shape-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+        .shape-chip {
+            padding: 8px 6px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3);
+            background: rgba(0,0,0,0.25); color: #fff; font-size: 11px; font-weight: 800;
+            cursor: pointer; text-align: center;
+        }
+        .shape-chip:hover { background: rgba(30,96,255,0.45); }
+        .shape-chip.active { border-color: #93c5fd; box-shadow: 0 0 0 2px rgba(147,197,253,0.5); }
         .hint-mini { font-size: 11px; opacity: 0.85; line-height: 1.35; margin: 6px 0; }
         .arrow-friend {
             margin-top: auto; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.2);
@@ -171,7 +166,6 @@
             border-radius: 8px; padding: 6px 10px; font-size: 11px; opacity: 0.9;
             pointer-events: none;
         }
-        /* Orientation cube (6 faces: +X -X +Y -Y +Z -Z) */
         #orientCubeWrap {
             position: absolute; right: 12px; top: 48px; width: 72px; height: 72px;
             z-index: 20; perspective: 400px; user-select: none;
@@ -179,8 +173,7 @@
         #orientCube {
             width: 48px; height: 48px; margin: 12px auto 0;
             position: relative; transform-style: preserve-3d;
-            transform: rotateX(-25deg) rotateY(35deg);
-            cursor: grab;
+            transform: rotateX(-25deg) rotateY(35deg); cursor: grab;
         }
         #orientCube:active { cursor: grabbing; }
         .oc-face {
@@ -239,25 +232,24 @@
 
 <div class="studio-layout" id="studioLayout">
     <div class="studio-panel">
-        <div class="panel-title">
-            <span>Hierarchy</span>
-            <button onclick="addNewPart()" style="font-size:11px;padding:4px 8px;margin:0;">+ Add Part</button>
-        </div>
+        <div class="panel-title"><span>Hierarchy</span></div>
         <div class="hierarchy-item selected" id="hierarchyWorkspace" onclick="selectNode('workspace')">Workspace</div>
         <div class="hierarchy-item" id="hierarchySky" onclick="selectNode('sky')">Sky / Atmosphere</div>
         <div class="hierarchy-item" id="hierarchyBaseplate" onclick="selectNode('baseplate')">Baseplate</div>
         <div class="hierarchy-item" id="hierarchyCharacter" onclick="selectNode('character')">Character</div>
         <div id="dynamicPartsContainer"></div>
 
+        <div style="margin-top:12px;border-top:1px solid rgba(255,255,255,0.2);padding-top:10px;">
+            <div class="panel-title" style="border:none;margin:0 0 6px;padding:0;"><span>Add Shape</span></div>
+            <p class="hint-mini">Pick a shape, then click Add. Parts snap to a 1-stud grid.</p>
+            <div class="shape-grid" id="shapeGrid"></div>
+            <button type="button" onclick="addNewPart()" style="width:100%;margin-top:6px;">+ Add Part</button>
+        </div>
+
         <div class="arrow-friend">
             <div class="panel-title" style="border:none;margin:0 0 6px;padding:0;"><span>Arrow Friend</span></div>
             <div class="arrow-bubble" id="arrowBubble">
-                <strong>Controls:</strong> Drag parts to move them. In Studio: <b>W/S</b> camera forward/back, <b>A/D</b> turn left/right. Press <b>Test Game</b> to play as your character.
-            </div>
-            <div style="margin-top:8px;">
-                <div class="script-block" draggable="true" ondragstart="dragBlock(event, 'print(\"Hello Azora!\")')">print("Hello Azora!")</div>
-                <div class="script-block" draggable="true" ondragstart="dragBlock(event, 'wait(1)')">wait(1)</div>
-                <div class="script-block" draggable="true" ondragstart="dragBlock(event, 'part.BrickColor = \"Bright blue\"')">Set part color</div>
+                Parts snap to the grid. Baseplate has full properties. Materials look distinct now. Publish uses your real username.
             </div>
         </div>
     </div>
@@ -269,7 +261,7 @@
         </div>
         <div id="canvas3d">
             <div id="testBanner">TEST MODE — WASD move character · Space jump · Esc to stop</div>
-            <div id="orientCubeWrap" title="Drag to orbit camera · click a face to snap view">
+            <div id="orientCubeWrap" title="Drag to orbit · click a face to snap">
                 <div id="orientCube">
                     <div class="oc-face px" data-face="px">X</div>
                     <div class="oc-face nx" data-face="nx">X</div>
@@ -284,10 +276,10 @@
             <button type="button" onclick="unselectAll()">Unselect</button>
             <button type="button" onclick="addNewPart()">+ Part</button>
             <button type="button" onclick="resetCamera()">Reset Camera</button>
-            <span class="hint-mini" id="selectHint">Drag parts to move · W/S camera · A/D turn</span>
+            <span class="hint-mini" id="selectHint">Grid snap ON · W/S camera · A/D turn</span>
         </div>
         <div id="scriptEditorContainer" ondragover="event.preventDefault()" ondrop="handleBlockDrop(event)">
-            <textarea id="codeArea" placeholder="// Write scripts here or drag blocks from Arrow Friend…"></textarea>
+            <textarea id="codeArea" placeholder="// Write scripts here…"></textarea>
         </div>
     </div>
 
@@ -298,7 +290,7 @@
         </div>
         <div style="margin-top:14px;border-top:1px solid rgba(255,255,255,0.2);padding-top:10px;">
             <div class="panel-title" style="border:none;margin:0 0 6px;padding:0;"><span>Materials</span></div>
-            <p class="hint-mini">Default for new parts is <strong>Glass</strong> (shiny). Select a part, then click a material.</p>
+            <p class="hint-mini">Materials have strong visual differences (shininess, color bias, roughness).</p>
             <div class="mat-grid" id="materialsGrid"></div>
         </div>
     </div>
@@ -307,54 +299,68 @@
 <div id="statusLine">Booting Creator…</div>
 
 <script>
-/* ===== Azora Creator Studio — drag, WASD camera, orient cube, test mode, touch/collide ===== */
+/* ===== Azora Creator Studio — grid snap, shapes, baseplate props, materials, publish fix ===== */
 var scene, camera, renderer, ambientLight, directionalLight;
 var baseplateMesh = null, gridHelper = null, characterGroup = null;
 var raycaster = null, mouse = null, outlineHelper = null;
 var partsList = [];
 var selectedPartId = null, selectedNodeId = "workspace";
-var selectedMaterialId = "Glass";
+var selectedMaterialId = "Plastic";
+var selectedShapeId = "Block";
 var currentGameId = null;
 var animating = false;
 var studioForced = false;
 var isTestMode = false;
+var GRID = 1; // 1 stud grid
 
-// Camera (studio)
 var camYaw = Math.PI / 4;
 var camPitch = 0.45;
 var camDist = 32;
-var camTarget = new THREE.Vector3(0, 1, 0);
+var camTarget = null;
 var keys = {};
 
-// Drag state
 var isDraggingPart = false;
 var dragPart = null;
 var dragPlane = null;
-var dragOffset = new THREE.Vector3();
+var dragOffset = null;
 var dragPointerId = null;
 
-// Orient cube
 var orientRotX = -25;
 var orientRotY = 35;
 var orientDragging = false;
 var orientLastX = 0, orientLastY = 0;
 
-// Character test movement
 var charVelY = 0;
 var charOnGround = true;
 var CHAR_SPEED = 10;
 var CHAR_JUMP = 9;
 var GRAVITY = 22;
 
+/* Strongly distinct materials */
 var MATERIALS = {
-    Glass:    { name: "Glass",    color: 0x88ccee, opacity: 0.55, shininess: 120, transparent: true },
-    Plastic:  { name: "Plastic",  color: 0x1e60ff, opacity: 1,    shininess: 60,  transparent: false },
-    Metal:    { name: "Metal",    color: 0xb0b8c4, opacity: 1,    shininess: 140, transparent: false },
-    Wood:     { name: "Wood",     color: 0x8b5a2b, opacity: 1,    shininess: 25,  transparent: false },
-    Concrete: { name: "Concrete", color: 0x9ca3af, opacity: 1,    shininess: 10,  transparent: false },
-    Neon:     { name: "Neon",     color: 0x00ebd4, opacity: 1,    shininess: 100, transparent: false, emissive: 0x00ebd4 },
-    Marble:   { name: "Marble",   color: 0xf5f5f4, opacity: 1,    shininess: 90,  transparent: false },
-    Rubber:   { name: "Rubber",   color: 0x222222, opacity: 1,    shininess: 5,   transparent: false }
+    Glass:    { name: "Glass",    color: 0x88d4ff, opacity: 0.35, shininess: 160, transparent: true, specular: 0xffffff },
+    Plastic:  { name: "Plastic",  color: 0x1e60ff, opacity: 1,    shininess: 45,  transparent: false, specular: 0x666666 },
+    Metal:    { name: "Metal",    color: 0xc0c8d0, opacity: 1,    shininess: 200, transparent: false, specular: 0xffffff },
+    Wood:     { name: "Wood",     color: 0x8b5a2b, opacity: 1,    shininess: 8,   transparent: false, specular: 0x222222 },
+    Concrete: { name: "Concrete", color: 0x7a7f86, opacity: 1,    shininess: 2,   transparent: false, specular: 0x111111 },
+    Neon:     { name: "Neon",     color: 0x00ffcc, opacity: 1,    shininess: 120, transparent: false, specular: 0x00ffcc, emissive: 0x00aa88 },
+    Marble:   { name: "Marble",   color: 0xf2f0ea, opacity: 1,    shininess: 90,  transparent: false, specular: 0xaaaaaa },
+    Rubber:   { name: "Rubber",   color: 0x1a1a1a, opacity: 1,    shininess: 1,   transparent: false, specular: 0x050505 },
+    Grass:    { name: "Grass",    color: 0x3d9e3d, opacity: 1,    shininess: 5,   transparent: false, specular: 0x113311 },
+    Brick:    { name: "Brick",    color: 0xb33a2b, opacity: 1,    shininess: 12,  transparent: false, specular: 0x331111 }
+};
+
+var SHAPES = {
+    Block:        { name: "Block",        icon: "⬛" },
+    Sphere:       { name: "Sphere",       icon: "⬤" },
+    Cylinder:     { name: "Cylinder",     icon: "⬭" },
+    Wedge:        { name: "Wedge",        icon: "◢" },
+    CornerWedge:  { name: "Corner Wedge", icon: "◣" },
+    Triangle:     { name: "Triangle",     icon: "▲" },
+    Pyramid:      { name: "Pyramid",      icon: "△" },
+    Cone:         { name: "Cone",         icon: "▽" },
+    Torus:        { name: "Torus",        icon: "◯" },
+    Prism:        { name: "Prism",        icon: "⬡" }
 };
 
 var skySettings = {
@@ -365,7 +371,17 @@ var skySettings = {
     sunIntensity: 1.0
 };
 
-var baseplateProps = { sizeX: 50, sizeY: 1, sizeZ: 50, posX: 0, posY: -0.5, posZ: 0 };
+/* Baseplate is a full part-like object */
+var baseplateProps = {
+    sizeX: 50, sizeY: 1, sizeZ: 50,
+    posX: 0, posY: -0.5, posZ: 0,
+    color: "#3a4555",
+    material: "Concrete",
+    transparency: 1,
+    canTouch: true,
+    canCollide: true
+};
+
 var placedCharacter = {
     head: 0xffdbac, torso: 0x1e60ff, leftArm: 0xffdbac, rightArm: 0xffdbac,
     leftLeg: 0x333333, rightLeg: 0x333333
@@ -375,10 +391,13 @@ function setStatus(msg) {
     var el = document.getElementById("statusLine");
     if (el) el.textContent = msg;
 }
-
 function arrowBubbleSpeak(html) {
     var el = document.getElementById("arrowBubble");
     if (el) el.innerHTML = html;
+}
+function snap(v) { return Math.round(v / GRID) * GRID; }
+function snapVec(x, y, z) {
+    return { x: snap(x), y: snap(y), z: snap(z) };
 }
 
 function enforceComputerOnly() {
@@ -387,7 +406,6 @@ function enforceComputerOnly() {
     if (studioForced) { err.style.display = "none"; return; }
     err.style.display = (window.innerWidth < 700) ? "flex" : "none";
 }
-
 function forceContinueStudio() {
     studioForced = true;
     var err = document.getElementById("desktopError");
@@ -395,8 +413,20 @@ function forceContinueStudio() {
     setTimeout(bootStudio, 50);
 }
 
+function getLoggedInUsername() {
+    try {
+        var a = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (a && a.username && String(a.username).trim()) return String(a.username).trim();
+    } catch (e) {}
+    try {
+        var g = JSON.parse(localStorage.getItem("azoraGuest") || "null");
+        if (g && g.id != null) return "Guest #" + g.id;
+    } catch (e2) {}
+    return "Player";
+}
+
 function makeMaterial(matId, colorHex, opacityOverride) {
-    var def = MATERIALS[matId] || MATERIALS.Glass;
+    var def = MATERIALS[matId] || MATERIALS.Plastic;
     var col = (colorHex != null) ? colorHex : def.color;
     var opacity = (opacityOverride != null) ? opacityOverride : (def.opacity != null ? def.opacity : 1);
     var transparent = opacity < 0.999 || !!def.transparent;
@@ -405,17 +435,87 @@ function makeMaterial(matId, colorHex, opacityOverride) {
             color: col,
             transparent: transparent,
             opacity: opacity,
-            shininess: def.shininess != null ? def.shininess : 80,
-            specular: 0xbfbfbf,
+            shininess: def.shininess != null ? def.shininess : 40,
+            specular: def.specular != null ? def.specular : 0x444444,
             emissive: def.emissive || 0x000000,
             side: THREE.DoubleSide,
-            depthWrite: opacity > 0.85
+            depthWrite: opacity > 0.85,
+            flatShading: (matId === "Concrete" || matId === "Brick" || matId === "Wood" || matId === "Grass")
         });
         mat.userData = { azoraMaterial: matId };
         return mat;
     } catch (e) {
         return new THREE.MeshLambertMaterial({ color: col, transparent: transparent, opacity: opacity, side: THREE.DoubleSide });
     }
+}
+
+/* ---- Shape geometry builders (unit-ish size ~2) ---- */
+function makeShapeGeometry(shapeId) {
+    switch (shapeId) {
+        case "Sphere":
+            return new THREE.SphereGeometry(1, 16, 12);
+        case "Cylinder":
+            return new THREE.CylinderGeometry(1, 1, 2, 16);
+        case "Cone":
+            return new THREE.ConeGeometry(1, 2, 16);
+        case "Torus":
+            return new THREE.TorusGeometry(0.9, 0.35, 12, 24);
+        case "Wedge": {
+            // Right-angle wedge (prism with triangle profile)
+            var g = new THREE.Geometry ? null : null;
+            // BufferGeometry triangle prism
+            var shape = new THREE.Shape();
+            shape.moveTo(-1, -1);
+            shape.lineTo(1, -1);
+            shape.lineTo(-1, 1);
+            shape.lineTo(-1, -1);
+            var extrude = new THREE.ExtrudeGeometry(shape, { depth: 2, bevelEnabled: false });
+            extrude.rotateY(Math.PI / 2);
+            extrude.translate(0, 0, -1);
+            return extrude;
+        }
+        case "CornerWedge": {
+            // Tetrahedron-ish corner
+            var geo = new THREE.TetrahedronGeometry(1.4, 0);
+            geo.rotateY(Math.PI / 4);
+            return geo;
+        }
+        case "Triangle": {
+            // Flat triangle panel
+            var s = new THREE.Shape();
+            s.moveTo(0, 1.2);
+            s.lineTo(-1.2, -1);
+            s.lineTo(1.2, -1);
+            s.lineTo(0, 1.2);
+            var eg = new THREE.ExtrudeGeometry(s, { depth: 0.3, bevelEnabled: false });
+            eg.translate(0, 0, -0.15);
+            return eg;
+        }
+        case "Pyramid":
+            return new THREE.ConeGeometry(1.2, 2, 4);
+        case "Prism":
+            return new THREE.CylinderGeometry(1.1, 1.1, 2, 6);
+        case "Block":
+        default:
+            return new THREE.BoxGeometry(2, 2, 2);
+    }
+}
+
+function initShapeGrid() {
+    var grid = document.getElementById("shapeGrid");
+    if (!grid) return;
+    var html = "";
+    Object.keys(SHAPES).forEach(function (id) {
+        var s = SHAPES[id];
+        html += '<button type="button" class="shape-chip' + (id === selectedShapeId ? " active" : "") +
+            '" onclick="pickShape(\'' + id + '\')">' + s.icon + " " + s.name + "</button>";
+    });
+    grid.innerHTML = html;
+}
+function pickShape(id) {
+    selectedShapeId = id;
+    initShapeGrid();
+    arrowBubbleSpeak("Shape set to <strong>" + (SHAPES[id] ? SHAPES[id].name : id) + "</strong>. Click + Add Part.");
 }
 
 function initMaterialsGrid() {
@@ -425,27 +525,57 @@ function initMaterialsGrid() {
     Object.keys(MATERIALS).forEach(function (id) {
         var m = MATERIALS[id];
         html += '<button type="button" class="mat-chip' + (id === selectedMaterialId ? " active" : "") +
-            '" data-mat="' + id + '" onclick="pickMaterial(\'' + id + '\')">' + m.name + "</button>";
+            '" onclick="pickMaterial(\'' + id + '\')">' + m.name + "</button>";
     });
     grid.innerHTML = html;
 }
-
 function pickMaterial(id) {
     selectedMaterialId = id;
     initMaterialsGrid();
-    if (selectedPartId) applyMaterialToPart(selectedPartId, id);
-    else arrowBubbleSpeak("Material set to <strong>" + id + "</strong>. Click a part to apply it.");
+    if (selectedPartId === "baseplate") {
+        applyMaterialToBaseplate(id);
+    } else if (selectedPartId) {
+        applyMaterialToPart(selectedPartId, id);
+    } else {
+        arrowBubbleSpeak("Material set to <strong>" + id + "</strong>. Select a part or baseplate to apply.");
+    }
 }
 
 function applyMaterialToPart(partId, matId) {
     var part = partsList.find(function (p) { return p.id === partId; });
     if (!part || !part.mesh) return;
     var col = part.color ? new THREE.Color(part.color) : null;
+    // When switching material, adopt material's default color if user hasn't custom-tinted much
+    var useCol = col ? col.getHex() : (MATERIALS[matId] ? MATERIALS[matId].color : 0x1e60ff);
+    // Always refresh color to material default for strong visual change, unless color was customized
+    if (!part.colorCustom) {
+        useCol = MATERIALS[matId] ? MATERIALS[matId].color : useCol;
+        part.color = "#" + ("000000" + useCol.toString(16)).slice(-6);
+    }
     part.material = matId;
-    part.mesh.material = makeMaterial(matId, col ? col.getHex() : undefined, part.transparency);
-    if (col && part.mesh.material.color) part.mesh.material.color.copy(col);
+    var op = part.transparency != null ? part.transparency : (MATERIALS[matId] && MATERIALS[matId].opacity != null ? MATERIALS[matId].opacity : 1);
+    if (MATERIALS[matId] && MATERIALS[matId].transparent && part.transparency == null) {
+        op = MATERIALS[matId].opacity;
+        part.transparency = op;
+    }
+    part.mesh.material = makeMaterial(matId, useCol, op);
     refreshPartProperties(partId);
     refreshHierarchyPartLabel(part);
+    setStatus(partId + " → " + matId);
+}
+
+function applyMaterialToBaseplate(matId) {
+    if (!baseplateMesh) return;
+    baseplateProps.material = matId;
+    if (!baseplateProps.colorCustom) {
+        var c = MATERIALS[matId] ? MATERIALS[matId].color : 0x3a4555;
+        baseplateProps.color = "#" + ("000000" + c.toString(16)).slice(-6);
+    }
+    var col = new THREE.Color(baseplateProps.color).getHex();
+    var op = baseplateProps.transparency != null ? baseplateProps.transparency : 1;
+    baseplateMesh.material = makeMaterial(matId, col, op);
+    refreshBaseplateProperties();
+    setStatus("Baseplate → " + matId);
 }
 
 function applySkySettings() {
@@ -467,6 +597,7 @@ function applySkySettings() {
 
 function updateCameraFromOrbit() {
     if (!camera || isTestMode) return;
+    if (!camTarget) camTarget = new THREE.Vector3(0, 1, 0);
     var x = camTarget.x + camDist * Math.sin(camYaw) * Math.cos(camPitch);
     var y = camTarget.y + camDist * Math.sin(camPitch);
     var z = camTarget.z + camDist * Math.cos(camYaw) * Math.cos(camPitch);
@@ -474,16 +605,13 @@ function updateCameraFromOrbit() {
     camera.lookAt(camTarget);
     syncOrientCube();
 }
-
 function syncOrientCube() {
     var cube = document.getElementById("orientCube");
     if (!cube) return;
-    // Map camera yaw/pitch to cube rotation for visual feedback
     orientRotY = (camYaw * 180 / Math.PI);
     orientRotX = -20 - (camPitch * 40);
     cube.style.transform = "rotateX(" + orientRotX + "deg) rotateY(" + orientRotY + "deg)";
 }
-
 function resizeRenderer() {
     var container = document.getElementById("canvas3d");
     if (!container || !renderer || !camera) return;
@@ -494,24 +622,36 @@ function resizeRenderer() {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h, false);
-    var mode = isTestMode ? "TEST" : "Studio";
-    setStatus(mode + " · " + w + "x" + h + " · parts: " + partsList.length);
+    setStatus((isTestMode ? "TEST" : "Studio") + " · grid " + GRID + " · parts: " + partsList.length);
+}
+
+function rebuildBaseplateMesh() {
+    if (!scene) return;
+    if (baseplateMesh) {
+        scene.remove(baseplateMesh);
+        try { baseplateMesh.geometry.dispose(); } catch (e) {}
+    }
+    var geo = new THREE.BoxGeometry(baseplateProps.sizeX, baseplateProps.sizeY, baseplateProps.sizeZ);
+    var col = new THREE.Color(baseplateProps.color || "#3a4555").getHex();
+    var op = baseplateProps.transparency != null ? baseplateProps.transparency : 1;
+    baseplateMesh = new THREE.Mesh(geo, makeMaterial(baseplateProps.material || "Concrete", col, op));
+    baseplateMesh.position.set(baseplateProps.posX, baseplateProps.posY, baseplateProps.posZ);
+    baseplateMesh.userData.azoraKind = "baseplate";
+    scene.add(baseplateMesh);
 }
 
 function init3DScene() {
     var container = document.getElementById("canvas3d");
     if (!container) { setStatus("Missing #canvas3d"); return false; }
     if (typeof THREE === "undefined") {
-        setStatus("Three.js failed to load — check internet / CDN");
-        arrowBubbleSpeak("Three.js did not load. Check your connection and refresh.");
+        setStatus("Three.js failed to load");
         return false;
     }
-
-    // Keep orient cube + banner; remove only previous canvas
     Array.prototype.slice.call(container.querySelectorAll("canvas")).forEach(function (c) { c.remove(); });
 
     scene = new THREE.Scene();
     applySkySettings();
+    camTarget = new THREE.Vector3(0, 1, 0);
 
     var w = Math.max(container.clientWidth, 2);
     var h = Math.max(container.clientHeight, 2);
@@ -519,17 +659,15 @@ function init3DScene() {
     if (w < 40) w = 640;
 
     camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 3000);
-    camTarget = new THREE.Vector3(0, 1, 0);
     updateCameraFromOrbit();
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setClearColor(0x87ceeb, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(w, h, false);
-    // insert canvas behind overlay widgets
     container.insertBefore(renderer.domElement, container.firstChild);
 
-    ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
     scene.add(ambientLight);
     directionalLight = new THREE.DirectionalLight(0xffffff, skySettings.sunIntensity || 1);
     directionalLight.position.set(20, 30, 12);
@@ -538,11 +676,7 @@ function init3DScene() {
     fill.position.set(-12, 10, -8);
     scene.add(fill);
 
-    var baseGeo = new THREE.BoxGeometry(baseplateProps.sizeX, baseplateProps.sizeY, baseplateProps.sizeZ);
-    baseplateMesh = new THREE.Mesh(baseGeo, makeMaterial("Concrete", 0x3a4555));
-    baseplateMesh.position.set(baseplateProps.posX, baseplateProps.posY, baseplateProps.posZ);
-    baseplateMesh.userData.azoraKind = "baseplate";
-    scene.add(baseplateMesh);
+    rebuildBaseplateMesh();
 
     gridHelper = new THREE.GridHelper(100, 100, 0xffffff, 0x556677);
     gridHelper.position.y = 0.02;
@@ -552,9 +686,7 @@ function init3DScene() {
     characterGroup.position.set(0, 1.2, 0);
     function limb(name, w2, h2, d2, col, x, y) {
         var m = new THREE.Mesh(new THREE.BoxGeometry(w2, h2, d2), makeMaterial("Plastic", col));
-        m.name = name;
-        m.position.set(x, y, 0);
-        characterGroup.add(m);
+        m.name = name; m.position.set(x, y, 0); characterGroup.add(m);
     }
     limb("head", 1.2, 1.2, 1.2, placedCharacter.head, 0, 2);
     limb("torso", 1.6, 2.0, 0.8, placedCharacter.torso, 0, 0.4);
@@ -567,6 +699,7 @@ function init3DScene() {
     raycaster = new THREE.Raycaster();
     mouse = new THREE.Vector2();
     dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    dragOffset = new THREE.Vector3();
 
     var canvas = renderer.domElement;
     canvas.addEventListener("pointerdown", onViewportPointerDown);
@@ -589,47 +722,24 @@ function init3DScene() {
 
     setTimeout(resizeRenderer, 30);
     setTimeout(resizeRenderer, 150);
-    setTimeout(resizeRenderer, 400);
-
-    setStatus("Studio ready · sky + baseplate loaded");
-    arrowBubbleSpeak("Scene ready! Drag parts to move. <b>W/S</b> camera, <b>A/D</b> turn. Hit <b>Test Game</b> to play.");
+    setStatus("Studio ready · grid snap ON");
+    arrowBubbleSpeak("Grid snap is on. Baseplate has full properties. Pick a shape and Add Part!");
     return true;
 }
 
 function updateStudio(dt) {
-    if (isTestMode) {
-        updateTestCharacter(dt);
-        return;
-    }
-
-    // Studio camera WASD
+    if (isTestMode) { updateTestCharacter(dt); return; }
     var moved = false;
     var turnSpeed = 1.6 * dt;
     var moveSpeed = 18 * dt;
     if (keys["a"] || keys["arrowleft"]) { camYaw += turnSpeed; moved = true; }
     if (keys["d"] || keys["arrowright"]) { camYaw -= turnSpeed; moved = true; }
-
-    // Forward/back along camera look on XZ plane
-    var fx = Math.sin(camYaw);
-    var fz = Math.cos(camYaw);
-    if (keys["w"] || keys["arrowup"]) {
-        camTarget.x += fx * moveSpeed;
-        camTarget.z += fz * moveSpeed;
-        moved = true;
-    }
-    if (keys["s"] || keys["arrowdown"]) {
-        camTarget.x -= fx * moveSpeed;
-        camTarget.z -= fz * moveSpeed;
-        moved = true;
-    }
+    var fx = Math.sin(camYaw), fz = Math.cos(camYaw);
+    if (keys["w"] || keys["arrowup"]) { camTarget.x += fx * moveSpeed; camTarget.z += fz * moveSpeed; moved = true; }
+    if (keys["s"] || keys["arrowdown"]) { camTarget.x -= fx * moveSpeed; camTarget.z -= fz * moveSpeed; moved = true; }
     if (moved) updateCameraFromOrbit();
-
-    if (characterGroup && selectedNodeId !== "character" && !isDraggingPart) {
-        characterGroup.rotation.y += 0.004;
-    }
-    if (outlineHelper && selectedPartId && outlineHelper.update) {
-        try { outlineHelper.update(); } catch (e) {}
-    }
+    if (characterGroup && selectedNodeId !== "character" && !isDraggingPart) characterGroup.rotation.y += 0.004;
+    if (outlineHelper && outlineHelper.update) { try { outlineHelper.update(); } catch (e) {} }
 }
 
 function updateTestCharacter(dt) {
@@ -638,48 +748,36 @@ function updateTestCharacter(dt) {
     var forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     var right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
     var move = new THREE.Vector3();
-
     if (keys["w"] || keys["arrowup"]) move.add(forward);
     if (keys["s"] || keys["arrowdown"]) move.sub(forward);
     if (keys["a"] || keys["arrowleft"]) move.sub(right);
     if (keys["d"] || keys["arrowright"]) move.add(right);
-
     if (move.lengthSq() > 0) {
         move.normalize().multiplyScalar(CHAR_SPEED * dt);
         characterGroup.position.x += move.x;
         characterGroup.position.z += move.z;
     }
-
-    // Jump
-    if ((keys[" "] || keys["space"]) && charOnGround) {
-        charVelY = CHAR_JUMP;
-        charOnGround = false;
-    }
+    if ((keys[" "] || keys["space"]) && charOnGround) { charVelY = CHAR_JUMP; charOnGround = false; }
     charVelY -= GRAVITY * dt;
     characterGroup.position.y += charVelY * dt;
-
-    // Ground at y = 1.2 (feet on baseplate top ~0)
-    var groundY = 1.2;
-    if (characterGroup.position.y <= groundY) {
-        characterGroup.position.y = groundY;
-        charVelY = 0;
-        charOnGround = true;
+    if (characterGroup.position.y <= 1.2) {
+        characterGroup.position.y = 1.2; charVelY = 0; charOnGround = true;
     }
-
-    // Simple collide with canCollide parts (AABB push-out on XZ)
-    partsList.forEach(function (p) {
-        if (!p.canCollide || !p.mesh) return;
+    // Collide with canCollide parts + baseplate
+    var colliders = partsList.filter(function (p) { return p.canCollide && p.mesh; });
+    if (baseplateProps.canCollide && baseplateMesh) {
+        // baseplate is floor — already handled by groundY
+    }
+    colliders.forEach(function (p) {
         var box = new THREE.Box3().setFromObject(p.mesh);
         var cpos = characterGroup.position;
-        // character approx radius
         var r = 0.9;
         var closest = new THREE.Vector3(
             Math.max(box.min.x, Math.min(cpos.x, box.max.x)),
             Math.max(box.min.y, Math.min(cpos.y, box.max.y)),
             Math.max(box.min.z, Math.min(cpos.z, box.max.z))
         );
-        var dx = cpos.x - closest.x;
-        var dz = cpos.z - closest.z;
+        var dx = cpos.x - closest.x, dz = cpos.z - closest.z;
         var distSq = dx * dx + dz * dz;
         if (distSq < r * r && cpos.y < box.max.y + 0.5 && cpos.y > box.min.y - 1) {
             var dist = Math.sqrt(distSq) || 0.001;
@@ -688,10 +786,7 @@ function updateTestCharacter(dt) {
             cpos.z += (dz / dist) * push;
         }
     });
-
-    // Camera follows behind character
-    var back = 10;
-    var height = 6;
+    var back = 10, height = 6;
     camera.position.set(
         characterGroup.position.x - Math.sin(yaw) * back,
         characterGroup.position.y + height,
@@ -711,11 +806,9 @@ function onViewportPointerDown(ev) {
     if (ev.button !== 0) return;
     getPointerNDC(ev);
     raycaster.setFromCamera(mouse, camera);
-
     var meshes = partsList.map(function (p) { return p.mesh; }).filter(Boolean);
     if (baseplateMesh) meshes.push(baseplateMesh);
     var hits = raycaster.intersectObjects(meshes, false);
-
     if (hits.length) {
         var mesh = hits[0].object;
         if (mesh === baseplateMesh) {
@@ -725,20 +818,15 @@ function onViewportPointerDown(ev) {
         var part = partsList.find(function (p) { return p.mesh === mesh; });
         if (part) {
             selectPartNode(part.id);
-            // Start drag on horizontal plane at part height
             isDraggingPart = true;
             dragPart = part;
             dragPointerId = ev.pointerId;
             try { renderer.domElement.setPointerCapture(ev.pointerId); } catch (e) {}
             document.getElementById("canvas3d").classList.add("dragging");
-            dragPlane.setFromNormalAndCoplanarPoint(
-                new THREE.Vector3(0, 1, 0),
-                part.mesh.position.clone()
-            );
+            dragPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), part.mesh.position.clone());
             var hitPoint = new THREE.Vector3();
             raycaster.ray.intersectPlane(dragPlane, hitPoint);
             if (hitPoint) dragOffset.copy(part.mesh.position).sub(hitPoint);
-            setStatus("Dragging " + part.id);
             return;
         }
     } else {
@@ -754,21 +842,20 @@ function onViewportPointerMove(ev) {
     var hitPoint = new THREE.Vector3();
     if (raycaster.ray.intersectPlane(dragPlane, hitPoint)) {
         var next = hitPoint.add(dragOffset);
-        dragPart.mesh.position.x = next.x;
-        dragPart.mesh.position.z = next.z;
-        // keep Y unless Shift held (then free Y via vertical plane approx - skip for simplicity)
-        dragPart.pos.x = dragPart.mesh.position.x;
+        // GRID SNAP
+        var sx = snap(next.x);
+        var sz = snap(next.z);
+        dragPart.mesh.position.x = sx;
+        dragPart.mesh.position.z = sz;
+        dragPart.pos.x = sx;
         dragPart.pos.y = dragPart.mesh.position.y;
-        dragPart.pos.z = dragPart.mesh.position.z;
+        dragPart.pos.z = sz;
         if (outlineHelper) setOutline(dragPart.mesh);
-        // live update pos fields if open
         var px = document.getElementById("pPx");
-        var py = document.getElementById("pPy");
         var pz = document.getElementById("pPz");
         if (px && selectedPartId === dragPart.id) {
-            px.value = dragPart.pos.x.toFixed(2);
-            if (py) py.value = dragPart.pos.y.toFixed(2);
-            if (pz) pz.value = dragPart.pos.z.toFixed(2);
+            px.value = sx;
+            if (pz) pz.value = sz;
         }
     }
 }
@@ -777,7 +864,7 @@ function onViewportPointerUp(ev) {
     if (!isDraggingPart) return;
     if (dragPointerId != null && ev.pointerId !== dragPointerId) return;
     isDraggingPart = false;
-    if (dragPart) setStatus("Moved " + dragPart.id);
+    if (dragPart) setStatus("Moved " + dragPart.id + " (snapped)");
     dragPart = null;
     dragPointerId = null;
     document.getElementById("canvas3d").classList.remove("dragging");
@@ -791,31 +878,21 @@ function onViewportWheel(ev) {
     updateCameraFromOrbit();
 }
 
-/* ===== Orientation cube ===== */
 function initOrientCube() {
-    var cube = document.getElementById("orientCube");
     var wrap = document.getElementById("orientCubeWrap");
-    if (!cube || !wrap) return;
-
+    if (!wrap) return;
     wrap.addEventListener("pointerdown", function (ev) {
         if (isTestMode) return;
-        // face click?
         var face = ev.target && ev.target.dataset && ev.target.dataset.face;
-        if (face) {
-            snapCameraToFace(face);
-            return;
-        }
+        if (face) { snapCameraToFace(face); return; }
         orientDragging = true;
-        orientLastX = ev.clientX;
-        orientLastY = ev.clientY;
+        orientLastX = ev.clientX; orientLastY = ev.clientY;
         try { wrap.setPointerCapture(ev.pointerId); } catch (e) {}
     });
     wrap.addEventListener("pointermove", function (ev) {
         if (!orientDragging || isTestMode) return;
-        var dx = ev.clientX - orientLastX;
-        var dy = ev.clientY - orientLastY;
-        orientLastX = ev.clientX;
-        orientLastY = ev.clientY;
+        var dx = ev.clientX - orientLastX, dy = ev.clientY - orientLastY;
+        orientLastX = ev.clientX; orientLastY = ev.clientY;
         camYaw -= dx * 0.01;
         camPitch = Math.max(-1.2, Math.min(1.4, camPitch + dy * 0.01));
         updateCameraFromOrbit();
@@ -823,9 +900,7 @@ function initOrientCube() {
     wrap.addEventListener("pointerup", function () { orientDragging = false; });
     wrap.addEventListener("pointercancel", function () { orientDragging = false; });
 }
-
 function snapCameraToFace(face) {
-    // Snap orbit yaw/pitch to axis views
     if (face === "px") { camYaw = Math.PI / 2; camPitch = 0.15; }
     else if (face === "nx") { camYaw = -Math.PI / 2; camPitch = 0.15; }
     else if (face === "pz") { camYaw = 0; camPitch = 0.15; }
@@ -833,32 +908,16 @@ function snapCameraToFace(face) {
     else if (face === "py") { camYaw = 0; camPitch = 1.4; }
     else if (face === "ny") { camYaw = 0; camPitch = -1.2; }
     updateCameraFromOrbit();
-    setStatus("View snapped: " + face.toUpperCase());
 }
 
-/* ===== Selection / parts ===== */
 function setOutline(mesh) {
     clearOutline();
     if (!mesh || !scene) return;
     try {
         outlineHelper = new THREE.BoxHelper(mesh, 0x93c5fd);
         scene.add(outlineHelper);
-    } catch (e) {
-        try {
-            var box = new THREE.Box3().setFromObject(mesh);
-            var size = new THREE.Vector3(); box.getSize(size);
-            var center = new THREE.Vector3(); box.getCenter(center);
-            var helper = new THREE.Mesh(
-                new THREE.BoxGeometry(Math.max(size.x, 0.2) * 1.02, Math.max(size.y, 0.2) * 1.02, Math.max(size.z, 0.2) * 1.02),
-                new THREE.MeshBasicMaterial({ color: 0x93c5fd, wireframe: true, transparent: true, opacity: 0.95 })
-            );
-            helper.position.copy(center);
-            outlineHelper = helper;
-            scene.add(outlineHelper);
-        } catch (e2) {}
-    }
+    } catch (e) {}
 }
-
 function clearOutline() {
     if (outlineHelper && scene) {
         scene.remove(outlineHelper);
@@ -869,54 +928,57 @@ function clearOutline() {
     }
     outlineHelper = null;
 }
-
 function unselectAll() {
     selectedPartId = null;
     selectedNodeId = null;
     document.querySelectorAll(".hierarchy-item").forEach(function (item) { item.classList.remove("selected"); });
     clearOutline();
     document.getElementById("propertiesTitle").textContent = "Properties";
-    document.getElementById("propertiesContent").innerHTML = "Nothing selected. Click a part or Hierarchy item.";
-    var hint = document.getElementById("selectHint");
-    if (hint) hint.textContent = "Drag parts to move · W/S camera · A/D turn";
+    document.getElementById("propertiesContent").innerHTML = "Nothing selected.";
 }
 
 function resizePartOneEnd(part, axis, newSize) {
     if (!part || !part.mesh) return;
-    newSize = Math.max(0.2, parseFloat(newSize) || 0.2);
+    newSize = Math.max(GRID, snap(parseFloat(newSize) || GRID));
     var old = part.size[axis];
     var delta = newSize - old;
     part.size[axis] = newSize;
+    // base geometry ~2 units; scale = size/2
     part.mesh.scale[axis] = newSize / 2;
-    part.mesh.position[axis] += delta / 2;
+    part.mesh.position[axis] = snap(part.mesh.position[axis] + delta / 2);
     part.pos[axis] = part.mesh.position[axis];
 }
 
 function addNewPart() {
     if (isTestMode) { alert("Stop Test Mode first."); return; }
     if (!scene) {
-        setStatus("Scene missing — rebooting…");
-        if (!init3DScene()) {
-            alert("3D scene is not ready yet. Wait a second and try again.");
-            return;
-        }
+        if (!init3DScene()) { alert("3D scene not ready."); return; }
     }
-    var id = "Part_" + (partsList.length + 1);
-    var geo = new THREE.BoxGeometry(2, 2, 2);
-    var mat = makeMaterial(selectedMaterialId || "Glass", 0x88ccee, 0.55);
+    var shape = selectedShapeId || "Block";
+    var id = shape + "_" + (partsList.length + 1);
+    var geo = makeShapeGeometry(shape);
+    var matDef = MATERIALS[selectedMaterialId] || MATERIALS.Plastic;
+    var defaultCol = matDef.color;
+    var defaultOp = matDef.opacity != null ? matDef.opacity : 1;
+    var mat = makeMaterial(selectedMaterialId || "Plastic", defaultCol, defaultOp);
     var mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set((Math.random() * 8 - 4), 1.5 + Math.random() * 2, (Math.random() * 8 - 4));
+    var spawn = snapVec((Math.random() * 8 - 4), 2, (Math.random() * 8 - 4));
+    // lift so resting on baseplate
+    spawn.y = Math.max(1, spawn.y);
+    mesh.position.set(spawn.x, spawn.y, spawn.z);
     mesh.userData.azoraPartId = id;
     scene.add(mesh);
 
     var partObj = {
         id: id,
+        shape: shape,
         mesh: mesh,
         size: { x: 2, y: 2, z: 2 },
-        pos: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
-        color: "#88ccee",
-        material: selectedMaterialId || "Glass",
-        transparency: 0.55,
+        pos: { x: spawn.x, y: spawn.y, z: spawn.z },
+        color: "#" + ("000000" + defaultCol.toString(16)).slice(-6),
+        colorCustom: false,
+        material: selectedMaterialId || "Plastic",
+        transparency: defaultOp,
         canTouch: true,
         canCollide: true
     };
@@ -925,18 +987,21 @@ function addNewPart() {
     var div = document.createElement("div");
     div.className = "hierarchy-item";
     div.id = "hierarchy_" + id;
-    div.innerHTML = "Part " + id + " <small style='opacity:0.75'>(" + partObj.material + ")</small>";
+    div.innerHTML = (SHAPES[shape] ? SHAPES[shape].icon + " " : "") + id +
+        " <small style='opacity:0.75'>(" + partObj.material + ")</small>";
     div.onclick = function () { selectPartNode(id); };
     document.getElementById("dynamicPartsContainer").appendChild(div);
 
     selectPartNode(id);
     setStatus("Added " + id);
-    arrowBubbleSpeak("Spawned <strong>" + id + "</strong>. Drag it to move. Tune transparency, CanTouch, CanCollide on the right.");
+    arrowBubbleSpeak("Spawned <strong>" + id + "</strong> on the grid. Drag to move (snaps).");
 }
 
 function refreshHierarchyPartLabel(part) {
     var el = document.getElementById("hierarchy_" + part.id);
-    if (el) el.innerHTML = "Part " + part.id + " <small style='opacity:0.75'>(" + (part.material || "Glass") + ")</small>";
+    if (!el) return;
+    var icon = (SHAPES[part.shape] && SHAPES[part.shape].icon) ? SHAPES[part.shape].icon + " " : "";
+    el.innerHTML = icon + part.id + " <small style='opacity:0.75'>(" + (part.material || "Plastic") + ")</small>";
 }
 
 function selectPartNode(id) {
@@ -950,8 +1015,6 @@ function selectPartNode(id) {
     selectedPartId = id;
     setOutline(part.mesh);
     refreshPartProperties(id);
-    var hint = document.getElementById("selectHint");
-    if (hint) hint.textContent = "Selected " + id + " · drag to move · light-blue outline";
 }
 
 function refreshPartProperties(id) {
@@ -964,28 +1027,56 @@ function refreshPartProperties(id) {
     var matOpts = Object.keys(MATERIALS).map(function (m) {
         return '<option value="' + m + '"' + (part.material === m ? " selected" : "") + ">" + m + "</option>";
     }).join("");
-
+    var shapeOpts = Object.keys(SHAPES).map(function (s) {
+        return '<option value="' + s + '"' + (part.shape === s ? " selected" : "") + ">" + SHAPES[s].name + "</option>";
+    }).join("");
     var tPct = Math.round((part.transparency != null ? part.transparency : 1) * 100);
 
     document.getElementById("propertiesTitle").textContent = "Properties - " + id;
     document.getElementById("propertiesContent").innerHTML =
-        '<p class="hint-mini">Drag the part in the viewport to move it. Size grows from one end only.</p>' +
-        '<div class="property-row"><label>Color</label><input type="color" id="pColor" value="' + part.color + '" oninput="updatePartProperty(\'' + id + '\',\'color\',this.value)"></div>' +
-        '<div class="property-row"><label>Material</label><select id="pMat" onchange="updatePartProperty(\'' + id + '\',\'material\',this.value)">' + matOpts + '</select></div>' +
+        '<p class="hint-mini">Positions snap to a <strong>' + GRID + '-stud grid</strong>.</p>' +
+        '<div class="property-row"><label>Shape</label><select onchange="changePartShape(\'' + id + '\',this.value)">' + shapeOpts + '</select></div>' +
+        '<div class="property-row"><label>Color</label><input type="color" value="' + part.color + '" oninput="updatePartProperty(\'' + id + '\',\'color\',this.value)"></div>' +
+        '<div class="property-row"><label>Material</label><select onchange="updatePartProperty(\'' + id + '\',\'material\',this.value)">' + matOpts + '</select></div>' +
         '<div class="property-row"><label>Transparency</label><input type="range" min="0" max="100" value="' + tPct + '" oninput="updatePartProperty(\'' + id + '\',\'transparency\',this.value)"><span id="tLabel">' + tPct + '%</span></div>' +
         '<div class="toggle-row"><label>Can Touch</label><button type="button" class="toggle-btn ' + (part.canTouch ? "on" : "off") + '" onclick="togglePartFlag(\'' + id + '\',\'canTouch\')">' + (part.canTouch ? "ON" : "OFF") + '</button></div>' +
         '<div class="toggle-row"><label>Can Collide</label><button type="button" class="toggle-btn ' + (part.canCollide ? "on" : "off") + '" onclick="togglePartFlag(\'' + id + '\',\'canCollide\')">' + (part.canCollide ? "ON" : "OFF") + '</button></div>' +
-        '<div class="property-row"><label>Size X</label><input type="number" step="0.1" id="pSx" value="' + part.size.x + '" oninput="updatePartProperty(\'' + id + '\',\'sx\',this.value)"></div>' +
-        '<div class="property-row"><label>Size Y</label><input type="number" step="0.1" id="pSy" value="' + part.size.y + '" oninput="updatePartProperty(\'' + id + '\',\'sy\',this.value)"></div>' +
-        '<div class="property-row"><label>Size Z</label><input type="number" step="0.1" id="pSz" value="' + part.size.z + '" oninput="updatePartProperty(\'' + id + '\',\'sz\',this.value)"></div>' +
-        '<div class="property-row"><label>Pos X</label><input type="number" step="0.1" id="pPx" value="' + Number(part.pos.x).toFixed(2) + '" oninput="updatePartProperty(\'' + id + '\',\'px\',this.value)"></div>' +
-        '<div class="property-row"><label>Pos Y</label><input type="number" step="0.1" id="pPy" value="' + Number(part.pos.y).toFixed(2) + '" oninput="updatePartProperty(\'' + id + '\',\'py\',this.value)"></div>' +
-        '<div class="property-row"><label>Pos Z</label><input type="number" step="0.1" id="pPz" value="' + Number(part.pos.z).toFixed(2) + '" oninput="updatePartProperty(\'' + id + '\',\'pz\',this.value)"></div>' +
+        '<div class="property-row"><label>Size X</label><input type="number" step="' + GRID + '" value="' + part.size.x + '" oninput="updatePartProperty(\'' + id + '\',\'sx\',this.value)"></div>' +
+        '<div class="property-row"><label>Size Y</label><input type="number" step="' + GRID + '" value="' + part.size.y + '" oninput="updatePartProperty(\'' + id + '\',\'sy\',this.value)"></div>' +
+        '<div class="property-row"><label>Size Z</label><input type="number" step="' + GRID + '" value="' + part.size.z + '" oninput="updatePartProperty(\'' + id + '\',\'sz\',this.value)"></div>' +
+        '<div class="property-row"><label>Pos X</label><input type="number" step="' + GRID + '" id="pPx" value="' + part.pos.x + '" oninput="updatePartProperty(\'' + id + '\',\'px\',this.value)"></div>' +
+        '<div class="property-row"><label>Pos Y</label><input type="number" step="' + GRID + '" id="pPy" value="' + part.pos.y + '" oninput="updatePartProperty(\'' + id + '\',\'py\',this.value)"></div>' +
+        '<div class="property-row"><label>Pos Z</label><input type="number" step="' + GRID + '" id="pPz" value="' + part.pos.z + '" oninput="updatePartProperty(\'' + id + '\',\'pz\',this.value)"></div>' +
         '<button type="button" onclick="deleteSelectedPart()" style="width:100%;margin-top:6px;background:#7f1d1d;">Delete Part</button>' +
         '<button type="button" onclick="unselectAll()" style="width:100%;margin-top:6px;">Unselect</button>';
 }
 
+function changePartShape(id, shapeId) {
+    var part = partsList.find(function (p) { return p.id === id; });
+    if (!part || !part.mesh || !scene) return;
+    part.shape = shapeId;
+    var oldMat = part.mesh.material;
+    scene.remove(part.mesh);
+    try { part.mesh.geometry.dispose(); } catch (e) {}
+    var geo = makeShapeGeometry(shapeId);
+    var mesh = new THREE.Mesh(geo, oldMat);
+    mesh.position.copy(part.mesh.position);
+    mesh.scale.set(part.size.x / 2, part.size.y / 2, part.size.z / 2);
+    mesh.userData.azoraPartId = id;
+    part.mesh = mesh;
+    scene.add(mesh);
+    refreshHierarchyPartLabel(part);
+    setOutline(mesh);
+    refreshPartProperties(id);
+}
+
 function togglePartFlag(id, flag) {
+    if (id === "baseplate") {
+        baseplateProps[flag] = !baseplateProps[flag];
+        refreshBaseplateProperties();
+        setStatus("Baseplate " + flag + " = " + (baseplateProps[flag] ? "ON" : "OFF"));
+        return;
+    }
     var part = partsList.find(function (p) { return p.id === id; });
     if (!part) return;
     part[flag] = !part[flag];
@@ -998,6 +1089,7 @@ function updatePartProperty(id, property, val) {
     if (!part) return;
     if (property === "color") {
         part.color = val;
+        part.colorCustom = true;
         if (part.mesh.material && part.mesh.material.color) part.mesh.material.color.set(val);
     } else if (property === "material") {
         applyMaterialToPart(id, val);
@@ -1006,7 +1098,7 @@ function updatePartProperty(id, property, val) {
         var t = Math.max(0, Math.min(100, parseFloat(val) || 0)) / 100;
         part.transparency = t;
         var col = part.color ? new THREE.Color(part.color).getHex() : undefined;
-        part.mesh.material = makeMaterial(part.material || "Glass", col, t);
+        part.mesh.material = makeMaterial(part.material || "Plastic", col, t);
         var lab = document.getElementById("tLabel");
         if (lab) lab.textContent = Math.round(t * 100) + "%";
     } else if (property === "sx") {
@@ -1016,17 +1108,17 @@ function updatePartProperty(id, property, val) {
     } else if (property === "sz") {
         resizePartOneEnd(part, "z", val);
     } else if (property === "px") {
-        part.pos.x = parseFloat(val) || 0; part.mesh.position.x = part.pos.x;
+        part.pos.x = snap(parseFloat(val) || 0); part.mesh.position.x = part.pos.x;
     } else if (property === "py") {
-        part.pos.y = parseFloat(val) || 0; part.mesh.position.y = part.pos.y;
+        part.pos.y = snap(parseFloat(val) || 0); part.mesh.position.y = part.pos.y;
     } else if (property === "pz") {
-        part.pos.z = parseFloat(val) || 0; part.mesh.position.z = part.pos.z;
+        part.pos.z = snap(parseFloat(val) || 0); part.mesh.position.z = part.pos.z;
     }
     if (outlineHelper) setOutline(part.mesh);
 }
 
 function deleteSelectedPart() {
-    if (!selectedPartId || isTestMode) return;
+    if (!selectedPartId || selectedPartId === "baseplate" || isTestMode) return;
     var idx = partsList.findIndex(function (p) { return p.id === selectedPartId; });
     if (idx < 0) return;
     var part = partsList[idx];
@@ -1035,7 +1127,6 @@ function deleteSelectedPart() {
     var el = document.getElementById("hierarchy_" + part.id);
     if (el) el.remove();
     unselectAll();
-    setStatus("Deleted " + part.id);
 }
 
 function switchView(view) {
@@ -1044,6 +1135,48 @@ function switchView(view) {
     document.getElementById("canvas3d").style.display = view === "3d" ? "block" : "none";
     document.getElementById("scriptEditorContainer").style.display = view === "script" ? "flex" : "none";
     if (view === "3d") setTimeout(resizeRenderer, 20);
+}
+
+function refreshBaseplateProperties() {
+    var matOpts = Object.keys(MATERIALS).map(function (m) {
+        return '<option value="' + m + '"' + (baseplateProps.material === m ? " selected" : "") + ">" + m + "</option>";
+    }).join("");
+    var tPct = Math.round((baseplateProps.transparency != null ? baseplateProps.transparency : 1) * 100);
+    document.getElementById("propertiesTitle").textContent = "Properties - Baseplate";
+    document.getElementById("propertiesContent").innerHTML =
+        '<p class="hint-mini">Baseplate has the <strong>same properties as parts</strong>.</p>' +
+        '<div class="property-row"><label>Color</label><input type="color" value="' + (baseplateProps.color || "#3a4555") + '" oninput="updateBaseplateProp(\'color\',this.value)"></div>' +
+        '<div class="property-row"><label>Material</label><select onchange="updateBaseplateProp(\'material\',this.value)">' + matOpts + '</select></div>' +
+        '<div class="property-row"><label>Transparency</label><input type="range" min="0" max="100" value="' + tPct + '" oninput="updateBaseplateProp(\'transparency\',this.value)"><span id="btLabel">' + tPct + '%</span></div>' +
+        '<div class="toggle-row"><label>Can Touch</label><button type="button" class="toggle-btn ' + (baseplateProps.canTouch ? "on" : "off") + '" onclick="togglePartFlag(\'baseplate\',\'canTouch\')">' + (baseplateProps.canTouch ? "ON" : "OFF") + '</button></div>' +
+        '<div class="toggle-row"><label>Can Collide</label><button type="button" class="toggle-btn ' + (baseplateProps.canCollide ? "on" : "off") + '" onclick="togglePartFlag(\'baseplate\',\'canCollide\')">' + (baseplateProps.canCollide ? "ON" : "OFF") + '</button></div>' +
+        '<div class="property-row"><label>Size X</label><input type="number" id="bsX" value="' + baseplateProps.sizeX + '" oninput="updateBaseplate()"></div>' +
+        '<div class="property-row"><label>Size Y</label><input type="number" id="bsY" value="' + baseplateProps.sizeY + '" oninput="updateBaseplate()"></div>' +
+        '<div class="property-row"><label>Size Z</label><input type="number" id="bsZ" value="' + baseplateProps.sizeZ + '" oninput="updateBaseplate()"></div>' +
+        '<div class="property-row"><label>Pos X</label><input type="number" id="bpX" value="' + baseplateProps.posX + '" oninput="updateBaseplate()"></div>' +
+        '<div class="property-row"><label>Pos Y</label><input type="number" id="bpY" value="' + baseplateProps.posY + '" oninput="updateBaseplate()"></div>' +
+        '<div class="property-row"><label>Pos Z</label><input type="number" id="bpZ" value="' + baseplateProps.posZ + '" oninput="updateBaseplate()"></div>';
+}
+
+function updateBaseplateProp(prop, val) {
+    if (prop === "color") {
+        baseplateProps.color = val;
+        baseplateProps.colorCustom = true;
+        if (baseplateMesh && baseplateMesh.material && baseplateMesh.material.color) {
+            baseplateMesh.material.color.set(val);
+        }
+    } else if (prop === "material") {
+        applyMaterialToBaseplate(val);
+        return;
+    } else if (prop === "transparency") {
+        var t = Math.max(0, Math.min(100, parseFloat(val) || 0)) / 100;
+        baseplateProps.transparency = t;
+        var col = new THREE.Color(baseplateProps.color || "#3a4555").getHex();
+        if (baseplateMesh) baseplateMesh.material = makeMaterial(baseplateProps.material || "Concrete", col, t);
+        var lab = document.getElementById("btLabel");
+        if (lab) lab.textContent = Math.round(t * 100) + "%";
+    }
+    if (baseplateMesh) setOutline(baseplateMesh);
 }
 
 function selectNode(node) {
@@ -1064,9 +1197,8 @@ function selectNode(node) {
     if (node === "workspace") {
         document.getElementById("propertiesTitle").textContent = "Properties - Workspace";
         document.getElementById("propertiesContent").innerHTML =
-            '<p class="hint-mini">Your game world. Add parts, edit sky, and publish when ready.</p>' +
-            '<p>Parts: <strong>' + partsList.length + '</strong></p>' +
-            '<p class="hint-mini"><b>W/S</b> move camera · <b>A/D</b> turn · drag parts · Test to play</p>';
+            '<p class="hint-mini">Grid snap is <strong>ON</strong> (1 stud). Parts cannot move smoothly.</p>' +
+            '<p>Parts: <strong>' + partsList.length + '</strong></p>';
     } else if (node === "sky") {
         document.getElementById("propertiesTitle").textContent = "Properties - Sky / Atmosphere";
         document.getElementById("propertiesContent").innerHTML =
@@ -1076,75 +1208,50 @@ function selectNode(node) {
             '<div class="property-row"><label>Density</label><input type="number" min="0" max="1" step="0.05" value="' + skySettings.density + '" oninput="skySettings.density=parseFloat(this.value)||0;applySkySettings()"></div>' +
             '<div class="property-row"><label>Sun</label><input type="number" min="0" max="3" step="0.05" value="' + skySettings.sunIntensity + '" oninput="skySettings.sunIntensity=parseFloat(this.value)||1;applySkySettings()"></div>';
     } else if (node === "baseplate") {
-        document.getElementById("propertiesTitle").textContent = "Properties - Baseplate";
-        document.getElementById("propertiesContent").innerHTML =
-            '<div class="property-row"><label>Size X</label><input type="number" id="bsX" value="' + baseplateProps.sizeX + '" oninput="updateBaseplate()"></div>' +
-            '<div class="property-row"><label>Size Y</label><input type="number" id="bsY" value="' + baseplateProps.sizeY + '" oninput="updateBaseplate()"></div>' +
-            '<div class="property-row"><label>Size Z</label><input type="number" id="bsZ" value="' + baseplateProps.sizeZ + '" oninput="updateBaseplate()"></div>' +
-            '<div class="property-row"><label>Pos X</label><input type="number" id="bpX" value="' + baseplateProps.posX + '" oninput="updateBaseplate()"></div>' +
-            '<div class="property-row"><label>Pos Y</label><input type="number" id="bpY" value="' + baseplateProps.posY + '" oninput="updateBaseplate()"></div>' +
-            '<div class="property-row"><label>Pos Z</label><input type="number" id="bpZ" value="' + baseplateProps.posZ + '" oninput="updateBaseplate()"></div>';
+        selectedPartId = "baseplate";
+        refreshBaseplateProperties();
         if (baseplateMesh) setOutline(baseplateMesh);
     } else if (node === "character") {
         document.getElementById("propertiesTitle").textContent = "Properties - Character";
         document.getElementById("propertiesContent").innerHTML =
-            '<p class="hint-mini">Preview avatar. In <b>Test Mode</b> you control this character with WASD + Space.</p>';
+            '<p class="hint-mini">In Test Mode you control this character with WASD + Space.</p>';
         if (characterGroup) setOutline(characterGroup);
     }
 }
 
 function updateBaseplate() {
-    if (!baseplateMesh || !scene) return;
     baseplateProps.sizeX = parseFloat(document.getElementById("bsX").value) || 1;
     baseplateProps.sizeY = parseFloat(document.getElementById("bsY").value) || 1;
     baseplateProps.sizeZ = parseFloat(document.getElementById("bsZ").value) || 1;
     baseplateProps.posX = parseFloat(document.getElementById("bpX").value) || 0;
     baseplateProps.posY = parseFloat(document.getElementById("bpY").value) || 0;
     baseplateProps.posZ = parseFloat(document.getElementById("bpZ").value) || 0;
-    var old = baseplateMesh;
-    scene.remove(old);
-    try { old.geometry.dispose(); } catch (e) {}
-    var geo = new THREE.BoxGeometry(baseplateProps.sizeX, baseplateProps.sizeY, baseplateProps.sizeZ);
-    baseplateMesh = new THREE.Mesh(geo, makeMaterial("Concrete", 0x3a4555));
-    baseplateMesh.position.set(baseplateProps.posX, baseplateProps.posY, baseplateProps.posZ);
-    baseplateMesh.userData.azoraKind = "baseplate";
-    scene.add(baseplateMesh);
+    rebuildBaseplateMesh();
     setOutline(baseplateMesh);
 }
 
 function resetCamera() {
     if (isTestMode) return;
-    camYaw = Math.PI / 4;
-    camPitch = 0.45;
-    camDist = 32;
-    camTarget.set(0, 1, 0);
+    camYaw = Math.PI / 4; camPitch = 0.45; camDist = 32;
+    if (camTarget) camTarget.set(0, 1, 0);
     updateCameraFromOrbit();
 }
 
-/* ===== Test mode ===== */
 function toggleTestMode() {
-    if (!scene || !characterGroup) {
-        alert("Scene not ready yet.");
-        return;
-    }
+    if (!scene || !characterGroup) { alert("Scene not ready yet."); return; }
     isTestMode = !isTestMode;
     var btn = document.getElementById("testBtn");
     var banner = document.getElementById("testBanner");
     var orient = document.getElementById("orientCubeWrap");
-
     if (isTestMode) {
         if (btn) { btn.textContent = "⏹ Stop Test"; btn.classList.add("test-on"); }
         if (banner) banner.style.display = "block";
         if (orient) orient.style.display = "none";
         unselectAll();
-        clearOutline();
-        // reset character pose
         characterGroup.position.set(0, 1.2, 0);
         characterGroup.rotation.y = 0;
-        charVelY = 0;
-        charOnGround = true;
-        setStatus("TEST MODE — WASD move · Space jump · Esc stop");
-        arrowBubbleSpeak("<strong>Test Mode:</strong> WASD move your character, Space to jump. Parts with CanCollide ON will block you. Esc or Stop Test to exit.");
+        charVelY = 0; charOnGround = true;
+        setStatus("TEST MODE");
     } else {
         if (btn) { btn.textContent = "▶ Test Game"; btn.classList.remove("test-on"); }
         if (banner) banner.style.display = "none";
@@ -1153,12 +1260,11 @@ function toggleTestMode() {
         characterGroup.rotation.y = 0;
         updateCameraFromOrbit();
         setStatus("Studio mode");
-        arrowBubbleSpeak("Back to Studio. Drag parts, edit properties, then Test again.");
     }
     resizeRenderer();
 }
 
-/* ===== Games list / publish ===== */
+/* ===== Games / Publish (fixed username + name) ===== */
 function getCreatorGames() {
     try { return JSON.parse(localStorage.getItem("azoraCreatorGames") || "[]"); }
     catch (e) { return []; }
@@ -1185,9 +1291,17 @@ function renderGamesList() {
 function createNewGame() {
     if (isTestMode) toggleTestMode();
     var name = prompt("Game name?", "My Azora Game");
-    if (!name) return;
+    if (!name || !String(name).trim()) return;
+    name = String(name).trim();
     var games = getCreatorGames();
-    var g = { id: "game_" + Date.now(), name: name, visibility: "private", createdAt: Date.now(), parts: [] };
+    var g = {
+        id: "game_" + Date.now(),
+        name: name,
+        by: getLoggedInUsername(),
+        visibility: "private",
+        createdAt: Date.now(),
+        parts: []
+    };
     games.unshift(g);
     saveCreatorGames(games);
     currentGameId = g.id;
@@ -1196,12 +1310,11 @@ function createNewGame() {
     document.getElementById("dynamicPartsContainer").innerHTML = "";
     unselectAll();
     renderGamesList();
-    arrowBubbleSpeak("Created <strong>" + name + "</strong>. Build and then Publish!");
+    arrowBubbleSpeak("Created <strong>" + name + "</strong> by " + g.by);
 }
 function loadGame(id) {
     currentGameId = id;
     renderGamesList();
-    arrowBubbleSpeak("Loaded game.");
 }
 function toggleVisibility(id) {
     var games = getCreatorGames();
@@ -1219,59 +1332,88 @@ function saveProject() {
     var games = getCreatorGames();
     var g = games.find(function (x) { return x.id === currentGameId; });
     if (!g) return;
+    if (!g.name || g.name === "undefined") g.name = "My Azora Game";
+    g.by = getLoggedInUsername();
     g.parts = partsList.map(function (p) {
         return {
-            id: p.id, size: p.size, pos: p.pos, color: p.color, material: p.material,
-            transparency: p.transparency, canTouch: p.canTouch, canCollide: p.canCollide
+            id: p.id, shape: p.shape, size: p.size, pos: p.pos, color: p.color,
+            material: p.material, transparency: p.transparency,
+            canTouch: p.canTouch, canCollide: p.canCollide
         };
     });
-    g.sky = JSON.parse(JSON.stringify(skySettings));
     g.baseplate = JSON.parse(JSON.stringify(baseplateProps));
+    g.sky = JSON.parse(JSON.stringify(skySettings));
     g.updatedAt = Date.now();
     saveCreatorGames(games);
-    setStatus("Saved " + (g.name || "game"));
-    arrowBubbleSpeak("Workspace saved for <strong>" + (g.name || "game") + "</strong>.");
+    setStatus("Saved " + g.name + " by " + g.by);
 }
+
 function publishCurrentGame() {
+    // Ensure we have a named game
     if (!currentGameId) {
-        alert("Create a game first with + New Game.");
-        return;
+        createNewGame();
+        if (!currentGameId) return;
     }
     saveProject();
     var games = getCreatorGames();
     var g = games.find(function (x) { return x.id === currentGameId; });
-    if (!g) return;
+    if (!g) {
+        alert("Could not find your game to publish.");
+        return;
+    }
+    // Fix undefined name
+    var gameName = (g.name && g.name !== "undefined") ? String(g.name).trim() : "";
+    if (!gameName) {
+        gameName = prompt("Name this game before publishing:", "My Azora Game") || "My Azora Game";
+        gameName = String(gameName).trim() || "My Azora Game";
+        g.name = gameName;
+    }
+    var author = getLoggedInUsername();
+    g.by = author;
     g.visibility = "public";
+    g.published = true;
+    g.publishedAt = Date.now();
     saveCreatorGames(games);
+
     try {
-        var feed = JSON.parse(localStorage.getItem("azoraAzaFnGames") || "[]");
+        var feed = [];
+        try { feed = JSON.parse(localStorage.getItem("azoraAzaFnGames") || "[]"); } catch (e) { feed = []; }
+        if (!Array.isArray(feed)) feed = [];
+        // Remove old entry for same id
+        feed = feed.filter(function (f) { return f && f.id !== g.id; });
         feed.unshift({
             id: g.id,
-            name: g.name,
-            by: (function () {
-                try {
-                    var a = JSON.parse(localStorage.getItem("azoraAccount") || "null");
-                    return (a && a.username) || "Player";
-                } catch (e) { return "Player"; }
-            })(),
+            name: gameName,
+            title: gameName,
+            by: author,
+            author: author,
+            creator: author,
             published: true,
-            createdAt: Date.now()
+            visibility: "public",
+            createdAt: g.createdAt || Date.now(),
+            publishedAt: Date.now(),
+            parts: g.parts || [],
+            baseplate: g.baseplate || null,
+            sky: g.sky || null
         });
-        localStorage.setItem("azoraAzaFnGames", JSON.stringify(feed.slice(0, 50)));
-    } catch (e) {}
+        localStorage.setItem("azoraAzaFnGames", JSON.stringify(feed.slice(0, 80)));
+        // Also write a simple public list some index pages may read
+        localStorage.setItem("azoraPublishedGames", JSON.stringify(feed.slice(0, 80)));
+    } catch (e) {
+        console.warn("publish feed write failed", e);
+    }
+
     renderGamesList();
-    alert('Published "' + g.name + '"! Players can discover it on the Feed.');
-    arrowBubbleSpeak("Published <strong>" + g.name + "</strong> to the public Feed.");
+    alert('Published "' + gameName + '" by ' + author + '!');
+    arrowBubbleSpeak("Published <strong>" + gameName + "</strong> by <strong>" + author + "</strong> to the Feed.");
+    setStatus("Published " + gameName + " by " + author);
 }
 
 function handleBack() {
     if (window.opener) window.close();
     else window.location.href = "index.html";
 }
-
-function dragBlock(ev, code) {
-    ev.dataTransfer.setData("text/plain", code);
-}
+function dragBlock(ev, code) { ev.dataTransfer.setData("text/plain", code); }
 function handleBlockDrop(ev) {
     ev.preventDefault();
     var code = ev.dataTransfer.getData("text/plain");
@@ -1283,6 +1425,7 @@ function handleBlockDrop(ev) {
 function bootStudio() {
     enforceComputerOnly();
     initMaterialsGrid();
+    initShapeGrid();
     renderGamesList();
     initOrientCube();
     var games = getCreatorGames();
@@ -1293,10 +1436,8 @@ function bootStudio() {
         keys[k] = true;
         if (k === " ") keys["space"] = true;
         if (k === "escape" && isTestMode) toggleTestMode();
-        // prevent page scroll on space / arrows while in studio
         if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].indexOf(k) >= 0) {
-            if (document.activeElement && document.activeElement.tagName === "INPUT") return;
-            if (document.activeElement && document.activeElement.tagName === "TEXTAREA") return;
+            if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA")) return;
             e.preventDefault();
         }
     });
@@ -1313,22 +1454,13 @@ function bootStudio() {
             setTimeout(function () { tryInit(attempt + 1); }, 250);
             return;
         }
-        if (ok) {
-            selectNode("workspace");
-            resizeRenderer();
-            updateCameraFromOrbit();
-        }
+        if (ok) { selectNode("workspace"); resizeRenderer(); updateCameraFromOrbit(); }
     }
-    requestAnimationFrame(function () {
-        setTimeout(function () { tryInit(1); }, 40);
-    });
+    requestAnimationFrame(function () { setTimeout(function () { tryInit(1); }, 40); });
 }
 
 window.addEventListener("load", bootStudio);
-window.addEventListener("resize", function () {
-    enforceComputerOnly();
-    resizeRenderer();
-});
+window.addEventListener("resize", function () { enforceComputerOnly(); resizeRenderer(); });
 </script>
 </body>
 </html>
