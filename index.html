@@ -388,6 +388,7 @@
             <label class="avatar-scale-row">Legs <input type="range" id="scaleLegs" min="0.6" max="1.6" step="0.05" value="1" oninput="onAvatarScaleInput()"></label>
         </div>
         <button type="button" id="aiAvatarBtn" class="ai-avatar-btn" onclick="openAIAvatarGenerator()">✨ AI Generate Avatar</button>
+        <button type="button" id="loadPrevAvatarsBtn" class="load-prev-avatars-btn" onclick="openAvatarHistory()">📂 Load previous avatars</button>
         <button onclick="saveAvatar()" id="saveAvatarBtn">Save Avatar</button>
         <p id="guestAvatarLock" style="display:none;color:#ffcc00;font-size:12px;font-weight:bold;text-align:center;margin-top:8px;">
             🔒 Log in or create an account to customize your avatar.<br>
@@ -799,6 +800,18 @@
 
 <!-- Azora AI Image Generator (heavily moderated) -->
 
+
+<div id="avatarHistoryOverlay" class="overlay" style="display:none;">
+    <div class="popup avatar-history-popup" style="max-width:min(400px,calc(100vw - 20px));text-align:left;">
+        <h2 style="text-align:center;margin-top:0;">📂 Previous avatars</h2>
+        <p class="ai-img-policy">Newest saves appear at the top. Loading one applies it to your customizer — saving again adds a <strong>new</strong> entry (old ones stay).</p>
+        <div id="avatarHistoryList" class="avatar-history-list"></div>
+        <div style="display:flex;gap:10px;margin-top:12px;">
+            <button type="button" onclick="closeAvatarHistory()" style="flex:1;">Close</button>
+        </div>
+    </div>
+</div>
+
 <div id="aiAvatarOverlay" class="overlay" style="display:none;">
     <div class="popup ai-avatar-popup" style="max-width:min(380px,calc(100vw - 20px));text-align:left;">
         <h2 style="text-align:center;margin-top:0;">✨ AI Avatar Generator</h2>
@@ -860,7 +873,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=59.5"></script>
+<script src="script.js?v=59.6"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {

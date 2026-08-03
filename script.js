@@ -2184,10 +2184,34 @@ let scene, camera, renderer;
 let headMesh, torsoMesh, leftArmMesh, rightArmMesh, leftLegMesh, rightLegMesh;
 let faceGroup, neckMesh, avatarCharacterGroup;
 
+/** Materials locked for now — solid glossy look (textures not used on live games). */
+var AZORA_MATERIALS_LOCKED = true;
+
+function azoraGlossMaterial(color) {
+    try {
+        return new THREE.MeshPhongMaterial({
+            color: color,
+            shininess: 90,
+            specular: 0xbfbfbf,
+            reflectivity: 0.4
+        });
+    } catch (e) {
+        try {
+            return new THREE.MeshStandardMaterial({
+                color: color,
+                metalness: 0.15,
+                roughness: 0.25
+            });
+        } catch (e2) {
+            return ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(color ):new THREE.MeshLambertMaterial({color:color }));
+        }
+    }
+}
+
 function makeBox(w, h, d, color) {
     return new THREE.Mesh(
         new THREE.BoxGeometry(w, h, d),
-        new THREE.MeshLambertMaterial({ color: color })
+        azoraGlossMaterial(color)
     );
 }
 
@@ -2308,7 +2332,7 @@ function makeAvatarHair(hairColor, headY, headSize, styleId) {
     group.name = "hair";
     group.userData = group.userData || {};
     group.userData.hairStyle = styleId;
-    var mat = new THREE.MeshLambertMaterial({ color: hairColor });
+    var mat = (typeof azoraGlossMaterial === 'function') ? azoraGlossMaterial(hairColor) : ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(hairColor ):new THREE.MeshLambertMaterial({color:hairColor }));
 
     function addPart(name, x, y, z, w, h, d) {
         var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat.clone());
@@ -2697,6 +2721,11 @@ function applyGuestAvatarLock(locked) {
         aiBtn.style.display = locked ? "none" : "block";
         aiBtn.disabled = !!locked;
     }
+    var histBtn = document.getElementById("loadPrevAvatarsBtn");
+    if (histBtn) {
+        histBtn.style.display = locked ? "none" : "block";
+        histBtn.disabled = !!locked;
+    }
     var scalePanel = document.getElementById("avatarScalePanel");
     if (scalePanel) scalePanel.style.display = locked ? "none" : "block";
 }
@@ -2755,7 +2784,7 @@ function applyColorsToMeshes(validated) {
             var mat = mesh.material;
             // If material is shared or missing, give this limb its own material
             if (!mat || (mat && mat.userData && mat.userData._azoraShared)) {
-                mat = new THREE.MeshLambertMaterial({ color: hex });
+                mat = (typeof azoraGlossMaterial === 'function') ? azoraGlossMaterial(hex) : ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(hex ):new THREE.MeshLambertMaterial({color:hex }));
                 mesh.material = mat;
             }
             if (Array.isArray(mat)) {
@@ -2842,6 +2871,161 @@ function updateAvatarColors() {
         console.warn("[Azora] updateAvatarColors failed", e);
     }
 }
+
+
+/** —— Avatar history (append-only; newest at top) —— */
+var AZORA_AVATAR_HISTORY_MAX = 24;
+
+function getAvatarHistory() {
+    try {
+        var list = JSON.parse(localStorage.getItem("azoraAvatarHistory") || "[]");
+        return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+}
+
+function saveAvatarHistory(list) {
+    try {
+        localStorage.setItem("azoraAvatarHistory", JSON.stringify(list || []));
+    } catch (e) {}
+}
+
+function cloneAvatarSnapshot(av) {
+    try {
+        return JSON.parse(JSON.stringify(av || {}));
+    } catch (e) {
+        return av || {};
+    }
+}
+
+/** Push a new history entry. Never edits older entries. */
+function pushAvatarHistory(avatar, source) {
+    if (!avatar) return;
+    var snap = cloneAvatarSnapshot(avatar);
+    var entry = {
+        id: "avh_" + Date.now() + "_" + Math.floor(Math.random() * 9999),
+        savedAt: Date.now(),
+        source: source || "save",
+        avatar: snap
+    };
+    var list = getAvatarHistory();
+    // Avoid spam: if top entry is nearly identical and < 5s old, skip
+    try {
+        if (list[0] && list[0].avatar && (Date.now() - (list[0].savedAt || 0)) < 5000) {
+            var a = list[0].avatar, b = snap;
+            if (a.head === b.head && a.torso === b.torso && a.leftArm === b.leftArm &&
+                a.rightArm === b.rightArm && a.leftLeg === b.leftLeg && a.rightLeg === b.rightLeg &&
+                JSON.stringify(a.scales || {}) === JSON.stringify(b.scales || {}) &&
+                a.gender === b.gender) {
+                return;
+            }
+        }
+    } catch (e2) {}
+    list.unshift(entry);
+    if (list.length > AZORA_AVATAR_HISTORY_MAX) list = list.slice(0, AZORA_AVATAR_HISTORY_MAX);
+    saveAvatarHistory(list);
+}
+
+function formatAvatarHistoryDate(ts) {
+    try {
+        var d = new Date(ts || Date.now());
+        return d.toLocaleString(undefined, {
+            year: "numeric", month: "short", day: "numeric",
+            hour: "2-digit", minute: "2-digit"
+        });
+    } catch (e) {
+        return "Unknown date";
+    }
+}
+
+function openAvatarHistory() {
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Log in to view previous avatars.");
+        if (typeof openCreateAccount === "function") openCreateAccount();
+        return;
+    }
+    var ov = document.getElementById("avatarHistoryOverlay");
+    if (!ov) return;
+    renderAvatarHistoryList();
+    ov.style.display = "flex";
+}
+
+function closeAvatarHistory() {
+    var ov = document.getElementById("avatarHistoryOverlay");
+    if (ov) ov.style.display = "none";
+}
+
+function renderAvatarHistoryList() {
+    var box = document.getElementById("avatarHistoryList");
+    if (!box) return;
+    var list = getAvatarHistory();
+    if (!list.length) {
+        box.innerHTML = '<p class="avatar-history-empty">No previous avatars yet.<br>Change your look and press <strong>Save Avatar</strong> (or Apply an AI design) to start a history.</p>';
+        return;
+    }
+    var html = "";
+    list.forEach(function (entry, idx) {
+        var av = entry.avatar || {};
+        var when = formatAvatarHistoryDate(entry.savedAt);
+        var src = entry.source === "ai" ? "AI design" : (entry.source === "load" ? "Loaded copy" : "Manual save");
+        var label = (idx === 0 ? "Latest · " : "") + src;
+        html += '<button type="button" class="avatar-history-card" onclick="loadAvatarHistoryEntry(\'' + entry.id + '\')">';
+        html += '<div class="avatar-history-swatches">';
+        ["head","torso","leftArm","rightArm","leftLeg","rightLeg"].forEach(function (k) {
+            var col = av[k] || "#888";
+            html += '<span class="avatar-history-swatch" style="background:' + col + '"></span>';
+        });
+        html += '</div>';
+        html += '<div class="avatar-history-meta"><strong>' + label + '</strong>';
+        html += '<small>Last modified: ' + when + '</small>';
+        if (av.gender) html += '<small> · ' + av.gender + '</small>';
+        html += '</div></button>';
+    });
+    box.innerHTML = html;
+}
+
+function loadAvatarHistoryEntry(id) {
+    var list = getAvatarHistory();
+    var entry = null;
+    for (var i = 0; i < list.length; i++) {
+        if (list[i] && list[i].id === id) { entry = list[i]; break; }
+    }
+    if (!entry || !entry.avatar) {
+        alert("That avatar entry was not found.");
+        return;
+    }
+    var av = cloneAvatarSnapshot(entry.avatar);
+    try {
+        if (typeof applyAvatarStateObject === "function") {
+            applyAvatarStateObject({
+                colors: {
+                    head: av.head, torso: av.torso,
+                    leftArm: av.leftArm, rightArm: av.rightArm,
+                    leftLeg: av.leftLeg, rightLeg: av.rightLeg
+                },
+                scales: av.scales || { head: 1, torso: 1, arms: 1, legs: 1 },
+                gender: av.gender || "boy",
+                hair: av.hair || "#3b2f2f"
+            });
+        } else {
+            if (typeof setAvatarColorInputs === "function") setAvatarColorInputs(av);
+            if (av.scales && typeof setAvatarScaleInputs === "function") setAvatarScaleInputs(av.scales);
+            if (typeof updateAvatarColors === "function") updateAvatarColors();
+            if (av.scales && typeof applyAvatarScales === "function") applyAvatarScales(av.scales);
+        }
+    } catch (e) {
+        console.warn("[Azora] load history", e);
+    }
+    closeAvatarHistory();
+    if (typeof showAzoraToast === "function") {
+        showAzoraToast("Loaded previous avatar — Save to add a new history entry");
+    }
+}
+
+window.getAvatarHistory = getAvatarHistory;
+window.pushAvatarHistory = pushAvatarHistory;
+window.openAvatarHistory = openAvatarHistory;
+window.closeAvatarHistory = closeAvatarHistory;
+window.loadAvatarHistoryEntry = loadAvatarHistoryEntry;
 
 function saveAvatar() {
     if (localStorage.getItem("loggedIn") !== "true") {
@@ -2949,6 +3133,9 @@ function saveAvatar() {
         setAvatarColorInputs(validated);
     } catch (e) {}
 
+    try {
+        if (typeof pushAvatarHistory === "function") pushAvatarHistory(account.avatar, "save");
+    } catch (eHist) {}
     alert("3D Avatar saved successfully to your Azora account!");
 }
 
@@ -3665,7 +3852,7 @@ function ensureAIAvatarPreview() {
     function boxMesh(ww, hh, dd, hex) {
         var m = new THREE.Mesh(
             new THREE.BoxGeometry(ww, hh, dd),
-            new THREE.MeshLambertMaterial({ color: hex })
+            (typeof azoraGlossMaterial === "function") ? azoraGlossMaterial(hex) : ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(hex ):new THREE.MeshLambertMaterial({color:hex }))
         );
         return m;
     }
@@ -3919,6 +4106,21 @@ function applyAIAvatarResult() {
             localStorage.setItem("azoraAccount", JSON.stringify(acc));
         }
     } catch (e) {}
+    try {
+        if (typeof pushAvatarHistory === "function") {
+            pushAvatarHistory({
+                head: kept.colors.head,
+                torso: kept.colors.torso,
+                leftArm: kept.colors.leftArm,
+                rightArm: kept.colors.rightArm,
+                leftLeg: kept.colors.leftLeg,
+                rightLeg: kept.colors.rightLeg,
+                hair: kept.hair,
+                gender: kept.gender,
+                scales: kept.scales
+            }, "ai");
+        }
+    } catch (eH2) {}
     showAIAvatarStatus("ok", "Applied! Press Save Avatar to keep it forever.");
     var resBox = document.getElementById("aiAvatarResultBox");
     if (resBox) resBox.style.display = "none";
@@ -4855,7 +5057,7 @@ function initPlay3D() {
     else if (cfg.theme === "snow") floorColor = 0xe2e8f0;
     else if (cfg.theme === "city" || cfg.theme === "neon") floorColor = 0x1e293b;
     else if (cfg.theme === "volcano") floorColor = 0x292524;
-    var floor = new THREE.Mesh(new THREE.BoxGeometry(60, 1, 60), new THREE.MeshLambertMaterial({ color: floorColor }));
+    var floor = new THREE.Mesh(new THREE.BoxGeometry(60, 1, 60), ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(floorColor ):new THREE.MeshLambertMaterial({color:floorColor })));
     floor.position.y = -0.5;
     _play.scene.add(floor);
 
@@ -4864,7 +5066,7 @@ function initPlay3D() {
         // Ocean water surface
         var water = new THREE.Mesh(
             new THREE.BoxGeometry(70, 0.4, 70),
-            new THREE.MeshLambertMaterial({ color: 0x0369a1 })
+            ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x0369a1 ):new THREE.MeshLambertMaterial({color:0x0369a1 }))
         );
         water.position.y = -0.2;
         _play.scene.add(water);
@@ -4872,7 +5074,7 @@ function initPlay3D() {
         for (var wv = 0; wv < 16; wv++) {
             var wave = new THREE.Mesh(
                 new THREE.BoxGeometry(4 + rand() * 6, 0.25, 1.2),
-                new THREE.MeshLambertMaterial({ color: 0x38bdf8 })
+                ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x38bdf8 ):new THREE.MeshLambertMaterial({color:0x38bdf8 }))
             );
             wave.position.set((rand() - 0.5) * 50, 0.15, (rand() - 0.5) * 50);
             _play.scene.add(wave);
@@ -4880,7 +5082,7 @@ function initPlay3D() {
         // Main boat hull
         var hull = new THREE.Mesh(
             new THREE.BoxGeometry(10, 1.4, 4),
-            new THREE.MeshLambertMaterial({ color: 0x92400e })
+            ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x92400e ):new THREE.MeshLambertMaterial({color:0x92400e }))
         );
         hull.position.set(0, 0.5, 0);
         // slight tilt = "sinking" feel
@@ -4889,7 +5091,7 @@ function initPlay3D() {
         _play.scene.add(hull);
         var cabin = new THREE.Mesh(
             new THREE.BoxGeometry(3.5, 2, 3.2),
-            new THREE.MeshLambertMaterial({ color: 0xf5f5f4 })
+            ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xf5f5f4 ):new THREE.MeshLambertMaterial({color:0xf5f5f4 }))
         );
         cabin.position.set(-1.5, 1.8, 0);
         cabin.rotation.z = -0.12;
@@ -4897,7 +5099,7 @@ function initPlay3D() {
         // mast
         var mast = new THREE.Mesh(
             new THREE.BoxGeometry(0.25, 5, 0.25),
-            new THREE.MeshLambertMaterial({ color: 0x44403c })
+            ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x44403c ):new THREE.MeshLambertMaterial({color:0x44403c }))
         );
         mast.position.set(2, 3.2, 0);
         mast.rotation.z = -0.12;
@@ -4906,7 +5108,7 @@ function initPlay3D() {
         for (var cr = 0; cr < 8; cr++) {
             var crate = new THREE.Mesh(
                 new THREE.BoxGeometry(1, 1, 1),
-                new THREE.MeshLambertMaterial({ color: 0xb45309 })
+                ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xb45309 ):new THREE.MeshLambertMaterial({color:0xb45309 }))
             );
             crate.position.set((rand() - 0.5) * 30, 0.4, (rand() - 0.5) * 30);
             _play.scene.add(crate);
@@ -4915,7 +5117,7 @@ function initPlay3D() {
         for (var rk = 0; rk < 6; rk++) {
             var rock = new THREE.Mesh(
                 new THREE.BoxGeometry(2 + rand() * 2, 1 + rand(), 2 + rand() * 2),
-                new THREE.MeshLambertMaterial({ color: 0x57534e })
+                ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x57534e ):new THREE.MeshLambertMaterial({color:0x57534e }))
             );
             rock.position.set((rand() - 0.5) * 40, 0.3, (rand() - 0.5) * 40);
             if (Math.abs(rock.position.x) < 6 && Math.abs(rock.position.z) < 4) rock.position.x += 12;
@@ -4924,15 +5126,15 @@ function initPlay3D() {
     } else if (cfg.theme === "city" || cfg.theme === "neon") {
         // road grid
         for (var r = -2; r <= 2; r++) {
-            var roadZ = new THREE.Mesh(new THREE.BoxGeometry(6, 0.12, 60), new THREE.MeshLambertMaterial({ color: 0x0f172a }));
+            var roadZ = new THREE.Mesh(new THREE.BoxGeometry(6, 0.12, 60), ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x0f172a ):new THREE.MeshLambertMaterial({color:0x0f172a })));
             roadZ.position.set(r * 12, 0.04, 0); _play.scene.add(roadZ);
-            var roadX = new THREE.Mesh(new THREE.BoxGeometry(60, 0.12, 6), new THREE.MeshLambertMaterial({ color: 0x0f172a }));
+            var roadX = new THREE.Mesh(new THREE.BoxGeometry(60, 0.12, 6), ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x0f172a ):new THREE.MeshLambertMaterial({color:0x0f172a })));
             roadX.position.set(0, 0.04, r * 12); _play.scene.add(roadX);
         }
         // street lines
         for (var ln = -2; ln <= 2; ln++) {
             for (var seg = 0; seg < 8; seg++) {
-                var line = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.13, 2), new THREE.MeshLambertMaterial({ color: 0xfbbf24 }));
+                var line = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.13, 2), ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xfbbf24 ):new THREE.MeshLambertMaterial({color:0xfbbf24 })));
                 line.position.set(ln * 12, 0.08, -24 + seg * 7 + (rand() * 1.5));
                 _play.scene.add(line);
             }
@@ -4941,7 +5143,7 @@ function initPlay3D() {
         for (var bi = 0; bi < bCount; bi++) {
             var bw = 2 + rand() * 4, bh = 5 + rand() * 16, bd = 2 + rand() * 4;
             var bcol = cfg.theme === "neon" ? (rand() > 0.5 ? 0x312e81 : 0x1e3a5f) : (rand() > 0.5 ? 0x64748b : 0x475569);
-            var building = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), new THREE.MeshLambertMaterial({ color: bcol }));
+            var building = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(bcol ):new THREE.MeshLambertMaterial({color:bcol })));
             var gx = Math.floor((rand() - 0.5) * 5);
             var gz = Math.floor((rand() - 0.5) * 5);
             var px = gx * 12 + (rand() - 0.5) * 5;
@@ -4955,7 +5157,7 @@ function initPlay3D() {
             if (bh > 6 && (cfg.mood === "night" || cfg.theme === "neon" || rand() > 0.4)) {
                 var win = new THREE.Mesh(
                     new THREE.BoxGeometry(bw * 0.75, bh * 0.55, 0.15),
-                    new THREE.MeshLambertMaterial({ color: 0xfde68a, emissive: 0xb45309 })
+                    (function(){try{return new THREE.MeshPhongMaterial({color:0xfde68a,emissive:0xb45309,shininess:70,specular:0x888888});}catch(e){return new THREE.MeshLambertMaterial({color:0xfde68a,emissive:0xb45309});}})()
                 );
                 win.position.set(px, bh * 0.4, pz + bd * 0.5);
                 _play.scene.add(win);
@@ -4963,7 +5165,7 @@ function initPlay3D() {
         }
         // traffic cones / street props
         for (var pr = 0; pr < (cfg.propCount || 10); pr++) {
-            var cone = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.9, 8), new THREE.MeshLambertMaterial({ color: 0xf97316 }));
+            var cone = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.9, 8), ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xf97316 ):new THREE.MeshLambertMaterial({color:0xf97316 })));
             cone.position.set((rand() - 0.5) * 40, 0.45, (rand() - 0.5) * 40);
             _play.scene.add(cone);
         }
@@ -4971,8 +5173,8 @@ function initPlay3D() {
         for (var t = 0; t < 35 * (cfg.density || 1); t++) {
             var tx = (rand() - 0.5) * 48, tz = (rand() - 0.5) * 48;
             if (Math.abs(tx) < 3 && Math.abs(tz) < 3) tx += 7;
-            var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 2.2, 6), new THREE.MeshLambertMaterial({ color: 0x78350f }));
-            var leaves = new THREE.Mesh(new THREE.SphereGeometry(1.1 + rand() * 0.6, 8, 8), new THREE.MeshLambertMaterial({ color: rand() > 0.3 ? 0x16a34a : 0x15803d }));
+            var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 2.2, 6), ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x78350f ):new THREE.MeshLambertMaterial({color:0x78350f })));
+            var leaves = new THREE.Mesh(new THREE.SphereGeometry(1.1 + rand() * 0.6, 8, 8), ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(rand() > 0.3 ? 0x16a34a : 0x15803d ):new THREE.MeshLambertMaterial({color:rand() > 0.3 ? 0x16a34a : 0x15803d })));
             trunk.position.set(tx, 1.1, tz); leaves.position.set(tx, 2.7, tz);
             _play.scene.add(trunk); _play.scene.add(leaves);
         }
@@ -4983,31 +5185,31 @@ function initPlay3D() {
             _play.scene.add(star);
         }
         for (var pl = 0; pl < 5; pl++) {
-            var planet = new THREE.Mesh(new THREE.SphereGeometry(1 + rand() * 2, 12, 12), new THREE.MeshLambertMaterial({ color: rand() > 0.5 ? 0x818cf8 : 0xf472b6 }));
+            var planet = new THREE.Mesh(new THREE.SphereGeometry(1 + rand() * 2, 12, 12), ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(rand() > 0.5 ? 0x818cf8 : 0xf472b6 ):new THREE.MeshLambertMaterial({color:rand() > 0.5 ? 0x818cf8 : 0xf472b6 })));
             planet.position.set((rand() - 0.5) * 40, 4 + rand() * 8, (rand() - 0.5) * 40);
             _play.scene.add(planet);
         }
     } else if (cfg.theme === "castle") {
         for (var tw = 0; tw < 8; tw++) {
-            var tower = new THREE.Mesh(new THREE.BoxGeometry(3, 8 + rand() * 6, 3), new THREE.MeshLambertMaterial({ color: 0x78716c }));
+            var tower = new THREE.Mesh(new THREE.BoxGeometry(3, 8 + rand() * 6, 3), ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x78716c ):new THREE.MeshLambertMaterial({color:0x78716c })));
             tower.position.set((rand() - 0.5) * 30, 5, (rand() - 0.5) * 30);
             _play.scene.add(tower);
         }
     } else if (cfg.theme === "volcano") {
-        var vol = new THREE.Mesh(new THREE.ConeGeometry(8, 10, 10), new THREE.MeshLambertMaterial({ color: 0x44403c }));
+        var vol = new THREE.Mesh(new THREE.ConeGeometry(8, 10, 10), ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x44403c ):new THREE.MeshLambertMaterial({color:0x44403c })));
         vol.position.set(12, 5, -10); _play.scene.add(vol);
-        var lava = new THREE.Mesh(new THREE.CircleGeometry(2, 12), new THREE.MeshLambertMaterial({ color: 0xf97316, emissive: 0x9a3412 }));
+        var lava = new THREE.Mesh(new THREE.CircleGeometry(2, 12), (function(){try{return new THREE.MeshPhongMaterial({color:0xf97316,emissive:0x9a3412,shininess:70,specular:0x888888});}catch(e){return new THREE.MeshLambertMaterial({color:0xf97316,emissive:0x9a3412});}})());
         lava.rotation.x = -Math.PI / 2; lava.position.set(12, 9.2, -10); _play.scene.add(lava);
     } else {
         for (var p = 0; p < (cfg.propCount || 12); p++) {
-            var rock = new THREE.Mesh(new THREE.BoxGeometry(1 + rand(), 0.5 + rand(), 1 + rand()), new THREE.MeshLambertMaterial({ color: 0x64748b }));
+            var rock = new THREE.Mesh(new THREE.BoxGeometry(1 + rand(), 0.5 + rand(), 1 + rand()), ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x64748b ):new THREE.MeshLambertMaterial({color:0x64748b })));
             rock.position.set((rand() - 0.5) * 35, 0.4, (rand() - 0.5) * 35);
             _play.scene.add(rock);
         }
     }
 
     // Player
-    _play.meshPlayer = new THREE.Mesh(new THREE.BoxGeometry(1, 1.4, 1), new THREE.MeshLambertMaterial({ color: cfg.colors.accent }));
+    _play.meshPlayer = new THREE.Mesh(new THREE.BoxGeometry(1, 1.4, 1), ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(cfg.colors.accent ):new THREE.MeshLambertMaterial({color:cfg.colors.accent })));
     // Box height 1.4 → center at 0.7 sits on y=0 ground
     _play.meshPlayer.position.set(0, 0.7, 0);
     _play.scene.add(_play.meshPlayer);
@@ -5018,7 +5220,7 @@ function initPlay3D() {
         var shape = (cfg.collectName === "package")
             ? new THREE.BoxGeometry(0.7, 0.7, 0.7)
             : new THREE.SphereGeometry(0.45, 12, 12);
-        var orb = new THREE.Mesh(shape, new THREE.MeshLambertMaterial({ color: cfg.colors.secondary, emissive: cfg.colors.secondary }));
+        var orb = new THREE.Mesh(shape, (function(){try{return new THREE.MeshPhongMaterial({color:cfg.colors.secondary,emissive:cfg.colors.secondary,shininess:70,specular:0x888888});}catch(e){return new THREE.MeshLambertMaterial({color:cfg.colors.secondary,emissive:cfg.colors.secondary});}})());
         var ox = (rand() - 0.5) * 42, oz = (rand() - 0.5) * 42;
         if (Math.abs(ox) < 2 && Math.abs(oz) < 2) ox += 7;
         orb.position.set(ox, 0.55, oz);
@@ -5032,7 +5234,7 @@ function initPlay3D() {
     else if (cfg.genre === "explorer" || cfg.genre === "boat_rescue" || cfg.theme === "city" || cfg.theme === "boat") hazardCount = 2;
     else hazardCount = 3;
     for (var o = 0; o < hazardCount; o++) {
-        var box = new THREE.Mesh(new THREE.BoxGeometry(1.15, 1.15, 1.15), new THREE.MeshLambertMaterial({ color: 0xef4444 }));
+        var box = new THREE.Mesh(new THREE.BoxGeometry(1.15, 1.15, 1.15), ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xef4444 ):new THREE.MeshLambertMaterial({color:0xef4444 })));
         var hx = (rand() - 0.5) * 36, hz = (rand() - 0.5) * 36;
         if (Math.abs(hx) < 6 && Math.abs(hz) < 6) hx += 12;
         box.position.set(hx, 0.6, hz);
@@ -8345,7 +8547,7 @@ function makeNormAvatar(colors) {
     function box(w, h, d, color) {
         return new THREE.Mesh(
             new THREE.BoxGeometry(w, h, d),
-            new THREE.MeshLambertMaterial({ color: color })
+            ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(color ):new THREE.MeshLambertMaterial({color:color }))
         );
     }
 
@@ -8415,7 +8617,7 @@ function makeNormCatAvatar(colors) {
     function box(w, h, d, color) {
         return new THREE.Mesh(
             new THREE.BoxGeometry(w, h, d),
-            new THREE.MeshLambertMaterial({ color: color })
+            ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(color ):new THREE.MeshLambertMaterial({color:color }))
         );
     }
 
@@ -8477,14 +8679,14 @@ function makeNormCatAvatar(colors) {
 
     // Simple face dots (eyes) on head front
     try {
-        var eyeMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+        var eyeMat = ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x222222 ):new THREE.MeshLambertMaterial({color:0x222222 }));
         var eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.06), eyeMat);
         eyeL.position.set(-0.12, 1.0, 0.73);
         g.add(eyeL);
         var eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.06), eyeMat);
         eyeR.position.set(0.12, 1.0, 0.73);
         g.add(eyeR);
-        var nose = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.06), new THREE.MeshLambertMaterial({ color: 0xff6b81 }));
+        var nose = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.06), ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xff6b81 ):new THREE.MeshLambertMaterial({color:0xff6b81 })));
         nose.position.set(0, 0.9, 0.74);
         g.add(nose);
     } catch (e) {}
@@ -9045,7 +9247,12 @@ function normTexForSize(baseTex, sizeX, sizeZ, tileSize) {
 
 function makeNormMat(opts) {
     opts = opts || {};
-    var o = { color: opts.color != null ? opts.color : 0xffffff };
+    var color = opts.color != null ? opts.color : 0xffffff;
+    // Materials locked: ignore texture maps; use shiny glossy solids
+    if (typeof AZORA_MATERIALS_LOCKED === "undefined" || AZORA_MATERIALS_LOCKED) {
+        return azoraGlossMaterial(color);
+    }
+    var o = { color: color };
     if (opts.map) o.map = opts.map;
     try { return new THREE.MeshLambertMaterial(o); }
     catch (e) { return new THREE.MeshBasicMaterial(o); }
@@ -9053,6 +9260,14 @@ function makeNormMat(opts) {
 
 /** One material per texture+color key — reused across all walls/floors */
 function makeNormMatShared(kind, color, sizeX, sizeZ, tileSize) {
+    // When materials are locked, skip texture maps entirely (still keep files available)
+    if (typeof AZORA_MATERIALS_LOCKED === "undefined" || AZORA_MATERIALS_LOCKED) {
+        var lockKey = "gloss_" + (color || 0);
+        if (_normMatPool[lockKey]) return _normMatPool[lockKey];
+        var g = azoraGlossMaterial(color != null ? color : 0xffffff);
+        _normMatPool[lockKey] = g;
+        return g;
+    }
     var tex = (_normTexCache && _normTexCache[kind]) || null;
     var key = kind + "_" + (color || 0) + "_" + Math.round(sizeX || 0) + "x" + Math.round(sizeZ || 0) + "_" + (tileSize || 4);
     if (_normMatPool[key]) return _normMatPool[key];
@@ -9182,7 +9397,7 @@ function buildNormCity(scene, tex) {
             _normWallColliders[_normWallColliders.length - 1].maxY = h;
             var lintel = new THREE.Mesh(
                 new THREE.BoxGeometry(doorW + 0.15, 0.25, wallT + 0.08),
-                new THREE.MeshLambertMaterial({ color: 0x1f2937 })
+                ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x1f2937 ):new THREE.MeshLambertMaterial({color:0x1f2937 }))
             );
             lintel.position.set(x, doorH + 0.1, frontZ);
             scene.add(lintel);
@@ -9267,7 +9482,7 @@ function buildNormCity(scene, tex) {
         // Roof (walkable top surface too)
         var roof = new THREE.Mesh(
             new THREE.BoxGeometry(w + 0.4, 0.35, d + 0.4),
-            new THREE.MeshLambertMaterial({ color: 0x1f2937 })
+            ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x1f2937 ):new THREE.MeshLambertMaterial({color:0x1f2937 }))
         );
         roof.position.set(x, h + 0.12, z);
         scene.add(roof);
@@ -9316,7 +9531,7 @@ function buildNormCity(scene, tex) {
     // Plaza center low walls
     var plaza = new THREE.Mesh(
         new THREE.BoxGeometry(24, 0.3, 24),
-        new THREE.MeshLambertMaterial({ color: 0xd1d5db })
+        ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xd1d5db ):new THREE.MeshLambertMaterial({color:0xd1d5db }))
     );
     plaza.position.y = 0.1;
     scene.add(plaza);
@@ -9326,7 +9541,7 @@ function buildNormCity(scene, tex) {
         [1, -1].forEach(function (side) {
             var pole = new THREE.Mesh(
                 new THREE.BoxGeometry(0.35, 8, 0.35),
-                new THREE.MeshLambertMaterial({ color: 0x111827 })
+                ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x111827 ):new THREE.MeshLambertMaterial({color:0x111827 }))
             );
             pole.position.set(s, 4, side * 14);
             scene.add(pole);
@@ -9391,10 +9606,10 @@ function buildNormCity(scene, tex) {
                     if (trunkMat && trunkMat.emissive) trunkMat.emissive.setHex(0x2a1810);
                 } catch (eEm) {}
             } else {
-                trunkMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b, emissive: 0x2a1810 });
+                trunkMat = (function(){try{return new THREE.MeshPhongMaterial({color:0x8b5a2b,emissive:0x2a1810,shininess:70,specular:0x888888});}catch(e){return new THREE.MeshLambertMaterial({color:0x8b5a2b,emissive:0x2a1810});}})();
             }
         } catch (e) {
-            trunkMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b, emissive: 0x2a1810 });
+            trunkMat = (function(){try{return new THREE.MeshPhongMaterial({color:0x8b5a2b,emissive:0x2a1810,shininess:70,specular:0x888888});}catch(e){return new THREE.MeshLambertMaterial({color:0x8b5a2b,emissive:0x2a1810});}})();
         }
 
         // Leaf canopy material — always green (never black)
@@ -9422,11 +9637,9 @@ function buildNormCity(scene, tex) {
             }
             leafMat = new THREE.MeshLambertMaterial(leafOpts);
         } catch (e) {
-            leafMat = new THREE.MeshLambertMaterial({
-                color: 0x3dcf5a,
-                emissive: 0x145a28,
-                side: THREE.DoubleSide
-            });
+            leafMat = (function(){try{return new THREE.MeshPhongMaterial({color:0x3dcf5a,emissive:0x145a28,
+                side: THREE.DoubleSide,shininess:70,specular:0x888888});}catch(e){return new THREE.MeshLambertMaterial({color:0x3dcf5a,emissive:0x145a28,
+                side: THREE.DoubleSide});}})();
         }
 
         function addTree(x, z, scale) {
@@ -9487,8 +9700,8 @@ function buildNormCity(scene, tex) {
         group.position.set(mx, 0, mz);
 
         // One shared stone material — no emissive, no extra lights
-        var stoneMat = new THREE.MeshLambertMaterial({ color: 0x8b9099 });
-        var baseMat = new THREE.MeshLambertMaterial({ color: 0x6b7280 });
+        var stoneMat = ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x8b9099 ):new THREE.MeshLambertMaterial({color:0x8b9099 }));
+        var baseMat = ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x6b7280 ):new THREE.MeshLambertMaterial({color:0x6b7280 }));
 
         // Small canvas plaque (256×320 — was 512×640, much cheaper)
         var plaqueMat;
@@ -9545,7 +9758,7 @@ function buildNormCity(scene, tex) {
             // MeshBasicMaterial = no lighting cost, stays readable
             plaqueMat = new THREE.MeshBasicMaterial({ map: tex });
         } catch (eTex) {
-            plaqueMat = new THREE.MeshLambertMaterial({ color: 0xa8a29e });
+            plaqueMat = ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xa8a29e ):new THREE.MeshLambertMaterial({color:0xa8a29e }));
         }
 
         // 3 meshes only: base, stone, plaque (was 10+)
@@ -9571,13 +9784,13 @@ function buildNormCity(scene, tex) {
         // One small flower (was 6 meshes)
         var stem = new THREE.Mesh(
             new THREE.BoxGeometry(0.08, 0.4, 0.08),
-            new THREE.MeshLambertMaterial({ color: 0x4ade80 })
+            ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x4ade80 ):new THREE.MeshLambertMaterial({color:0x4ade80 }))
         );
         stem.position.set(0, 0.55, 1.0);
         group.add(stem);
         var bloom = new THREE.Mesh(
             new THREE.BoxGeometry(0.25, 0.2, 0.25),
-            new THREE.MeshLambertMaterial({ color: 0xf472b6 })
+            ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xf472b6 ):new THREE.MeshLambertMaterial({color:0xf472b6 }))
         );
         bloom.position.set(0, 0.8, 1.0);
         group.add(bloom);
@@ -9716,12 +9929,24 @@ function loadAzoraObjModel(url, onDone, onError) {
                 allMax[2] = Math.max(allMax[2], bb.max.z);
             }
             var info = (matTable && matTable[key]) || { color: 0xc4b49a, opacity: 1 };
-            var mat = new THREE.MeshLambertMaterial({
-                color: info.color,
-                side: THREE.DoubleSide,
-                transparent: info.opacity < 0.999,
-                opacity: info.opacity
-            });
+            var mat;
+            try {
+                mat = new THREE.MeshPhongMaterial({
+                    color: info.color,
+                    side: THREE.DoubleSide,
+                    transparent: info.opacity < 0.999,
+                    opacity: info.opacity,
+                    shininess: 85,
+                    specular: 0xb0b0b0
+                });
+            } catch (eM) {
+                mat = new THREE.MeshLambertMaterial({
+                    color: info.color,
+                    side: THREE.DoubleSide,
+                    transparent: info.opacity < 0.999,
+                    opacity: info.opacity
+                });
+            }
             var mesh = new THREE.Mesh(geo, mat);
             mesh.name = key;
             mesh.castShadow = true;
@@ -9828,7 +10053,7 @@ function loadAzoraObjModel(url, onDone, onError) {
 function buildHouseWorld(scene, tex) {
     if (!scene || typeof THREE === "undefined") return;
 
-    var groundMat = new THREE.MeshLambertMaterial({ color: 0x5a9e3a });
+    var groundMat = ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x5a9e3a ):new THREE.MeshLambertMaterial({color:0x5a9e3a }));
     try {
         if (tex && tex.grass) {
             groundMat.map = tex.grass;
@@ -9843,7 +10068,7 @@ function buildHouseWorld(scene, tex) {
     ground.receiveShadow = true;
     scene.add(ground);
 
-    var pathMat = new THREE.MeshLambertMaterial({ color: 0x8a8a8a });
+    var pathMat = ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x8a8a8a ):new THREE.MeshLambertMaterial({color:0x8a8a8a }));
     try {
         if (tex && tex.road) {
             pathMat.map = tex.road;
@@ -9859,7 +10084,7 @@ function buildHouseWorld(scene, tex) {
 
     var pad = new THREE.Mesh(
         new THREE.CylinderGeometry(1.4, 1.4, 0.1, 20),
-        new THREE.MeshLambertMaterial({ color: 0x4a90e2 })
+        ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x4a90e2 ):new THREE.MeshLambertMaterial({color:0x4a90e2 }))
     );
     pad.position.set(0, 0.06, 16);
     scene.add(pad);
@@ -9893,13 +10118,13 @@ function buildHouseWorld(scene, tex) {
     function yardTree(x, z) {
         var trunk = new THREE.Mesh(
             new THREE.BoxGeometry(0.45, 2.0, 0.45),
-            new THREE.MeshLambertMaterial({ color: 0x6b4226 })
+            ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x6b4226 ):new THREE.MeshLambertMaterial({color:0x6b4226 }))
         );
         trunk.position.set(x, 1.0, z);
         scene.add(trunk);
         var leaves = new THREE.Mesh(
             new THREE.BoxGeometry(2.2, 2.2, 2.2),
-            new THREE.MeshLambertMaterial({ color: 0x3dcf5a })
+            ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x3dcf5a ):new THREE.MeshLambertMaterial({color:0x3dcf5a }))
         );
         leaves.position.set(x, 2.6, z);
         scene.add(leaves);
@@ -9936,7 +10161,7 @@ function buildNormWorldByType(scene, tex, worldType) {
     }
 
     function groundMat(map, color) {
-        var m = new THREE.MeshLambertMaterial({ color: color || 0x4a7c3a });
+        var m = ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(color || 0x4a7c3a ):new THREE.MeshLambertMaterial({color:color || 0x4a7c3a }));
         if (map) {
             m.map = map;
             try {
@@ -9962,11 +10187,11 @@ function buildNormWorldByType(scene, tex, worldType) {
         function tree(x, z) {
             var trunk = new THREE.Mesh(
                 new THREE.BoxGeometry(0.5, 2.2, 0.5),
-                new THREE.MeshLambertMaterial({ color: 0x6b4226 })
+                ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x6b4226 ):new THREE.MeshLambertMaterial({color:0x6b4226 }))
             );
             trunk.position.set(x, 1.1, z);
             scene.add(trunk);
-            var leafMat = new THREE.MeshLambertMaterial({ color: 0x2ecc71 });
+            var leafMat = ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x2ecc71 ):new THREE.MeshLambertMaterial({color:0x2ecc71 }));
             try {
                 if (tex.leaf) {
                     var lt = tex.leaf.clone ? tex.leaf.clone() : tex.leaf;
@@ -9989,7 +10214,7 @@ function buildNormWorldByType(scene, tex, worldType) {
         for (var i = 0; i < 6; i++) {
             var bx = new THREE.Mesh(
                 new THREE.BoxGeometry(1.4, 1.0, 1.4),
-                new THREE.MeshLambertMaterial({ color: 0xc4a574 })
+                ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xc4a574 ):new THREE.MeshLambertMaterial({color:0xc4a574 }))
             );
             bx.position.set((i % 3) * 4 - 4, 0.5, Math.floor(i / 3) * 5 - 2);
             scene.add(bx);
@@ -10008,7 +10233,7 @@ function buildNormWorldByType(scene, tex, worldType) {
         for (var p = 0; p < 12; p++) {
             var plat = new THREE.Mesh(
                 new THREE.BoxGeometry(3, 0.4, 3),
-                new THREE.MeshLambertMaterial({ color: p % 2 ? 0x3498db : 0x2980b9 })
+                ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(p % 2 ? 0x3498db : 0x2980b9 ):new THREE.MeshLambertMaterial({color:p % 2 ? 0x3498db : 0x2980b9 }))
             );
             plat.position.set(p * 4 - 10, 0.5 + p * 0.7, Math.sin(p) * 3);
             scene.add(plat);
@@ -10016,7 +10241,7 @@ function buildNormWorldByType(scene, tex, worldType) {
         // Start pad
         var start = new THREE.Mesh(
             new THREE.BoxGeometry(6, 0.3, 6),
-            new THREE.MeshLambertMaterial({ color: 0x2ecc71 })
+            ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x2ecc71 ):new THREE.MeshLambertMaterial({color:0x2ecc71 }))
         );
         start.position.set(-14, 0.15, 0);
         scene.add(start);
@@ -10024,18 +10249,18 @@ function buildNormWorldByType(scene, tex, worldType) {
         // Floor rug area + counter + tables
         var rug = new THREE.Mesh(
             new THREE.BoxGeometry(20, 0.08, 16),
-            new THREE.MeshLambertMaterial({ color: 0xc0392b })
+            ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xc0392b ):new THREE.MeshLambertMaterial({color:0xc0392b }))
         );
         rug.position.set(0, 0.04, 0);
         scene.add(rug);
         var counter = new THREE.Mesh(
             new THREE.BoxGeometry(8, 1.2, 1.5),
-            new THREE.MeshLambertMaterial({ color: 0x6b4226 })
+            ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x6b4226 ):new THREE.MeshLambertMaterial({color:0x6b4226 }))
         );
         counter.position.set(0, 0.6, -6);
         scene.add(counter);
         for (var t = 0; t < 4; t++) {
-            var tableMat = new THREE.MeshLambertMaterial({ color: 0x8B5A2B });
+            var tableMat = ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x8B5A2B ):new THREE.MeshLambertMaterial({color:0x8B5A2B }));
             try {
                 if (tex.wood3) {
                     var wt = tex.wood3.clone ? tex.wood3.clone() : tex.wood3;
@@ -10053,7 +10278,7 @@ function buildNormWorldByType(scene, tex, worldType) {
             scene.add(table);
             var leg = new THREE.Mesh(
                 new THREE.BoxGeometry(0.2, 0.7, 0.2),
-                new THREE.MeshLambertMaterial({ color: 0x5d4037 })
+                ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x5d4037 ):new THREE.MeshLambertMaterial({color:0x5d4037 }))
             );
             leg.position.set((t % 2) * 5 - 2.5, 0.35, Math.floor(t / 2) * 4 - 1);
             scene.add(leg);
@@ -10066,13 +10291,13 @@ function buildNormWorldByType(scene, tex, worldType) {
         islands.forEach(function (isl) {
             var pad = new THREE.Mesh(
                 new THREE.CylinderGeometry(isl[3], isl[3] * 0.9, 1.2, 12),
-                new THREE.MeshLambertMaterial({ color: 0x3d8b6e })
+                ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x3d8b6e ):new THREE.MeshLambertMaterial({color:0x3d8b6e }))
             );
             pad.position.set(isl[0], isl[1], isl[2]);
             scene.add(pad);
             var dirt = new THREE.Mesh(
                 new THREE.CylinderGeometry(isl[3] * 0.85, isl[3] * 0.5, 2, 12),
-                new THREE.MeshLambertMaterial({ color: 0x6b4226 })
+                ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x6b4226 ):new THREE.MeshLambertMaterial({color:0x6b4226 }))
             );
             dirt.position.set(isl[0], isl[1] - 1.4, isl[2]);
             scene.add(dirt);
@@ -10158,27 +10383,27 @@ function buildEmpireOutpostMesh(scene, x, z, level) {
     // Flag platform
     var pad = new THREE.Mesh(
         new THREE.CylinderGeometry(2.2 + level * 0.3, 2.4 + level * 0.3, 0.4, 10),
-        new THREE.MeshLambertMaterial({ color: 0xc4a574 })
+        ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xc4a574 ):new THREE.MeshLambertMaterial({color:0xc4a574 }))
     );
     pad.position.y = 0.2;
     group.add(pad);
     // Tower
     var tower = new THREE.Mesh(
         new THREE.BoxGeometry(1.2, 2.5 + level * 0.8, 1.2),
-        new THREE.MeshLambertMaterial({ color: 0x5b8def })
+        ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x5b8def ):new THREE.MeshLambertMaterial({color:0x5b8def }))
     );
     tower.position.y = 1.4 + level * 0.35;
     group.add(tower);
     // Flag tip
     var tip = new THREE.Mesh(
         new THREE.BoxGeometry(0.15, 1.2, 0.15),
-        new THREE.MeshLambertMaterial({ color: 0xdddddd })
+        ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xdddddd ):new THREE.MeshLambertMaterial({color:0xdddddd }))
     );
     tip.position.y = 3.2 + level * 0.7;
     group.add(tip);
     var flag = new THREE.Mesh(
         new THREE.BoxGeometry(0.9, 0.55, 0.08),
-        new THREE.MeshLambertMaterial({ color: 0xf59e0b })
+        ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xf59e0b ):new THREE.MeshLambertMaterial({color:0xf59e0b }))
     );
     flag.position.set(0.45, 3.4 + level * 0.7, 0);
     group.add(flag);
@@ -10197,7 +10422,7 @@ function buildEmpireWorld(scene, tex) {
     try {
         groundMat = makeNormMatShared("grass", 0x4f9b45, SIZE, SIZE, 8);
     } catch (e) {
-        groundMat = new THREE.MeshLambertMaterial({ color: 0x4f9b45 });
+        groundMat = ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x4f9b45 ):new THREE.MeshLambertMaterial({color:0x4f9b45 }));
     }
     var ground = new THREE.Mesh(new THREE.BoxGeometry(SIZE, 2, SIZE), groundMat);
     ground.position.y = -1;
@@ -10224,7 +10449,7 @@ function buildEmpireWorld(scene, tex) {
     } catch (e2) {
         var hqPad2 = new THREE.Mesh(
             new THREE.BoxGeometry(40, 0.5, 40),
-            new THREE.MeshLambertMaterial({ color: 0xe8e8e8 })
+            ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xe8e8e8 ):new THREE.MeshLambertMaterial({color:0xe8e8e8 }))
         );
         hqPad2.position.y = 0.15;
         scene.add(hqPad2);
@@ -10233,20 +10458,20 @@ function buildEmpireWorld(scene, tex) {
     // HQ building
     var hq = new THREE.Mesh(
         new THREE.BoxGeometry(8, 10, 8),
-        new THREE.MeshLambertMaterial({ color: 0x1e60ff })
+        ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x1e60ff ):new THREE.MeshLambertMaterial({color:0x1e60ff }))
     );
     hq.position.y = 5.2;
     scene.add(hq);
     var roof = new THREE.Mesh(
         new THREE.BoxGeometry(9, 1, 9),
-        new THREE.MeshLambertMaterial({ color: 0x0f172a })
+        ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0x0f172a ):new THREE.MeshLambertMaterial({color:0x0f172a }))
     );
     roof.position.y = 10.5;
     scene.add(roof);
     // Antenna
     var ant = new THREE.Mesh(
         new THREE.BoxGeometry(0.3, 4, 0.3),
-        new THREE.MeshLambertMaterial({ color: 0xcbd5e1 })
+        ((typeof azoraGlossMaterial==="function")?azoraGlossMaterial(0xcbd5e1 ):new THREE.MeshLambertMaterial({color:0xcbd5e1 }))
     );
     ant.position.y = 13;
     scene.add(ant);
