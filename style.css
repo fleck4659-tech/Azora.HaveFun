@@ -3886,3 +3886,78 @@ footer {
     .operator-card { flex-direction: column; text-align: center; }
     .operator-text { text-align: center; }
 }
+
+
+/* ===== Owner badges + moderation ===== */
+.profile-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin: 6px 0 4px;
+}
+.azora-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    line-height: 1.2;
+}
+.azora-badge.verified { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; }
+.azora-badge.dev { background: #ede9fe; color: #6d28d9; border-color: #c4b5fd; }
+.azora-badge.admin { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+.azora-badge.founder { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
+.azora-badge.system { background: #e0e7ff; color: #3730a3; border-color: #a5b4fc; }
+.azora-badge.staff { background: #d1fae5; color: #047857; border-color: #6ee7b7; }
+
+.admin-mod-panel {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 12px;
+    background: #0f172a;
+    color: #e2e8f0;
+    text-align: left;
+}
+.admin-mod-panel h4 { margin: 0 0 8px; color: #f8fafc; font-size: 0.95rem; }
+.admin-mod-panel label { display: block; font-size: 0.78rem; margin: 8px 0 4px; opacity: 0.9; }
+.admin-mod-panel input, .admin-mod-panel select {
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #f1f5f9;
+    padding: 8px;
+}
+.admin-mod-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.admin-mod-actions button { margin: 0; }
+.btn-ban { background: linear-gradient(180deg,#f59e0b,#d97706) !important; color: #111 !important; }
+.btn-terminate { background: linear-gradient(180deg,#ef4444,#b91c1c) !important; color: #fff !important; }
+.btn-unban { background: linear-gradient(180deg,#22c55e,#16a34a) !important; color: #fff !important; }
+
+.appeal-link-blue {
+    color: #2563eb !important;
+    font-weight: 800;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    background: #dbeafe;
+    padding: 4px 10px;
+    border-radius: 8px;
+    display: inline-block;
+}
+.mod-lock-popup { max-width: min(380px, calc(100vw - 24px)); }
+.mod-lock-overlay { background: rgba(15,23,42,0.92) !important; }
+
+.search-result-item .sys-tag {
+    font-size: 0.7rem;
+    background: #e0e7ff;
+    color: #3730a3;
+    border-radius: 6px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    font-weight: 700;
+}

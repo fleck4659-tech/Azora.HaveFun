@@ -12,7 +12,8 @@ let spawnInterval;
 const database = {
     // Real platform data only — no fake demo users/games
     users: [
-        { username: "Azora", profileLink: "#", userId: "Aza: 0" }
+        { username: "Azora", profileLink: "#", userId: "Aza: 0" },
+        { username: "system", profileLink: "#", userId: "Aza: 2", isSystemElement: true }
     ],
     games: [
         { title: "Azora Roleplay", author: "Azora", link: "#", type: "norm" },
@@ -2103,6 +2104,14 @@ function loginAccount() {
             if (coins < 99999) localStorage.setItem("azoraCoins", "99999");
         } catch (e) {}
         clearAccountError();
+        // Allow testing bans on owner — lock screen will show; owner override available
+        try {
+            var omod = typeof getActiveModerationForUser === "function" ? getActiveModerationForUser("Azora") : null;
+            if (omod && omod.active) {
+                location.reload();
+                return;
+            }
+        } catch (eO) {}
         alert("Welcome, Azora (Owner)!\nFull platform access unlocked.\nNo password required for this account.");
         location.reload();
         return;
@@ -2132,7 +2141,20 @@ function loginAccount() {
         return;
     }
 
-    setLoggedInAccount(account);
+        // Moderation gate (ban / terminate)
+    try {
+        if (typeof getActiveModerationForUser === "function") {
+            var mod = getActiveModerationForUser(account.username);
+            if (mod && mod.active) {
+                setLoggedInAccount(account);
+                clearAccountError();
+                location.reload();
+                return;
+            }
+        }
+    } catch (eMod) {}
+
+setLoggedInAccount(account);
     clearAccountError();
     alert("Welcome back, " + account.username + "!\nYour progress has been restored.");
     location.reload();
@@ -5950,6 +5972,8 @@ function openGuestProfile() {
     // Guests have no username — User ID is shown at username size
     document.getElementById("profileUsername").textContent = "";
     document.getElementById("profileUsername").style.display = "none";
+    var _pb = document.getElementById("profileBadges");
+    if (_pb) { _pb.innerHTML = ""; _pb.style.display = "none"; }
 
     var acc = {};
     try { acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}"); } catch (e) {}
@@ -6031,6 +6055,7 @@ function openUserProfile(username) {
 
     document.getElementById("profileUsername").textContent = username;
     document.getElementById("profileUsername").style.display = "block";
+    try { if (typeof renderProfileBadges === "function") renderProfileBadges(username); } catch (eB) {}
 
     // Public User ID (smaller, below username for normal accounts)
     var pubId = getPublicUserId(username);
@@ -6094,6 +6119,7 @@ function openUserProfile(username) {
         actions.innerHTML = '<p style="color:#666;">Log in to follow or add friends.</p>';
     } else if (me === username) {
         actions.innerHTML = '<p style="color:#1e60ff;font-weight:bold;">This is your profile</p>';
+        try { if (typeof appendOwnerModPanel === "function") appendOwnerModPanel(actions, username); } catch (eM) {}
     } else {
         var myData = ensureUserSocial(data, me);
         var isFollowing = myData.following.indexOf(username) !== -1;
@@ -6169,6 +6195,7 @@ function openUserProfile(username) {
     }
 
     var meName = getMyUsername();
+    try { if (typeof appendOwnerModPanel === "function") appendOwnerModPanel(document.getElementById("profileActions"), username); } catch (eOther) {}
     renderProfileGames(username, meName === username);
     document.getElementById("profileOverlay").style.display = "flex";
 
@@ -13670,3 +13697,600 @@ window.renderMembershipPanel = renderMembershipPanel;
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { setTimeout(run, 500); });
     else setTimeout(run, 500);
 })();
+
+
+// ============================================================
+// Azora Moderation + System Element (Aza: 2) + Owner badges
+// ============================================================
+
+function getModerationRecords() {
+    try {
+        var r = JSON.parse(localStorage.getItem("azoraModerationRecords") || "{}");
+        if (!r || typeof r !== "object") r = {};
+        if (!r.bans) r.bans = {};
+        if (!r.terminations) r.terminations = {};
+        if (!r.appeals) r.appeals = [];
+        if (!r.systemInbox) r.systemInbox = [];
+        return r;
+    } catch (e) {
+        return { bans: {}, terminations: {}, appeals: [], systemInbox: [] };
+    }
+}
+
+function saveModerationRecords(r) {
+    localStorage.setItem("azoraModerationRecords", JSON.stringify(r || {}));
+}
+
+/** Ensure System Element exists in registry / public search (not a real player) */
+function ensureSystemElement() {
+    try {
+        var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+        var found = false;
+        for (var i = 0; i < reg.length; i++) {
+            if (reg[i] && (String(reg[i].username).toLowerCase() === "system" || reg[i].userId === "Aza: 2")) {
+                reg[i].username = "system";
+                reg[i].userId = "Aza: 2";
+                reg[i].isSystemElement = true;
+                reg[i].isGuest = false;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            reg.push({
+                username: "system",
+                userId: "Aza: 2",
+                isGuest: false,
+                isSystemElement: true,
+                createdAt: 0,
+                note: "System Element — not a real player"
+            });
+        }
+        localStorage.setItem("azoraUserRegistry", JSON.stringify(reg));
+    } catch (e) {}
+
+    try {
+        if (typeof database !== "undefined" && database.users) {
+            var has = database.users.some(function (u) {
+                return u && String(u.username).toLowerCase() === "system";
+            });
+            if (!has) {
+                database.users.push({
+                    username: "system",
+                    profileLink: "#",
+                    userId: "Aza: 2",
+                    isSystemElement: true
+                });
+            }
+        }
+    } catch (e2) {}
+}
+
+function isSystemUsername(name) {
+    return String(name || "").trim().toLowerCase() === "system";
+}
+
+function formatBanDuration(ms) {
+    if (ms == null || isNaN(ms)) return "unknown duration";
+    if (ms <= 0) return "expired";
+    var sec = Math.floor(ms / 1000);
+    var min = Math.floor(sec / 60);
+    var hours = Math.floor(min / 60);
+    var days = Math.floor(hours / 24);
+    var weeks = Math.floor(days / 7);
+    var years = Math.floor(days / 365);
+    if (years >= 1) {
+        var yd = days - years * 365;
+        return years + " year" + (years === 1 ? "" : "s") + (yd ? (", " + yd + " day" + (yd === 1 ? "" : "s")) : "");
+    }
+    if (weeks >= 1) {
+        var wd = days - weeks * 7;
+        return weeks + " week" + (weeks === 1 ? "" : "s") + (wd ? (", " + wd + " day" + (wd === 1 ? "" : "s")) : "");
+    }
+    if (days >= 1) {
+        var dh = hours - days * 24;
+        return days + " day" + (days === 1 ? "" : "s") + (dh ? (", " + dh + " hour" + (dh === 1 ? "" : "s")) : "");
+    }
+    if (hours >= 1) {
+        var hm = min - hours * 60;
+        return hours + " hour" + (hours === 1 ? "" : "s") + (hm ? (", " + hm + " minute" + (hm === 1 ? "" : "s")) : "");
+    }
+    if (min >= 1) return min + " minute" + (min === 1 ? "" : "s");
+    return sec + " second" + (sec === 1 ? "" : "s");
+}
+
+function getActiveModerationForUser(username) {
+    username = String(username || "").trim();
+    if (!username) return null;
+    var key = username; // store by exact username used at ban time; also try case-insensitive
+    var r = getModerationRecords();
+    var term = r.terminations[key];
+    if (!term) {
+        Object.keys(r.terminations).forEach(function (k) {
+            if (k.toLowerCase() === key.toLowerCase()) term = r.terminations[k];
+        });
+    }
+    if (term && term.active !== false) {
+        return {
+            active: true,
+            kind: "termination",
+            reason: term.reason || "Your account has been terminated.",
+            at: term.at,
+            by: term.by || "Azora",
+            until: null
+        };
+    }
+    var ban = r.bans[key];
+    if (!ban) {
+        Object.keys(r.bans).forEach(function (k) {
+            if (k.toLowerCase() === key.toLowerCase()) ban = r.bans[k];
+        });
+    }
+    if (ban && ban.active !== false) {
+        var until = ban.until || 0;
+        if (until && Date.now() >= until) {
+            // expired
+            ban.active = false;
+            ban.expired = true;
+            r.bans[ban.username || key] = ban;
+            saveModerationRecords(r);
+            return null;
+        }
+        return {
+            active: true,
+            kind: "ban",
+            reason: ban.reason || "Your account is temporarily banned.",
+            at: ban.at,
+            by: ban.by || "Azora",
+            until: until,
+            remainingMs: until ? Math.max(0, until - Date.now()) : null,
+            from: ban.from || ban.at,
+            untilDate: until
+        };
+    }
+    return null;
+}
+
+function ownerBanUser(username, opts) {
+    opts = opts || {};
+    if (!isAzoraOwner()) {
+        alert("Only the Azora owner can ban users.");
+        return false;
+    }
+    username = String(username || "").trim();
+    if (!username) return false;
+    if (isSystemUsername(username)) {
+        alert("system is a System Element and cannot be banned.");
+        return false;
+    }
+
+    var fromMs = opts.fromMs != null ? opts.fromMs : Date.now();
+    var untilMs = opts.untilMs;
+    if (untilMs == null && opts.durationMs != null) untilMs = fromMs + opts.durationMs;
+    if (!untilMs || untilMs <= fromMs) {
+        alert("Pick a valid ban end date/time after the start.");
+        return false;
+    }
+
+    var r = getModerationRecords();
+    r.bans[username] = {
+        username: username,
+        active: true,
+        from: fromMs,
+        until: untilMs,
+        at: Date.now(),
+        by: "Azora",
+        reason: opts.reason || "Banned by Azora staff.",
+        automated: !!opts.automated
+    };
+    // clear termination if any when issuing temp ban
+    if (r.terminations[username]) {
+        r.terminations[username].active = false;
+    }
+    saveModerationRecords(r);
+
+    // notify system inbox
+    r = getModerationRecords();
+    r.systemInbox.unshift({
+        kind: "ban_issued",
+        target: username,
+        from: fromMs,
+        until: untilMs,
+        by: "Azora",
+        at: Date.now()
+    });
+    saveModerationRecords(r);
+
+    alert(
+        "Banned " + username + "\n" +
+        "Duration: " + formatBanDuration(untilMs - fromMs) + "\n" +
+        "Until: " + new Date(untilMs).toLocaleString()
+    );
+    return true;
+}
+
+function ownerTerminateUser(username, opts) {
+    opts = opts || {};
+    if (!isAzoraOwner()) {
+        alert("Only the Azora owner can terminate users.");
+        return false;
+    }
+    username = String(username || "").trim();
+    if (!username) return false;
+    if (isSystemUsername(username)) {
+        alert("system is a System Element and cannot be terminated.");
+        return false;
+    }
+    if (!confirm("Permanently terminate " + username + "?\nThey can appeal via the blue appeal link.")) return false;
+
+    var r = getModerationRecords();
+    r.terminations[username] = {
+        username: username,
+        active: true,
+        at: Date.now(),
+        by: "Azora",
+        reason: opts.reason || "Account terminated by Azora staff.",
+        automated: !!opts.automated
+    };
+    if (r.bans[username]) r.bans[username].active = false;
+    saveModerationRecords(r);
+
+    r = getModerationRecords();
+    r.systemInbox.unshift({
+        kind: "termination_issued",
+        target: username,
+        by: "Azora",
+        at: Date.now()
+    });
+    saveModerationRecords(r);
+
+    alert("Terminated " + username + ".\nThey will see a blue appeal link to contact system.");
+    return true;
+}
+
+function ownerClearModeration(username) {
+    if (!isAzoraOwner()) return false;
+    username = String(username || "").trim();
+    var r = getModerationRecords();
+    if (r.bans[username]) r.bans[username].active = false;
+    if (r.terminations[username]) r.terminations[username].active = false;
+    // case-insensitive clear
+    Object.keys(r.bans).forEach(function (k) {
+        if (k.toLowerCase() === username.toLowerCase()) r.bans[k].active = false;
+    });
+    Object.keys(r.terminations).forEach(function (k) {
+        if (k.toLowerCase() === username.toLowerCase()) r.terminations[k].active = false;
+    });
+    saveModerationRecords(r);
+    alert("Cleared ban/termination for " + username + ".");
+    return true;
+}
+
+function ownerOverrideRestoreAccess() {
+    if (!isAzoraOwner()) {
+        alert("Owner override is only for the Azora account.");
+        return;
+    }
+    var me = null;
+    try { me = JSON.parse(localStorage.getItem("azoraAccount") || "null"); } catch (e) {}
+    if (!me || !isOwnerUsername(me.username)) {
+        alert("Owner override is only for the Azora account.");
+        return;
+    }
+    ownerClearModeration(me.username);
+    var ov = document.getElementById("moderationLockOverlay");
+    if (ov) ov.style.display = "none";
+    location.reload();
+}
+
+function modLockSignOut() {
+    try {
+        localStorage.removeItem("loggedIn");
+        // keep azoraAccount so appeal form can prefill if desired
+    } catch (e) {}
+    location.reload();
+}
+
+function showModerationLockScreen(mod, username) {
+    var ov = document.getElementById("moderationLockOverlay");
+    if (!ov) return;
+    var title = document.getElementById("modLockTitle");
+    var msg = document.getElementById("modLockMessage");
+    var dur = document.getElementById("modLockDuration");
+    var link = document.getElementById("modLockAppealLink");
+    var own = document.getElementById("modLockOwnerOverride");
+
+    if (mod.kind === "termination") {
+        if (title) title.textContent = "Account terminated";
+        if (msg) msg.textContent = mod.reason || "Your account has been terminated.";
+        if (dur) dur.textContent = "This is a permanent restriction until an appeal is accepted.";
+        if (link) {
+            link.href = "appeal.html?user=" + encodeURIComponent(username) + "&type=termination";
+            link.textContent = "Submit an appeal (opens blue link → system)";
+        }
+    } else {
+        if (title) title.textContent = "Account banned";
+        if (msg) msg.textContent = mod.reason || "Your account is temporarily banned.";
+        var left = mod.remainingMs != null ? formatBanDuration(mod.remainingMs) : "";
+        var untilStr = mod.until ? new Date(mod.until).toLocaleString() : "";
+        if (dur) {
+            dur.innerHTML =
+                (left ? ("Time remaining: <strong>" + left + "</strong><br>") : "") +
+                (untilStr ? ("Ban ends: " + untilStr) : "");
+        }
+        if (link) {
+            link.href = "appeal.html?user=" + encodeURIComponent(username) + "&type=ban";
+            link.textContent = "Submit an appeal (goes to system)";
+        }
+    }
+
+    if (own) {
+        own.style.display = isOwnerUsername(username) ? "block" : "none";
+    }
+    ov.style.display = "flex";
+}
+
+function checkModerationOnBoot() {
+    try {
+        ensureSystemElement();
+        if (localStorage.getItem("loggedIn") !== "true") return;
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (!acc || !acc.username || acc.isGuest) return;
+        var mod = getActiveModerationForUser(acc.username);
+        if (mod && mod.active) {
+            showModerationLockScreen(mod, acc.username);
+        }
+    } catch (e) {}
+}
+
+function renderProfileBadges(username) {
+    var el = document.getElementById("profileBadges");
+    if (!el) return;
+    el.innerHTML = "";
+    el.style.display = "none";
+    username = String(username || "");
+
+    if (isSystemUsername(username)) {
+        el.style.display = "flex";
+        el.innerHTML =
+            '<span class="azora-badge system">⚙️ System Element</span>' +
+            '<span class="azora-badge staff">Aza: 2</span>';
+        return;
+    }
+
+    if (!isOwnerUsername(username)) return;
+
+    el.style.display = "flex";
+    el.innerHTML =
+        '<span class="azora-badge verified">✓ Verified</span>' +
+        '<span class="azora-badge founder">★ Founder</span>' +
+        '<span class="azora-badge dev">🛠️ Main Developer</span>' +
+        '<span class="azora-badge admin">🛡️ Super Admin</span>' +
+        '<span class="azora-badge staff">Official</span>';
+}
+
+function appendOwnerModPanel(actionsEl, targetUsername) {
+    if (!actionsEl) return;
+    if (!isAzoraOwner()) return;
+    targetUsername = String(targetUsername || "").trim();
+    if (!targetUsername) return;
+    if (isSystemUsername(targetUsername)) {
+        var note = document.createElement("p");
+        note.style.cssText = "color:#6366f1;font-size:13px;margin-top:10px;";
+        note.textContent = "system is a System Element (Aza: 2) — not a real player. Appeals route here.";
+        actionsEl.appendChild(note);
+        return;
+    }
+
+    // Avoid duplicate panels
+    if (actionsEl.querySelector(".admin-mod-panel")) return;
+
+    var mod = getActiveModerationForUser(targetUsername);
+    var panel = document.createElement("div");
+    panel.className = "admin-mod-panel";
+    panel.innerHTML =
+        "<h4>Owner moderation</h4>" +
+        "<p style='margin:0 0 8px;font-size:0.8rem;opacity:0.9;'>Only visible to Azora. You can ban/terminate for testing — including your own account.</p>" +
+        (mod && mod.active
+            ? ("<p style='color:#fbbf24;font-size:0.85rem;'>Active: <strong>" +
+                (mod.kind === "termination" ? "TERMINATED" : "BANNED") +
+                "</strong>" +
+                (mod.kind === "ban" && mod.remainingMs != null
+                    ? (" · " + formatBanDuration(mod.remainingMs) + " left")
+                    : "") +
+                "</p>")
+            : "<p style='font-size:0.8rem;opacity:0.75;'>No active restriction.</p>") +
+        "<label>Ban until (local date & time)</label>" +
+        "<input type='datetime-local' id='modBanUntilInput' />" +
+        "<label>Or quick duration</label>" +
+        "<select id='modBanQuick'>" +
+        "<option value=''>Custom date above</option>" +
+        "<option value='3600000'>1 hour</option>" +
+        "<option value='86400000'>1 day</option>" +
+        "<option value='604800000'>1 week</option>" +
+        "<option value='2592000000'>30 days</option>" +
+        "<option value='31536000000'>1 year</option>" +
+        "</select>" +
+        "<label>Reason (optional)</label>" +
+        "<input type='text' id='modReasonInput' placeholder='Reason shown to the user' />" +
+        "<div class='admin-mod-actions'>" +
+        "<button type='button' class='btn-ban' id='modBanBtn'>Ban user (date → date)</button>" +
+        "<button type='button' class='btn-terminate' id='modTermBtn'>Terminate user</button>" +
+        "<button type='button' class='btn-unban' id='modClearBtn'>Clear ban / termination</button>" +
+        "</div>";
+
+    actionsEl.appendChild(panel);
+
+    panel.querySelector("#modBanBtn").onclick = function () {
+        var quick = panel.querySelector("#modBanQuick").value;
+        var untilInput = panel.querySelector("#modBanUntilInput").value;
+        var reason = panel.querySelector("#modReasonInput").value.trim();
+        var fromMs = Date.now();
+        var untilMs = null;
+        if (quick) {
+            untilMs = fromMs + parseInt(quick, 10);
+        } else if (untilInput) {
+            untilMs = new Date(untilInput).getTime();
+        } else {
+            alert("Pick a quick duration or a ban-until date.");
+            return;
+        }
+        if (ownerBanUser(targetUsername, { fromMs: fromMs, untilMs: untilMs, reason: reason })) {
+            try { closeProfile(); } catch (e) {}
+            // If banning self, lock immediately
+            if (typeof getMyUsername === "function" && getMyUsername() === targetUsername) {
+                checkModerationOnBoot();
+            }
+        }
+    };
+    panel.querySelector("#modTermBtn").onclick = function () {
+        var reason = panel.querySelector("#modReasonInput").value.trim();
+        if (ownerTerminateUser(targetUsername, { reason: reason })) {
+            try { closeProfile(); } catch (e) {}
+            if (typeof getMyUsername === "function" && getMyUsername() === targetUsername) {
+                checkModerationOnBoot();
+            }
+        }
+    };
+    panel.querySelector("#modClearBtn").onclick = function () {
+        ownerClearModeration(targetUsername);
+        try { openUserProfile(targetUsername); } catch (e) {}
+    };
+}
+
+function getPublicUserId_systemPatch(username) {
+    if (isSystemUsername(username)) return "Aza: 2";
+    return null;
+}
+
+// Patch getPublicUserId if present
+(function patchGetPublicUserId() {
+    if (typeof getPublicUserId !== "function") return;
+    var _orig = getPublicUserId;
+    window.getPublicUserId = function (username, accountHint) {
+        if (isSystemUsername(username)) return "Aza: 2";
+        return _orig(username, accountHint);
+    };
+})();
+
+// Enrich search results with system + registry
+(function patchPerformSearch() {
+    if (typeof performSearch !== "function") return;
+    var _orig = performSearch;
+    window.performSearch = function () {
+        ensureSystemElement();
+        try {
+            // Prefer rebuilt search that includes registry
+            var query = (document.getElementById("searchInput").value || "").trim().toLowerCase();
+            var resultsContainer = document.getElementById("searchResultsContainer");
+            if (!resultsContainer) return _orig();
+            resultsContainer.innerHTML = "";
+
+            if (currentSearchTab === "users") {
+                var map = {};
+                function addU(u) {
+                    if (!u || !u.username) return;
+                    map[String(u.username).toLowerCase()] = u;
+                }
+                if (typeof database !== "undefined" && database.users) database.users.forEach(addU);
+                try {
+                    var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+                    reg.forEach(addU);
+                } catch (e) {}
+                try {
+                    var accounts = JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+                    Object.keys(accounts).forEach(function (k) {
+                        addU({ username: accounts[k].username || k, userId: accounts[k].userId });
+                    });
+                } catch (e2) {}
+                try {
+                    var social = typeof getSocialData === "function" ? getSocialData() : {};
+                    Object.keys(social || {}).forEach(function (k) {
+                        addU({ username: k });
+                    });
+                } catch (e3) {}
+                addU({ username: "system", userId: "Aza: 2", isSystemElement: true });
+                addU({ username: "Azora", userId: "Aza: 0" });
+
+                var list = Object.keys(map).map(function (k) { return map[k]; });
+                var results = list.filter(function (u) {
+                    return String(u.username || "").toLowerCase().indexOf(query) !== -1;
+                });
+                if (!results.length) {
+                    resultsContainer.innerHTML = "<div class='no-results'>No results found.</div>";
+                    return;
+                }
+                results.forEach(function (item) {
+                    var row = document.createElement("div");
+                    row.className = "search-result-item";
+                    var extra = item.isSystemElement || isSystemUsername(item.username)
+                        ? " <span class='sys-tag'>System Element</span>"
+                        : (isOwnerUsername(item.username) ? " <span class='sys-tag'>Owner</span>" : "");
+                    row.innerHTML = "👤 <strong>" + String(item.username).replace(/</g, "&lt;") + "</strong>" + extra + " ";
+                    var viewBtn = document.createElement("a");
+                    viewBtn.href = "#";
+                    viewBtn.className = "search-action-btn";
+                    viewBtn.textContent = "View";
+                    viewBtn.onclick = function (e) {
+                        e.preventDefault();
+                        try { closeSearch(); } catch (err) {}
+                        openUserProfile(item.username);
+                    };
+                    row.appendChild(viewBtn);
+                    resultsContainer.appendChild(row);
+                });
+                return;
+            }
+        } catch (eFail) {}
+        return _orig();
+    };
+})();
+
+// System profile special bio
+(function patchOpenUserProfileSystem() {
+    if (typeof openUserProfile !== "function") return;
+    var _orig = openUserProfile;
+    window.openUserProfile = function (username) {
+        _orig(username);
+        try {
+            if (isSystemUsername(username)) {
+                var bioEl = document.getElementById("profileBio");
+                if (bioEl) {
+                    bioEl.style.display = "block";
+                    bioEl.textContent = "System Element (not a real player). Routes automated moderation, bans, terminations, and appeals. User ID Aza: 2.";
+                }
+                var st = document.getElementById("profileStatus");
+                if (st) st.innerHTML = '<span class="status-dot online"></span> Always on';
+                var stats = document.getElementById("profileStats");
+                if (stats) stats.textContent = "System Element · Not a player account";
+            }
+        } catch (e) {}
+    };
+})();
+
+// Boot
+try {
+    ensureSystemElement();
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function () {
+            ensureSystemElement();
+            setTimeout(checkModerationOnBoot, 400);
+        });
+    } else {
+        setTimeout(checkModerationOnBoot, 400);
+    }
+} catch (eBoot) {}
+
+window.getModerationRecords = getModerationRecords;
+window.ownerBanUser = ownerBanUser;
+window.ownerTerminateUser = ownerTerminateUser;
+window.ownerClearModeration = ownerClearModeration;
+window.ownerOverrideRestoreAccess = ownerOverrideRestoreAccess;
+window.modLockSignOut = modLockSignOut;
+window.getActiveModerationForUser = getActiveModerationForUser;
+window.renderProfileBadges = renderProfileBadges;
+window.appendOwnerModPanel = appendOwnerModPanel;
+window.checkModerationOnBoot = checkModerationOnBoot;
+window.formatBanDuration = formatBanDuration;
+window.ensureSystemElement = ensureSystemElement;
+window.isSystemUsername = isSystemUsername;

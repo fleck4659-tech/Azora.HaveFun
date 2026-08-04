@@ -577,6 +577,7 @@
     <div class="popup profile-popup" style="max-width:min(360px,calc(100vw - 20px));">
         <img src="logo.jpg" class="popupLogo" alt="Avatar" id="profileAvatarImg">
         <h2 id="profileUsername">Username</h2>
+        <div id="profileBadges" class="profile-badges" style="display:none;"></div>
         <div id="profileUserId" class="profile-user-id"></div>
         <div id="profileStatus" class="profile-status"><span class="status-dot offline"></span> Offline</div>
         <p id="profileBio" class="profile-bio"></p>
@@ -1037,6 +1038,24 @@ if ("serviceWorker" in navigator) {
             <button type="button" onclick="submitCreateTShirt()" style="flex:1;">Publish T-Shirt</button>
             <button type="button" onclick="closeCreateTShirt()" style="flex:1;">Cancel</button>
         </div>
+    </div>
+</div>
+
+
+<!-- Moderation lock (ban / terminate) -->
+<div id="moderationLockOverlay" class="overlay mod-lock-overlay" style="display:none;z-index:99999;">
+    <div class="popup mod-lock-popup">
+        <img src="logo.jpg" class="popupLogo" alt="Azora">
+        <h2 id="modLockTitle">Account restricted</h2>
+        <p id="modLockMessage" style="line-height:1.45;"></p>
+        <p id="modLockDuration" style="font-weight:700;color:#1e60ff;"></p>
+        <p style="margin-top:12px;">
+            <a id="modLockAppealLink" class="appeal-link-blue" href="appeal.html">Submit an appeal</a>
+        </p>
+        <div id="modLockOwnerOverride" style="display:none;margin-top:14px;">
+            <button type="button" onclick="ownerOverrideRestoreAccess()" style="background:#111;color:#fff;">Owner override — restore my access (testing)</button>
+        </div>
+        <button type="button" class="secondary" onclick="modLockSignOut()" style="margin-top:10px;">Sign out</button>
     </div>
 </div>
 
