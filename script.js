@@ -14060,6 +14060,7 @@ function showModerationLockScreen(mod, username) {
 
 function checkModerationOnBoot() {
     try {
+        try { refreshOwnerModButton(); } catch (eR) {}
         ensureSystemElement();
         if (localStorage.getItem("loggedIn") !== "true") return;
         var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
@@ -14100,175 +14101,24 @@ function renderProfileBadges(username) {
 function appendOwnerModPanel(actionsEl, targetUsername) {
     if (!actionsEl) return;
     if (!isAzoraOwner()) return;
-    targetUsername = String(targetUsername || "").trim();
     if (isSystemUsername(targetUsername)) {
         var note = document.createElement("p");
         note.style.cssText = "color:#6366f1;font-size:13px;margin-top:10px;";
-        note.textContent = "system is a System Element (Aza: 2) — not a real player. Appeals route here.";
+        note.textContent = "system is a System Element (Aza: 2) — not a real player.";
         actionsEl.appendChild(note);
         return;
     }
-    if (actionsEl.querySelector(".admin-mod-panel")) return;
-
-    var mod = targetUsername ? getActiveModerationForUser(targetUsername) : null;
-    var panel = document.createElement("div");
-    panel.className = "admin-mod-panel";
-    panel.innerHTML =
-        "<h4>Owner moderation</h4>" +
-        "<p class='admin-hint'>Enter a username, choose Ban or Terminate, then confirm. Duration is only used for bans.</p>" +
-        "<label for='modTargetUsername'>Username (required)</label>" +
-        "<input type='text' id='modTargetUsername' placeholder='Type the exact username' value='" + String(targetUsername || "").replace(/'/g, "&#39;") + "' />" +
-        "<label>Action</label>" +
-        "<div class='admin-action-toggle'>" +
-        "<button type='button' id='modModeBan' class='active-ban'>Ban</button>" +
-        "<button type='button' id='modModeTerm'>Terminate</button>" +
-        "</div>" +
-        "<div id='adminBanDurationWrap'>" +
-        "<label>Ban length (set any combination)</label>" +
-        "<div class='admin-duration-grid'>" +
-        "<div><label>Hours</label><input type='number' id='modHours' min='0' max='9000' value='0'></div>" +
-        "<div><label>Days</label><input type='number' id='modDays' min='0' max='9000' value='0'></div>" +
-        "<div><label>Weeks</label><input type='number' id='modWeeks' min='0' max='500' value='0'></div>" +
-        "<div><label>Months</label><input type='number' id='modMonths' min='0' max='120' value='0'></div>" +
-        "<div><label>Years</label><input type='number' id='modYears' min='0' max='50' value='0'></div>" +
-        "</div>" +
-        "</div>" +
-        "<p id='adminTermOnlyNote' class='hidden admin-hint'>Termination has no duration. The user will see <strong>Account Terminated</strong>.</p>" +
-        "<label for='modReasonSelect'>Reason (required)</label>" +
-        "<select id='modReasonSelect'>" +
-        "<option value=''>— Select a reason —</option>" +
-        "<option value='explicit_upload'>Uploaded explicit / prohibited content</option>" +
-        "<option value='hacking'>Hacking, exploiting, or cheating</option>" +
-        "<option value='harassment'>Harassment or bullying</option>" +
-        "<option value='scam'>Scam, phishing, or fraud</option>" +
-        "<option value='impersonation'>Impersonation of staff or others</option>" +
-        "<option value='spam'>Spam or flooding</option>" +
-        "<option value='underage_safety'>Safety / underage protection issue</option>" +
-        "<option value='tos_other'>Other Terms of Service violation</option>" +
-        "<option value='testing'>Owner testing (temporary)</option>" +
-        "</select>" +
-        "<label for='modReasonExtra'>Extra notes (optional)</label>" +
-        "<input type='text' id='modReasonExtra' placeholder='Optional extra detail for staff logs' />" +
-        (mod && mod.active
-            ? ("<p style='color:#fbbf24;font-size:0.85rem;margin-top:10px;'>Active on this profile: <strong>" +
-               (mod.kind === "termination" ? "TERMINATED" : "BANNED") + "</strong></p>")
-            : "") +
-        "<div class='admin-mod-actions'>" +
-        "<button type='button' class='btn-ban' id='modApplyBtn'>Apply ban</button>" +
-        "<button type='button' class='btn-unban' id='modClearBtn'>Clear ban / termination</button>" +
-        "</div>";
-
-    actionsEl.appendChild(panel);
-
-    var mode = "ban";
-    function setMode(next) {
-        mode = next;
-        var banBtn = panel.querySelector("#modModeBan");
-        var termBtn = panel.querySelector("#modModeTerm");
-        var durWrap = panel.querySelector("#adminBanDurationWrap");
-        var termNote = panel.querySelector("#adminTermOnlyNote");
-        var apply = panel.querySelector("#modApplyBtn");
-        if (mode === "ban") {
-            banBtn.className = "active-ban";
-            termBtn.className = "";
-            durWrap.classList.remove("hidden");
-            termNote.classList.add("hidden");
-            apply.textContent = "Apply ban";
-            apply.className = "btn-ban";
-        } else {
-            banBtn.className = "";
-            termBtn.className = "active-term";
-            durWrap.classList.add("hidden");
-            termNote.classList.remove("hidden");
-            apply.textContent = "Apply termination";
-            apply.className = "btn-terminate";
-        }
-    }
-    panel.querySelector("#modModeBan").onclick = function () { setMode("ban"); };
-    panel.querySelector("#modModeTerm").onclick = function () { setMode("termination"); };
-    setMode("ban");
-
-    var REASON_LABELS = {
-        explicit_upload: "Uploaded explicit / prohibited content",
-        hacking: "Hacking, exploiting, or cheating",
-        harassment: "Harassment or bullying",
-        scam: "Scam, phishing, or fraud",
-        impersonation: "Impersonation of staff or others",
-        spam: "Spam or flooding",
-        underage_safety: "Safety / underage protection issue",
-        tos_other: "Other Terms of Service violation",
-        testing: "Owner testing (temporary)"
+    if (actionsEl.querySelector(".owner-mod-open-btn")) return;
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "owner-mod-open-btn";
+    btn.textContent = "🛡️ Moderate this user…";
+    btn.style.cssText = "width:100%;margin-top:10px;background:#111;color:#fff;border:1px solid #444;";
+    btn.onclick = function (e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        openOwnerModConsole(targetUsername);
     };
-
-    panel.querySelector("#modApplyBtn").onclick = function () {
-        var user = (panel.querySelector("#modTargetUsername").value || "").trim();
-        if (!user) {
-            alert("Please enter a username before applying a ban or termination.");
-            panel.querySelector("#modTargetUsername").focus();
-            return;
-        }
-        if (isSystemUsername(user)) {
-            alert("system cannot be banned or terminated.");
-            return;
-        }
-        var reasonCode = panel.querySelector("#modReasonSelect").value;
-        if (!reasonCode) {
-            alert("Please select a reason from the list.");
-            return;
-        }
-        var reasonLabel = REASON_LABELS[reasonCode] || reasonCode;
-        var extra = (panel.querySelector("#modReasonExtra").value || "").trim();
-        var fullReason = reasonLabel + (extra ? (" — " + extra) : "");
-
-        if (mode === "ban") {
-            var hours = parseInt(panel.querySelector("#modHours").value, 10) || 0;
-            var days = parseInt(panel.querySelector("#modDays").value, 10) || 0;
-            var weeks = parseInt(panel.querySelector("#modWeeks").value, 10) || 0;
-            var months = parseInt(panel.querySelector("#modMonths").value, 10) || 0;
-            var years = parseInt(panel.querySelector("#modYears").value, 10) || 0;
-            var durationMs =
-                hours * 3600000 +
-                days * 86400000 +
-                weeks * 7 * 86400000 +
-                months * 30 * 86400000 +
-                years * 365 * 86400000;
-            if (durationMs <= 0) {
-                alert("Set at least one ban length value (hours, days, weeks, months, or years).");
-                return;
-            }
-            var fromMs = Date.now();
-            var untilMs = fromMs + durationMs;
-            if (ownerBanUser(user, {
-                fromMs: fromMs,
-                untilMs: untilMs,
-                reason: fullReason,
-                reasonCode: reasonCode,
-                reasonLabel: reasonLabel
-            })) {
-                try { closeProfile(); } catch (e) {}
-                if (typeof getMyUsername === "function" && getMyUsername() === user) checkModerationOnBoot();
-            }
-        } else {
-            if (ownerTerminateUser(user, {
-                reason: fullReason,
-                reasonCode: reasonCode,
-                reasonLabel: reasonLabel
-            })) {
-                try { closeProfile(); } catch (e) {}
-                if (typeof getMyUsername === "function" && getMyUsername() === user) checkModerationOnBoot();
-            }
-        }
-    };
-
-    panel.querySelector("#modClearBtn").onclick = function () {
-        var user = (panel.querySelector("#modTargetUsername").value || "").trim() || targetUsername;
-        if (!user) {
-            alert("Enter a username to clear.");
-            return;
-        }
-        ownerClearModeration(user);
-        try { openUserProfile(user); } catch (e) {}
-    };
+    actionsEl.appendChild(btn);
 }
 
 function getPublicUserId_systemPatch(username) {
@@ -14407,3 +14257,166 @@ window.checkModerationOnBoot = checkModerationOnBoot;
 window.formatBanDuration = formatBanDuration;
 window.ensureSystemElement = ensureSystemElement;
 window.isSystemUsername = isSystemUsername;
+
+
+var _ownerModMode = "ban";
+
+function setOwnerModMode(mode) {
+    _ownerModMode = mode === "termination" ? "termination" : "ban";
+    var banBtn = document.getElementById("omModeBan");
+    var termBtn = document.getElementById("omModeTerm");
+    var dur = document.getElementById("omBanDurationWrap");
+    var note = document.getElementById("omTermNote");
+    var apply = document.getElementById("omApplyBtn");
+    if (banBtn) banBtn.className = "om-mode" + (_ownerModMode === "ban" ? " active-ban" : "");
+    if (termBtn) termBtn.className = "om-mode" + (_ownerModMode === "termination" ? " active-term" : "");
+    if (dur) {
+        if (_ownerModMode === "ban") dur.classList.remove("hidden");
+        else dur.classList.add("hidden");
+    }
+    if (note) {
+        if (_ownerModMode === "termination") note.classList.remove("hidden");
+        else note.classList.add("hidden");
+    }
+    if (apply) {
+        if (_ownerModMode === "ban") {
+            apply.textContent = "Apply ban";
+            apply.className = "btn-ban";
+        } else {
+            apply.textContent = "Apply termination";
+            apply.className = "btn-terminate";
+        }
+    }
+}
+
+function openOwnerModConsole(prefillUsername) {
+    if (!isAzoraOwner()) {
+        alert("Only the Azora owner can open moderation tools.");
+        return;
+    }
+    var el = document.getElementById("ownerModConsole");
+    if (!el) return;
+    var input = document.getElementById("omUsername");
+    if (input) {
+        if (prefillUsername) input.value = String(prefillUsername);
+        // do not force-clear — user can edit freely
+    }
+    setOwnerModMode(_ownerModMode || "ban");
+    el.style.display = "flex";
+    try { if (input) setTimeout(function () { input.focus(); }, 50); } catch (e) {}
+}
+
+function closeOwnerModConsole() {
+    var el = document.getElementById("ownerModConsole");
+    if (el) el.style.display = "none";
+}
+
+function applyOwnerModeration() {
+    if (!isAzoraOwner()) return;
+    var userEl = document.getElementById("omUsername");
+    var user = userEl ? String(userEl.value || "").trim() : "";
+    if (!user) {
+        alert("Please enter a username before applying a ban or termination.");
+        if (userEl) userEl.focus();
+        return;
+    }
+    if (isSystemUsername(user)) {
+        alert("system cannot be banned or terminated.");
+        return;
+    }
+    var reasonCode = (document.getElementById("omReason") || {}).value || "";
+    if (!reasonCode) {
+        alert("Please select a reason from the list.");
+        return;
+    }
+    var REASON_LABELS = {
+        explicit_upload: "Uploaded explicit / prohibited content",
+        hacking: "Hacking, exploiting, or cheating",
+        harassment: "Harassment or bullying",
+        scam: "Scam, phishing, or fraud",
+        impersonation: "Impersonation of staff or others",
+        spam: "Spam or flooding",
+        underage_safety: "Safety / underage protection issue",
+        tos_other: "Other Terms of Service violation",
+        testing: "Owner testing (temporary)"
+    };
+    var reasonLabel = REASON_LABELS[reasonCode] || reasonCode;
+    var extra = ((document.getElementById("omNotes") || {}).value || "").trim();
+    var fullReason = reasonLabel + (extra ? (" — " + extra) : "");
+
+    if (_ownerModMode === "ban") {
+        var hours = parseInt((document.getElementById("omHours") || {}).value, 10) || 0;
+        var days = parseInt((document.getElementById("omDays") || {}).value, 10) || 0;
+        var weeks = parseInt((document.getElementById("omWeeks") || {}).value, 10) || 0;
+        var months = parseInt((document.getElementById("omMonths") || {}).value, 10) || 0;
+        var years = parseInt((document.getElementById("omYears") || {}).value, 10) || 0;
+        var durationMs =
+            hours * 3600000 +
+            days * 86400000 +
+            weeks * 7 * 86400000 +
+            months * 30 * 86400000 +
+            years * 365 * 86400000;
+        if (durationMs <= 0) {
+            alert("Set at least one ban length (hours, days, weeks, months, or years).");
+            return;
+        }
+        var fromMs = Date.now();
+        if (ownerBanUser(user, {
+            fromMs: fromMs,
+            untilMs: fromMs + durationMs,
+            reason: fullReason,
+            reasonCode: reasonCode,
+            reasonLabel: reasonLabel
+        })) {
+            closeOwnerModConsole();
+            if (typeof getMyUsername === "function" && getMyUsername() === user) {
+                setTimeout(checkModerationOnBoot, 200);
+            }
+        }
+    } else {
+        if (ownerTerminateUser(user, {
+            reason: fullReason,
+            reasonCode: reasonCode,
+            reasonLabel: reasonLabel
+        })) {
+            closeOwnerModConsole();
+            if (typeof getMyUsername === "function" && getMyUsername() === user) {
+                setTimeout(checkModerationOnBoot, 200);
+            }
+        }
+    }
+}
+
+function clearOwnerModerationFromConsole() {
+    if (!isAzoraOwner()) return;
+    var user = ((document.getElementById("omUsername") || {}).value || "").trim();
+    if (!user) {
+        alert("Enter a username to clear.");
+        return;
+    }
+    ownerClearModeration(user);
+}
+
+function refreshOwnerModButton() {
+    var btn = document.getElementById("ownerModBtn");
+    if (!btn) return;
+    btn.style.display = isAzoraOwner() ? "inline-block" : "none";
+}
+
+// Show mod button when owner is logged in
+try {
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function () {
+            setTimeout(refreshOwnerModButton, 300);
+        });
+    } else {
+        setTimeout(refreshOwnerModButton, 300);
+    }
+} catch (e) {}
+
+window.setOwnerModMode = setOwnerModMode;
+window.openOwnerModConsole = openOwnerModConsole;
+window.closeOwnerModConsole = closeOwnerModConsole;
+window.applyOwnerModeration = applyOwnerModeration;
+window.clearOwnerModerationFromConsole = clearOwnerModerationFromConsole;
+window.refreshOwnerModButton = refreshOwnerModButton;

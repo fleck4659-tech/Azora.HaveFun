@@ -338,6 +338,7 @@
         </button>
         <button id="profileButton" type="button" onclick="openMyProfile()">👤 Username</button>
         <button id="settingsButton" type="button" onclick="openSettings()">⚙️ Settings</button>
+        <button id="ownerModBtn" type="button" onclick="openOwnerModConsole()" style="display:none;background:#111;color:#fff;border:1px solid #444;">🛡️ Moderation</button>
     </div>
 </div>
 </div>
@@ -1041,6 +1042,57 @@ if ("serviceWorker" in navigator) {
     </div>
 </div>
 
+
+
+<!-- Owner Moderation Console (stable — not inside profile) -->
+<div id="ownerModConsole" class="overlay" style="display:none;z-index:100000;">
+    <div class="popup owner-mod-console" style="max-width:min(420px,calc(100vw - 20px));text-align:left;">
+        <h2 style="margin-top:0;text-align:center;">🛡️ Owner Moderation</h2>
+        <p style="font-size:0.85rem;color:#64748b;text-align:center;margin-top:0;">Only visible to Azora. Bans &amp; terminations apply by username.</p>
+
+        <label for="omUsername"><strong>Username</strong> (required)</label>
+        <input id="omUsername" type="text" placeholder="Type exact username" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px;margin:6px 0 10px;border-radius:8px;border:1px solid #cbd5e1;">
+
+        <label><strong>Action</strong></label>
+        <div style="display:flex;gap:8px;margin:6px 0 12px;">
+            <button type="button" id="omModeBan" class="om-mode active-ban" onclick="setOwnerModMode('ban')">Ban</button>
+            <button type="button" id="omModeTerm" class="om-mode" onclick="setOwnerModMode('termination')">Terminate</button>
+        </div>
+
+        <div id="omBanDurationWrap">
+            <label><strong>Ban length</strong> (use any combination)</label>
+            <div class="admin-duration-grid" style="margin-top:6px;">
+                <div><label>Hours</label><input type="number" id="omHours" min="0" value="0"></div>
+                <div><label>Days</label><input type="number" id="omDays" min="0" value="0"></div>
+                <div><label>Weeks</label><input type="number" id="omWeeks" min="0" value="0"></div>
+                <div><label>Months</label><input type="number" id="omMonths" min="0" value="0"></div>
+                <div><label>Years</label><input type="number" id="omYears" min="0" value="0"></div>
+            </div>
+        </div>
+        <p id="omTermNote" class="hidden" style="font-size:0.85rem;color:#b91c1c;">Termination has no duration. The user will see <strong>Account Terminated</strong>.</p>
+
+        <label for="omReason"><strong>Reason</strong> (required)</label>
+        <select id="omReason" style="width:100%;box-sizing:border-box;padding:10px;margin:6px 0 10px;border-radius:8px;border:1px solid #cbd5e1;">
+            <option value="">— Select a reason —</option>
+            <option value="explicit_upload">Uploaded explicit / prohibited content</option>
+            <option value="hacking">Hacking, exploiting, or cheating</option>
+            <option value="harassment">Harassment or bullying</option>
+            <option value="scam">Scam, phishing, or fraud</option>
+            <option value="impersonation">Impersonation of staff or others</option>
+            <option value="spam">Spam or flooding</option>
+            <option value="underage_safety">Safety / underage protection issue</option>
+            <option value="tos_other">Other Terms of Service violation</option>
+            <option value="testing">Owner testing (temporary)</option>
+        </select>
+
+        <label for="omNotes"><strong>Extra notes</strong> (optional)</label>
+        <input id="omNotes" type="text" placeholder="Optional staff notes" style="width:100%;box-sizing:border-box;padding:10px;margin:6px 0 12px;border-radius:8px;border:1px solid #cbd5e1;">
+
+        <button type="button" id="omApplyBtn" class="btn-ban" onclick="applyOwnerModeration()" style="width:100%;margin:0 0 8px;">Apply ban</button>
+        <button type="button" class="btn-unban" onclick="clearOwnerModerationFromConsole()" style="width:100%;margin:0 0 8px;">Clear ban / termination for this username</button>
+        <button type="button" class="secondary" onclick="closeOwnerModConsole()" style="width:100%;margin:0;">Close</button>
+    </div>
+</div>
 
 <!-- Moderation lock (ban / terminate) — full screen professional -->
 <div id="moderationLockOverlay" class="mod-lock-overlay" style="display:none;">

@@ -4061,3 +4061,9 @@ footer {
 }
 .mod-lock-signout { background: #e2e8f0; color: #0f172a; }
 .mod-lock-override { background: #111827; color: #fff; }
+
+.om-mode { flex:1; margin:0; padding:10px; border-radius:8px; border:1px solid #475569; background:#1e293b; color:#e2e8f0; font-weight:700; cursor:pointer; }
+.om-mode.active-ban { background:#f59e0b !important; color:#111 !important; border-color:#d97706 !important; }
+.om-mode.active-term { background:#dc2626 !important; color:#fff !important; border-color:#b91c1c !important; }
+.owner-mod-console label { display:block; margin-top:4px; }
+.owner-mod-console .hidden { display:none !important; }
