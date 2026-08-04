@@ -3961,3 +3961,103 @@ footer {
     margin-left: 6px;
     font-weight: 700;
 }
+
+
+/* ===== Professional moderation UI (v2) ===== */
+.admin-mod-panel {
+    margin-top: 12px;
+    padding: 14px;
+    border-radius: 12px;
+    background: #0b1220;
+    color: #e2e8f0;
+    text-align: left;
+    border: 1px solid #334155;
+}
+.admin-mod-panel h4 { margin: 0 0 6px; color: #f8fafc; font-size: 0.95rem; }
+.admin-mod-panel .admin-hint { margin: 0 0 10px; font-size: 0.78rem; opacity: 0.85; line-height: 1.35; }
+.admin-mod-panel label { display: block; font-size: 0.78rem; margin: 10px 0 4px; opacity: 0.95; font-weight: 600; }
+.admin-mod-panel input, .admin-mod-panel select {
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #f1f5f9;
+    padding: 8px 10px;
+    font-size: 0.9rem;
+}
+.admin-duration-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px;
+    background: #111827;
+    border-radius: 10px;
+    border: 1px solid #334155;
+}
+.admin-duration-grid label { margin: 0 0 4px; }
+.admin-mod-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.admin-mod-actions button { margin: 0; font-weight: 700; }
+.btn-ban { background: linear-gradient(180deg,#f59e0b,#b45309) !important; color: #111 !important; }
+.btn-terminate { background: linear-gradient(180deg,#ef4444,#991b1b) !important; color: #fff !important; }
+.btn-unban { background: linear-gradient(180deg,#22c55e,#15803d) !important; color: #fff !important; }
+.admin-action-toggle { display: flex; gap: 8px; margin-top: 8px; }
+.admin-action-toggle button {
+    flex: 1; margin: 0; background: #1e293b; color: #e2e8f0; border: 1px solid #475569;
+}
+.admin-action-toggle button.active-ban { background: #f59e0b; color: #111; border-color: #d97706; }
+.admin-action-toggle button.active-term { background: #dc2626; color: #fff; border-color: #b91c1c; }
+#adminBanDurationWrap.hidden, #adminTermOnlyNote.hidden { display: none !important; }
+
+.mod-lock-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 999999 !important;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(55, 65, 81, 0.92) !important;
+    padding: 16px;
+    box-sizing: border-box;
+}
+.mod-lock-panel {
+    width: min(420px, 100%);
+    background: #ffffff;
+    color: #0f172a;
+    border-radius: 14px;
+    padding: 22px 20px 18px;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.35);
+    text-align: center;
+    border: 1px solid #e2e8f0;
+}
+.mod-lock-brand {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    margin-bottom: 12px; font-weight: 800; color: #1e3a8a;
+}
+.mod-lock-brand img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; }
+.mod-lock-kind {
+    display: inline-block; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+}
+.mod-lock-kind.ban { background: #ffedd5; color: #9a3412; }
+.mod-lock-kind.termination { background: #fee2e2; color: #991b1b; }
+.mod-lock-panel h1 { margin: 0 0 10px; font-size: 1.35rem; color: #0f172a; }
+.mod-lock-msg { margin: 0 0 12px; line-height: 1.45; color: #334155; font-size: 0.95rem; }
+.mod-lock-duration {
+    margin: 0 0 12px; padding: 10px 12px; background: #f1f5f9; border-radius: 10px;
+    font-weight: 700; color: #1e3a8a; font-size: 0.92rem; line-height: 1.4;
+}
+.mod-lock-reason {
+    margin: 0 0 12px; padding: 10px 12px; background: #fff7ed; border: 1px solid #fed7aa;
+    border-radius: 10px; font-size: 0.88rem; color: #9a3412; text-align: left;
+}
+.appeal-link-blue {
+    color: #1d4ed8 !important; font-weight: 800; text-decoration: underline; text-underline-offset: 3px;
+    background: #dbeafe; padding: 8px 14px; border-radius: 10px; display: inline-block; margin: 4px 0 8px;
+}
+.mod-lock-fine { font-size: 0.78rem; color: #64748b; margin: 0 0 12px; }
+.mod-lock-signout, .mod-lock-override {
+    width: 100%; margin-top: 8px; padding: 10px 12px; border-radius: 10px; border: 0; font-weight: 700; cursor: pointer;
+}
+.mod-lock-signout { background: #e2e8f0; color: #0f172a; }
+.mod-lock-override { background: #111827; color: #fff; }

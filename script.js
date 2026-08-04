@@ -13777,20 +13777,18 @@ function formatBanDuration(ms) {
     var min = Math.floor(sec / 60);
     var hours = Math.floor(min / 60);
     var days = Math.floor(hours / 24);
-    var weeks = Math.floor(days / 7);
     var years = Math.floor(days / 365);
-    if (years >= 1) {
-        var yd = days - years * 365;
-        return years + " year" + (years === 1 ? "" : "s") + (yd ? (", " + yd + " day" + (yd === 1 ? "" : "s")) : "");
-    }
-    if (weeks >= 1) {
-        var wd = days - weeks * 7;
-        return weeks + " week" + (weeks === 1 ? "" : "s") + (wd ? (", " + wd + " day" + (wd === 1 ? "" : "s")) : "");
-    }
-    if (days >= 1) {
-        var dh = hours - days * 24;
-        return days + " day" + (days === 1 ? "" : "s") + (dh ? (", " + dh + " hour" + (dh === 1 ? "" : "s")) : "");
-    }
+    var remDays = days - years * 365;
+    var months = Math.floor(remDays / 30);
+    remDays = remDays - months * 30;
+    var weeks = Math.floor(remDays / 7);
+    remDays = remDays - weeks * 7;
+    var parts = [];
+    if (years >= 1) parts.push(years + " year" + (years === 1 ? "" : "s"));
+    if (months >= 1) parts.push(months + " month" + (months === 1 ? "" : "s"));
+    if (weeks >= 1) parts.push(weeks + " week" + (weeks === 1 ? "" : "s"));
+    if (remDays >= 1) parts.push(remDays + " day" + (remDays === 1 ? "" : "s"));
+    if (parts.length) return parts.join(", ");
     if (hours >= 1) {
         var hm = min - hours * 60;
         return hours + " hour" + (hours === 1 ? "" : "s") + (hm ? (", " + hm + " minute" + (hm === 1 ? "" : "s")) : "");
@@ -13815,6 +13813,8 @@ function getActiveModerationForUser(username) {
             active: true,
             kind: "termination",
             reason: term.reason || "Your account has been terminated.",
+            reasonLabel: term.reasonLabel || term.reason || "Your account has been terminated.",
+            reasonCode: term.reasonCode || "",
             at: term.at,
             by: term.by || "Azora",
             until: null
@@ -13840,6 +13840,8 @@ function getActiveModerationForUser(username) {
             active: true,
             kind: "ban",
             reason: ban.reason || "Your account is temporarily banned.",
+            reasonLabel: ban.reasonLabel || ban.reason || "Your account is temporarily banned.",
+            reasonCode: ban.reasonCode || "",
             at: ban.at,
             by: ban.by || "Azora",
             until: until,
@@ -13881,6 +13883,8 @@ function ownerBanUser(username, opts) {
         at: Date.now(),
         by: "Azora",
         reason: opts.reason || "Banned by Azora staff.",
+        reasonCode: opts.reasonCode || "",
+        reasonLabel: opts.reasonLabel || opts.reason || "Banned by Azora staff.",
         automated: !!opts.automated
     };
     // clear termination if any when issuing temp ban
@@ -13930,6 +13934,8 @@ function ownerTerminateUser(username, opts) {
         at: Date.now(),
         by: "Azora",
         reason: opts.reason || "Account terminated by Azora staff.",
+        reasonCode: opts.reasonCode || "",
+        reasonLabel: opts.reasonLabel || opts.reason || "Account terminated by Azora staff.",
         automated: !!opts.automated
     };
     if (r.bans[username]) r.bans[username].active = false;
@@ -13999,35 +14005,57 @@ function showModerationLockScreen(mod, username) {
     var dur = document.getElementById("modLockDuration");
     var link = document.getElementById("modLockAppealLink");
     var own = document.getElementById("modLockOwnerOverride");
+    var kind = document.getElementById("modLockKindTag");
+    var reasonBox = document.getElementById("modLockReasonBox");
+
+    ov.style.display = "flex";
 
     if (mod.kind === "termination") {
-        if (title) title.textContent = "Account terminated";
-        if (msg) msg.textContent = mod.reason || "Your account has been terminated.";
-        if (dur) dur.textContent = "This is a permanent restriction until an appeal is accepted.";
+        if (kind) { kind.textContent = "Account Terminated"; kind.className = "mod-lock-kind termination"; }
+        if (title) title.textContent = "Account Terminated";
+        if (msg) msg.textContent = "Your access to Azora has been permanently restricted pending staff review of any appeal.";
+        if (dur) {
+            dur.style.display = "block";
+            dur.innerHTML = "Status: <strong>Terminated</strong><br>This is not a timed restriction.";
+        }
         if (link) {
             link.href = "appeal.html?user=" + encodeURIComponent(username) + "&type=termination";
-            link.textContent = "Submit an appeal (opens blue link → system)";
+            link.textContent = "Submit an appeal";
         }
     } else {
-        if (title) title.textContent = "Account banned";
-        if (msg) msg.textContent = mod.reason || "Your account is temporarily banned.";
+        if (kind) { kind.textContent = "Temporary Ban"; kind.className = "mod-lock-kind ban"; }
+        if (title) title.textContent = "You have been banned";
+        if (msg) msg.textContent = "Your account is temporarily restricted from using Azora.";
         var left = mod.remainingMs != null ? formatBanDuration(mod.remainingMs) : "";
         var untilStr = mod.until ? new Date(mod.until).toLocaleString() : "";
+        var total = (mod.from && mod.until) ? formatBanDuration(mod.until - mod.from) : "";
         if (dur) {
+            dur.style.display = "block";
             dur.innerHTML =
+                (total ? ("Ban length: <strong>" + total + "</strong><br>") : "") +
                 (left ? ("Time remaining: <strong>" + left + "</strong><br>") : "") +
                 (untilStr ? ("Ban ends: " + untilStr) : "");
         }
         if (link) {
             link.href = "appeal.html?user=" + encodeURIComponent(username) + "&type=ban";
-            link.textContent = "Submit an appeal (goes to system)";
+            link.textContent = "Submit an appeal";
+        }
+    }
+
+    if (reasonBox) {
+        var label = mod.reasonLabel || mod.reason || "";
+        if (label) {
+            reasonBox.style.display = "block";
+            reasonBox.innerHTML = "<strong>Reason:</strong> " + String(label).replace(/</g, "&lt;");
+        } else {
+            reasonBox.style.display = "none";
+            reasonBox.innerHTML = "";
         }
     }
 
     if (own) {
         own.style.display = isOwnerUsername(username) ? "block" : "none";
     }
-    ov.style.display = "flex";
 }
 
 function checkModerationOnBoot() {
@@ -14073,7 +14101,6 @@ function appendOwnerModPanel(actionsEl, targetUsername) {
     if (!actionsEl) return;
     if (!isAzoraOwner()) return;
     targetUsername = String(targetUsername || "").trim();
-    if (!targetUsername) return;
     if (isSystemUsername(targetUsername)) {
         var note = document.createElement("p");
         note.style.cssText = "color:#6366f1;font-size:13px;margin-top:10px;";
@@ -14081,80 +14108,166 @@ function appendOwnerModPanel(actionsEl, targetUsername) {
         actionsEl.appendChild(note);
         return;
     }
-
-    // Avoid duplicate panels
     if (actionsEl.querySelector(".admin-mod-panel")) return;
 
-    var mod = getActiveModerationForUser(targetUsername);
+    var mod = targetUsername ? getActiveModerationForUser(targetUsername) : null;
     var panel = document.createElement("div");
     panel.className = "admin-mod-panel";
     panel.innerHTML =
         "<h4>Owner moderation</h4>" +
-        "<p style='margin:0 0 8px;font-size:0.8rem;opacity:0.9;'>Only visible to Azora. You can ban/terminate for testing — including your own account.</p>" +
-        (mod && mod.active
-            ? ("<p style='color:#fbbf24;font-size:0.85rem;'>Active: <strong>" +
-                (mod.kind === "termination" ? "TERMINATED" : "BANNED") +
-                "</strong>" +
-                (mod.kind === "ban" && mod.remainingMs != null
-                    ? (" · " + formatBanDuration(mod.remainingMs) + " left")
-                    : "") +
-                "</p>")
-            : "<p style='font-size:0.8rem;opacity:0.75;'>No active restriction.</p>") +
-        "<label>Ban until (local date & time)</label>" +
-        "<input type='datetime-local' id='modBanUntilInput' />" +
-        "<label>Or quick duration</label>" +
-        "<select id='modBanQuick'>" +
-        "<option value=''>Custom date above</option>" +
-        "<option value='3600000'>1 hour</option>" +
-        "<option value='86400000'>1 day</option>" +
-        "<option value='604800000'>1 week</option>" +
-        "<option value='2592000000'>30 days</option>" +
-        "<option value='31536000000'>1 year</option>" +
+        "<p class='admin-hint'>Enter a username, choose Ban or Terminate, then confirm. Duration is only used for bans.</p>" +
+        "<label for='modTargetUsername'>Username (required)</label>" +
+        "<input type='text' id='modTargetUsername' placeholder='Type the exact username' value='" + String(targetUsername || "").replace(/'/g, "&#39;") + "' />" +
+        "<label>Action</label>" +
+        "<div class='admin-action-toggle'>" +
+        "<button type='button' id='modModeBan' class='active-ban'>Ban</button>" +
+        "<button type='button' id='modModeTerm'>Terminate</button>" +
+        "</div>" +
+        "<div id='adminBanDurationWrap'>" +
+        "<label>Ban length (set any combination)</label>" +
+        "<div class='admin-duration-grid'>" +
+        "<div><label>Hours</label><input type='number' id='modHours' min='0' max='9000' value='0'></div>" +
+        "<div><label>Days</label><input type='number' id='modDays' min='0' max='9000' value='0'></div>" +
+        "<div><label>Weeks</label><input type='number' id='modWeeks' min='0' max='500' value='0'></div>" +
+        "<div><label>Months</label><input type='number' id='modMonths' min='0' max='120' value='0'></div>" +
+        "<div><label>Years</label><input type='number' id='modYears' min='0' max='50' value='0'></div>" +
+        "</div>" +
+        "</div>" +
+        "<p id='adminTermOnlyNote' class='hidden admin-hint'>Termination has no duration. The user will see <strong>Account Terminated</strong>.</p>" +
+        "<label for='modReasonSelect'>Reason (required)</label>" +
+        "<select id='modReasonSelect'>" +
+        "<option value=''>— Select a reason —</option>" +
+        "<option value='explicit_upload'>Uploaded explicit / prohibited content</option>" +
+        "<option value='hacking'>Hacking, exploiting, or cheating</option>" +
+        "<option value='harassment'>Harassment or bullying</option>" +
+        "<option value='scam'>Scam, phishing, or fraud</option>" +
+        "<option value='impersonation'>Impersonation of staff or others</option>" +
+        "<option value='spam'>Spam or flooding</option>" +
+        "<option value='underage_safety'>Safety / underage protection issue</option>" +
+        "<option value='tos_other'>Other Terms of Service violation</option>" +
+        "<option value='testing'>Owner testing (temporary)</option>" +
         "</select>" +
-        "<label>Reason (optional)</label>" +
-        "<input type='text' id='modReasonInput' placeholder='Reason shown to the user' />" +
+        "<label for='modReasonExtra'>Extra notes (optional)</label>" +
+        "<input type='text' id='modReasonExtra' placeholder='Optional extra detail for staff logs' />" +
+        (mod && mod.active
+            ? ("<p style='color:#fbbf24;font-size:0.85rem;margin-top:10px;'>Active on this profile: <strong>" +
+               (mod.kind === "termination" ? "TERMINATED" : "BANNED") + "</strong></p>")
+            : "") +
         "<div class='admin-mod-actions'>" +
-        "<button type='button' class='btn-ban' id='modBanBtn'>Ban user (date → date)</button>" +
-        "<button type='button' class='btn-terminate' id='modTermBtn'>Terminate user</button>" +
+        "<button type='button' class='btn-ban' id='modApplyBtn'>Apply ban</button>" +
         "<button type='button' class='btn-unban' id='modClearBtn'>Clear ban / termination</button>" +
         "</div>";
 
     actionsEl.appendChild(panel);
 
-    panel.querySelector("#modBanBtn").onclick = function () {
-        var quick = panel.querySelector("#modBanQuick").value;
-        var untilInput = panel.querySelector("#modBanUntilInput").value;
-        var reason = panel.querySelector("#modReasonInput").value.trim();
-        var fromMs = Date.now();
-        var untilMs = null;
-        if (quick) {
-            untilMs = fromMs + parseInt(quick, 10);
-        } else if (untilInput) {
-            untilMs = new Date(untilInput).getTime();
+    var mode = "ban";
+    function setMode(next) {
+        mode = next;
+        var banBtn = panel.querySelector("#modModeBan");
+        var termBtn = panel.querySelector("#modModeTerm");
+        var durWrap = panel.querySelector("#adminBanDurationWrap");
+        var termNote = panel.querySelector("#adminTermOnlyNote");
+        var apply = panel.querySelector("#modApplyBtn");
+        if (mode === "ban") {
+            banBtn.className = "active-ban";
+            termBtn.className = "";
+            durWrap.classList.remove("hidden");
+            termNote.classList.add("hidden");
+            apply.textContent = "Apply ban";
+            apply.className = "btn-ban";
         } else {
-            alert("Pick a quick duration or a ban-until date.");
+            banBtn.className = "";
+            termBtn.className = "active-term";
+            durWrap.classList.add("hidden");
+            termNote.classList.remove("hidden");
+            apply.textContent = "Apply termination";
+            apply.className = "btn-terminate";
+        }
+    }
+    panel.querySelector("#modModeBan").onclick = function () { setMode("ban"); };
+    panel.querySelector("#modModeTerm").onclick = function () { setMode("termination"); };
+    setMode("ban");
+
+    var REASON_LABELS = {
+        explicit_upload: "Uploaded explicit / prohibited content",
+        hacking: "Hacking, exploiting, or cheating",
+        harassment: "Harassment or bullying",
+        scam: "Scam, phishing, or fraud",
+        impersonation: "Impersonation of staff or others",
+        spam: "Spam or flooding",
+        underage_safety: "Safety / underage protection issue",
+        tos_other: "Other Terms of Service violation",
+        testing: "Owner testing (temporary)"
+    };
+
+    panel.querySelector("#modApplyBtn").onclick = function () {
+        var user = (panel.querySelector("#modTargetUsername").value || "").trim();
+        if (!user) {
+            alert("Please enter a username before applying a ban or termination.");
+            panel.querySelector("#modTargetUsername").focus();
             return;
         }
-        if (ownerBanUser(targetUsername, { fromMs: fromMs, untilMs: untilMs, reason: reason })) {
-            try { closeProfile(); } catch (e) {}
-            // If banning self, lock immediately
-            if (typeof getMyUsername === "function" && getMyUsername() === targetUsername) {
-                checkModerationOnBoot();
+        if (isSystemUsername(user)) {
+            alert("system cannot be banned or terminated.");
+            return;
+        }
+        var reasonCode = panel.querySelector("#modReasonSelect").value;
+        if (!reasonCode) {
+            alert("Please select a reason from the list.");
+            return;
+        }
+        var reasonLabel = REASON_LABELS[reasonCode] || reasonCode;
+        var extra = (panel.querySelector("#modReasonExtra").value || "").trim();
+        var fullReason = reasonLabel + (extra ? (" — " + extra) : "");
+
+        if (mode === "ban") {
+            var hours = parseInt(panel.querySelector("#modHours").value, 10) || 0;
+            var days = parseInt(panel.querySelector("#modDays").value, 10) || 0;
+            var weeks = parseInt(panel.querySelector("#modWeeks").value, 10) || 0;
+            var months = parseInt(panel.querySelector("#modMonths").value, 10) || 0;
+            var years = parseInt(panel.querySelector("#modYears").value, 10) || 0;
+            var durationMs =
+                hours * 3600000 +
+                days * 86400000 +
+                weeks * 7 * 86400000 +
+                months * 30 * 86400000 +
+                years * 365 * 86400000;
+            if (durationMs <= 0) {
+                alert("Set at least one ban length value (hours, days, weeks, months, or years).");
+                return;
+            }
+            var fromMs = Date.now();
+            var untilMs = fromMs + durationMs;
+            if (ownerBanUser(user, {
+                fromMs: fromMs,
+                untilMs: untilMs,
+                reason: fullReason,
+                reasonCode: reasonCode,
+                reasonLabel: reasonLabel
+            })) {
+                try { closeProfile(); } catch (e) {}
+                if (typeof getMyUsername === "function" && getMyUsername() === user) checkModerationOnBoot();
+            }
+        } else {
+            if (ownerTerminateUser(user, {
+                reason: fullReason,
+                reasonCode: reasonCode,
+                reasonLabel: reasonLabel
+            })) {
+                try { closeProfile(); } catch (e) {}
+                if (typeof getMyUsername === "function" && getMyUsername() === user) checkModerationOnBoot();
             }
         }
     };
-    panel.querySelector("#modTermBtn").onclick = function () {
-        var reason = panel.querySelector("#modReasonInput").value.trim();
-        if (ownerTerminateUser(targetUsername, { reason: reason })) {
-            try { closeProfile(); } catch (e) {}
-            if (typeof getMyUsername === "function" && getMyUsername() === targetUsername) {
-                checkModerationOnBoot();
-            }
-        }
-    };
+
     panel.querySelector("#modClearBtn").onclick = function () {
-        ownerClearModeration(targetUsername);
-        try { openUserProfile(targetUsername); } catch (e) {}
+        var user = (panel.querySelector("#modTargetUsername").value || "").trim() || targetUsername;
+        if (!user) {
+            alert("Enter a username to clear.");
+            return;
+        }
+        ownerClearModeration(user);
+        try { openUserProfile(user); } catch (e) {}
     };
 }
 

@@ -6,71 +6,124 @@
     <title>Azora Appeals</title>
     <link rel="stylesheet" href="appeal.css">
     <style>
-        .appeal-link-blue { color: #2563eb; font-weight: 800; }
-        .sys-note { background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; padding: 10px 12px; font-size: 0.9rem; margin: 12px 0; }
+        body { background: #e8eef7; }
+        .appeal-box { max-width: 480px; margin: 24px auto; background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 8px 30px rgba(15,23,42,0.08); }
+        .logo { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; }
+        label { display: block; font-weight: 700; margin: 12px 0 6px; font-size: 0.9rem; }
+        input, select, textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid #cbd5e1; font: inherit; }
+        textarea { min-height: 110px; resize: vertical; }
+        button { margin-top: 14px; width: 100%; padding: 12px; border: 0; border-radius: 10px; background: linear-gradient(180deg,#3b82f6,#1d4ed8); color: #fff; font-weight: 700; cursor: pointer; }
+        .sys-note { background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; margin: 12px 0; }
         .ok { color: #047857; font-weight: 700; }
         .err { color: #b91c1c; font-weight: 700; }
+        .hidden { display: none !important; }
+        .hint { font-size: 0.8rem; color: #64748b; margin: 4px 0 0; }
+        #assetIdWrap { margin-top: 8px; padding: 12px; background: #f8fafc; border-radius: 10px; border: 1px dashed #94a3b8; }
     </style>
 </head>
 <body>
 <div class="appeal-box">
     <img src="logo.jpg" class="logo" alt="Azora Logo">
     <h1>Azora Appeals</h1>
-    <p class="welcome">Hello — appeals are reviewed by <strong>system</strong> (System Element · Aza: 2).</p>
+    <p>Appeals are reviewed via <strong>system</strong> (System Element · Aza: 2).</p>
     <div class="sys-note">
-        Appeals are delivered to the <strong>system</strong> account inbox.
-        System is not a real player — it is a <em>System Element</em> used for automated moderation routing.
+        Pick <strong>one</strong> reason that best matches why you received this action.
+        If it involves content you uploaded, enter that item’s ID.
     </div>
+
     <label for="appealUsername">Username</label>
-    <input id="appealUsername" type="text" placeholder="Enter your username">
-    <br><br>
+    <input id="appealUsername" type="text" placeholder="Your username" autocomplete="username">
+
     <label for="appealType">What are you appealing?</label>
-    <select id="appealType">
+    <select id="appealType" onchange="onAppealTypeChange()">
+        <option value="">— Select —</option>
         <option value="ban">Temporary Ban</option>
         <option value="termination">Termination</option>
     </select>
-    <br><br>
-    <label for="appealText">Your Appeal</label>
-    <textarea id="appealText" rows="6" placeholder="Explain why this decision should be reviewed."></textarea>
-    <br><br>
-    <button type="button" onclick="submitAppeal()">Send Appeal to system</button>
+
+    <div id="punishmentReasonWrap" class="hidden">
+        <label for="punishmentReason">Why do you believe you received this punishment? (select only one)</label>
+        <select id="punishmentReason" onchange="onPunishmentReasonChange()">
+            <option value="">— Select one —</option>
+            <option value="explicit_upload">I uploaded something that may have broken content rules</option>
+            <option value="hacking">I was accused of hacking / exploiting</option>
+            <option value="harassment">Harassment or bullying related</option>
+            <option value="scam">Scam / phishing / fraud related</option>
+            <option value="impersonation">Impersonation related</option>
+            <option value="spam">Spam or flooding related</option>
+            <option value="tos_other">Other Terms of Service issue</option>
+            <option value="mistake">I believe this was a mistake</option>
+            <option value="unsure">I’m not sure why</option>
+        </select>
+        <p class="hint">Choose exactly one option from the list.</p>
+
+        <div id="assetIdWrap" class="hidden">
+            <label for="appealAssetId">Uploaded item ID</label>
+            <input id="appealAssetId" type="text" placeholder="e.g. game / hair / face / t-shirt ID">
+            <p class="hint">Games, hair, faces, and T-shirts each have an ID. Enter the one involved.</p>
+        </div>
+    </div>
+
+    <label for="appealText">Your appeal message</label>
+    <textarea id="appealText" placeholder="Explain your side clearly and respectfully."></textarea>
+
+    <button type="button" onclick="submitAppeal()">Send appeal to system</button>
     <p id="appealStatus" class="note"></p>
-    <p class="note">Your appeal is attached to <strong>system</strong> (ID Aza: 2).</p>
 </div>
 <script>
+function onAppealTypeChange() {
+    var ty = document.getElementById("appealType").value;
+    var wrap = document.getElementById("punishmentReasonWrap");
+    if (ty === "ban" || ty === "termination") wrap.classList.remove("hidden");
+    else wrap.classList.add("hidden");
+}
+function onPunishmentReasonChange() {
+    var v = document.getElementById("punishmentReason").value;
+    var needId = (v === "explicit_upload");
+    document.getElementById("assetIdWrap").classList.toggle("hidden", !needId);
+}
 (function () {
     try {
         var q = new URLSearchParams(location.search);
         var u = q.get("user") || q.get("username");
         var ty = q.get("type");
         if (u) document.getElementById("appealUsername").value = u;
-        if (ty === "termination") document.getElementById("appealType").value = "termination";
-        if (ty === "ban") document.getElementById("appealType").value = "ban";
+        if (ty === "termination" || ty === "ban") {
+            document.getElementById("appealType").value = ty;
+            onAppealTypeChange();
+        }
     } catch (e) {}
 })();
 
 function submitAppeal() {
     var username = document.getElementById("appealUsername").value.trim();
     var type = document.getElementById("appealType").value;
+    var punishmentReason = document.getElementById("punishmentReason").value;
+    var assetId = document.getElementById("appealAssetId").value.trim();
     var text = document.getElementById("appealText").value.trim();
     var status = document.getElementById("appealStatus");
-    if (!username) {
-        status.className = "err";
-        status.textContent = "Please enter your username.";
-        return;
+
+    if (!username) { status.className = "err"; status.textContent = "Enter your username."; return; }
+    if (!type) { status.className = "err"; status.textContent = "Select ban or termination."; return; }
+    if (!punishmentReason) { status.className = "err"; status.textContent = "Select one reason from the list."; return; }
+    if (punishmentReason === "explicit_upload" && !assetId) {
+        status.className = "err"; status.textContent = "Enter the ID of the uploaded item."; return;
     }
     if (!text || text.length < 10) {
-        status.className = "err";
-        status.textContent = "Please write a more detailed appeal (at least 10 characters).";
-        return;
+        status.className = "err"; status.textContent = "Write a more detailed appeal (at least 10 characters)."; return;
     }
+
     var records;
     try { records = JSON.parse(localStorage.getItem("azoraModerationRecords") || "{}"); } catch (e) { records = {}; }
     if (!records.appeals) records.appeals = [];
+    if (!records.systemInbox) records.systemInbox = [];
+
     var entry = {
         id: "apl_" + Date.now(),
         username: username,
         type: type,
+        punishmentReason: punishmentReason,
+        assetId: assetId || null,
         text: text,
         at: Date.now(),
         to: "system",
@@ -78,19 +131,19 @@ function submitAppeal() {
         status: "pending"
     };
     records.appeals.unshift(entry);
-    // Also drop into system inbox
-    if (!records.systemInbox) records.systemInbox = [];
     records.systemInbox.unshift({
         kind: "appeal",
         from: username,
         type: type,
+        punishmentReason: punishmentReason,
+        assetId: assetId || null,
         text: text,
         at: Date.now(),
         appealId: entry.id
     });
     localStorage.setItem("azoraModerationRecords", JSON.stringify(records));
     status.className = "ok";
-    status.textContent = "Appeal sent to system (Aza: 2). It will be reviewed by automated moderation and staff tools.";
+    status.textContent = "Appeal sent to system (Aza: 2).";
     document.getElementById("appealText").value = "";
 }
 </script>
