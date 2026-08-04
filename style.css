@@ -3792,3 +3792,97 @@ html[data-azora-shell="app"] .download-azora-overlay {
 .buy-coins-note {
     margin: 10px 0 0; font-size: 0.75rem; opacity: 0.65; line-height: 1.4; text-align: center;
 }
+
+
+/* ===== Azoraius Makes operator branding ===== */
+.operator-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 16px 0 8px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(56,189,248,0.10));
+    border: 1px solid rgba(99,102,241,0.25);
+    max-width: 520px;
+}
+.operator-logo {
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+    border-radius: 12px;
+    background: #fff;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.operator-text { min-width: 0; }
+.operator-label {
+    margin: 0;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.75;
+}
+.operator-name {
+    margin: 2px 0 4px;
+    font-size: 1.15rem;
+    font-weight: 800;
+    background: linear-gradient(90deg, #7c3aed, #38bdf8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+.operator-desc {
+    margin: 0;
+    font-size: 0.85rem;
+    opacity: 0.9;
+    line-height: 1.35;
+}
+
+footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 12px 20px !important;
+}
+.footer-operator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.footer-operator-logo {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    border-radius: 8px;
+    background: #fff;
+}
+.footer-operator-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.2;
+}
+.footer-operator-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.75;
+}
+.footer-operator-name {
+    font-size: 0.95rem;
+    background: linear-gradient(90deg, #a78bfa, #38bdf8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+.footer-meta {
+    margin: 0;
+    font-size: 0.8rem;
+    opacity: 0.85;
+}
+@media (max-width: 520px) {
+    .operator-card { flex-direction: column; text-align: center; }
+    .operator-text { text-align: center; }
+}
