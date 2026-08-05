@@ -1,11 +1,12 @@
-/* Azora main app service worker — v48.2 */
-var CACHE = "azora-app-v60-0-creator";
+/* Azora main app service worker — v61.0 official t-shirts */
+var CACHE = "azora-app-v61-0-tshirts";
 var ASSETS = [
   "./", "./index.html", "./checkout.html", "./style.css",
   "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./female_smile.png", "./cartoonish_smile.png", "./crying.png", "./greedy_smile.png", "./mysterious.png", "./red_mysterious.png", "./robotic.png", "./sad_tears.png", "./simple_smile.png", "./tears_of_joy.png", "./wide_mouth.png", "./female_hair.webp", "./Mossy.mp3",
   "./grass.jpg", "./road.jpg", "./concrete.jpg", "./wood1.jpg", "./wood2.jpg", "./wood3.jpg", "./leaf.jpg", "./skybox.jpg", "./marble.png",
   "./House.obj", "./House.mtl",
-  "./walking.mp3", "./jumping.mp3", "./character_reset.mp3", "./notifcation.mp3", "./click_buttons.mp3"
+  "./walking.mp3", "./jumping.mp3", "./character_reset.mp3", "./notifcation.mp3", "./click_buttons.mp3",
+  "./rainbow!.png", "./smiley.png", "./a.png", "./b.png", "./c.png", "./g.png", "./h.png", "./k.png", "./l.png", "./p.png", "./r.png", "./z.png"
 ];
 self.addEventListener("install", function (e) {
   e.waitUntil(

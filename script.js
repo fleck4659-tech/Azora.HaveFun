@@ -12331,6 +12331,32 @@ function isFaceItemId(id) {
 function isHairItemId(id) {
     return String(id || "").indexOf("hair_") === 0;
 }
+function isShirtItemId(id) {
+    return String(id || "").indexOf("shirt_") === 0;
+}
+
+/** Official T-Shirts by Azora — applied to the front of the torso */
+var AZORA_TSHIRT_CATALOG = [
+    { id: "shirt_rainbow", name: "Rainbow!", file: "rainbow!.png", price: 0.08, desc: "Bright rainbow stripes across the torso", by: "Azora", official: true },
+    { id: "shirt_smiley", name: "Smiley", file: "smiley.png", price: 0.07, desc: "Happy smiley face design", by: "Azora", official: true },
+    { id: "shirt_a", name: "A", file: "a.png", price: 0.05, desc: "Letter A — bold red mark", by: "Azora", official: true },
+    { id: "shirt_b", name: "B", file: "b.png", price: 0.05, desc: "Letter B — orange outline", by: "Azora", official: true },
+    { id: "shirt_c", name: "C", file: "c.png", price: 0.05, desc: "Letter C — yellow curve", by: "Azora", official: true },
+    { id: "shirt_g", name: "G", file: "g.png", price: 0.05, desc: "Letter G — cyan style", by: "Azora", official: true },
+    { id: "shirt_h", name: "H", file: "h.png", price: 0.05, desc: "Letter H — mint green", by: "Azora", official: true },
+    { id: "shirt_k", name: "K", file: "k.png", price: 0.05, desc: "Letter K — magenta mark", by: "Azora", official: true },
+    { id: "shirt_l", name: "L", file: "l.png", price: 0.05, desc: "Letter L — lime green", by: "Azora", official: true },
+    { id: "shirt_p", name: "P", file: "p.png", price: 0.05, desc: "Letter P — purple style", by: "Azora", official: true },
+    { id: "shirt_r", name: "R", file: "r.png", price: 0.05, desc: "Letter R — blue outline", by: "Azora", official: true },
+    { id: "shirt_z", name: "Z", file: "z.png", price: 0.05, desc: "Letter Z — blue zig-zag", by: "Azora", official: true }
+];
+
+function officialTShirtCatalogById(id) {
+    for (var i = 0; i < AZORA_TSHIRT_CATALOG.length; i++) {
+        if (AZORA_TSHIRT_CATALOG[i].id === id) return AZORA_TSHIRT_CATALOG[i];
+    }
+    return null;
+}
 
 
 /** Format coins for display — up to 1 decimal (realistic economy) */
@@ -13048,6 +13074,7 @@ function getAllOfficialCatalogIds() {
     try {
         (AZORA_HAIR_CATALOG || []).forEach(function (it) { if (it && it.id) ids.push(it.id); });
         (AZORA_FACE_CATALOG || []).forEach(function (it) { if (it && it.id) ids.push(it.id); });
+        (AZORA_TSHIRT_CATALOG || []).forEach(function (it) { if (it && it.id) ids.push(it.id); });
     } catch (e) {}
     return ids;
 }
@@ -13087,10 +13114,13 @@ function grantAllOfficialItemsToOwner() {
 }
 
 function ownsItem(itemId) {
-    // Official account owns every official catalog item (hair + faces)
+    // Official account owns every official catalog item (hair + faces + shirts)
     try {
         if (typeof isAzoraOwner === "function" && isAzoraOwner()) {
-            if (hairCatalogById(itemId) || faceCatalogById(itemId)) return true;
+            if (hairCatalogById(itemId) || faceCatalogById(itemId) ||
+                (typeof officialTShirtCatalogById === "function" && officialTShirtCatalogById(itemId))) {
+                return true;
+            }
         }
     } catch (e) {}
     var inv = getInventory();
@@ -13172,8 +13202,14 @@ function buyMarketplaceItem(itemId) {
     } catch (e) {}
 
     var splitNote = "";
-    if (isShirt) {
-        // Tax-free under 0.10; 90/10 starting at 0.10
+    if (isShirt && item.official) {
+        // Official Azora T-Shirts → 100% to Azora (same as faces/hair)
+        if (price > 0) {
+            creditOfficialCatalogSale(price, buyerName, item.name || itemId);
+            splitNote = " (to Azora)";
+        }
+    } else if (isShirt) {
+        // Player-uploaded T-Shirts: tax-free under 0.10; 90/10 starting at 0.10
         var split = computeSaleSplit(price);
         recordSale({
             sellerName: item.creator || "Creator",
@@ -13270,23 +13306,71 @@ function getInventoryCategory() {
 window.getInventoryCategory = getInventoryCategory;
 
 
-/** —— User T-Shirts (free upload, priced by creator, 10% to Azora) —— */
+/** —— T-Shirts: official Azora catalog + user uploads (free to list, priced by creator) —— */
 function getTShirtCatalog() {
+    var official = (AZORA_TSHIRT_CATALOG || []).map(function (it) {
+        return {
+            id: it.id,
+            name: it.name,
+            price: it.price,
+            creator: "Azora",
+            by: "Azora",
+            file: it.file,
+            imageData: null,
+            desc: it.desc || "",
+            official: true,
+            createdAt: 0
+        };
+    });
+    var userList = [];
     try {
-        var list = JSON.parse(localStorage.getItem("azoraTShirts") || "[]");
-        return Array.isArray(list) ? list : [];
-    } catch (e) { return []; }
+        userList = JSON.parse(localStorage.getItem("azoraTShirts") || "[]");
+        if (!Array.isArray(userList)) userList = [];
+    } catch (e) { userList = []; }
+    // Official first, then player uploads (skip any upload that collides with official ids)
+    var seen = {};
+    official.forEach(function (o) { seen[o.id] = true; });
+    var merged = official.slice();
+    userList.forEach(function (u) {
+        if (!u || !u.id || seen[u.id]) return;
+        seen[u.id] = true;
+        merged.push(u);
+    });
+    return merged;
 }
 
 function saveTShirtCatalog(list) {
-    try { localStorage.setItem("azoraTShirts", JSON.stringify(list || [])); } catch (e) {}
+    // Only persist user-uploaded shirts (never overwrite official catalog)
+    var userOnly = (list || []).filter(function (it) {
+        return it && it.id && !it.official && String(it.id).indexOf("shirt_") === 0 &&
+            !(typeof officialTShirtCatalogById === "function" && officialTShirtCatalogById(it.id));
+    });
+    try { localStorage.setItem("azoraTShirts", JSON.stringify(userOnly)); } catch (e) {}
 }
 
 function getTShirtById(id) {
-    var list = getTShirtCatalog();
-    for (var i = 0; i < list.length; i++) {
-        if (list[i] && list[i].id === id) return list[i];
+    var off = typeof officialTShirtCatalogById === "function" ? officialTShirtCatalogById(id) : null;
+    if (off) {
+        return {
+            id: off.id,
+            name: off.name,
+            price: off.price,
+            creator: "Azora",
+            by: "Azora",
+            file: off.file,
+            imageData: null,
+            desc: off.desc || "",
+            official: true,
+            createdAt: 0
+        };
     }
+    try {
+        var list = JSON.parse(localStorage.getItem("azoraTShirts") || "[]");
+        if (!Array.isArray(list)) list = [];
+        for (var i = 0; i < list.length; i++) {
+            if (list[i] && list[i].id === id) return list[i];
+        }
+    } catch (e) {}
     return null;
 }
 
@@ -13410,11 +13494,13 @@ function getEquippedTShirtId() {
 }
 
 function equipTShirt(itemId) {
-    if (!ownsItem(itemId) && !(getTShirtById(itemId) && getActiveAccount() && getTShirtById(itemId).creator === getActiveAccount().username)) {
-        // still allow if in inventory
-    }
     var inv = getInventory();
-    if (inv.items.indexOf(itemId) === -1) {
+    // Owner auto-owns official shirts; ensure inventory has the id for equip
+    if (ownsItem(itemId) && inv.items.indexOf(itemId) === -1) {
+        inv.items.push(itemId);
+        saveInventory(inv);
+    }
+    if (!ownsItem(itemId) && inv.items.indexOf(itemId) === -1) {
         showAzoraToast("You do not own this T-Shirt.");
         return;
     }
@@ -13475,19 +13561,20 @@ function renderMarketplace() {
             html += '<p class="market-empty">No T-Shirts yet. Upload one for free and set your own price!</p>';
         }
         shirts.forEach(function (item) {
-            var owned = ownsItem(item.id);
-            var canBuy = !owned && (item.price === 0 || coins >= item.price);
+            var owned = ownsItem(item.id) || (isOwner && item.official);
+            var canBuy = !owned && !isOwner && (item.price === 0 || coins >= item.price);
             var priceLabel = item.price === 0 ? "Free" : (formatCoins(item.price) + " 🪙");
-            var by = item.creator || "Player";
+            var by = item.official ? "Azora" : (item.creator || item.by || "Player");
+            var thumbSrc = item.imageData || item.file || "";
             html += '<div class="market-card market-card-face' + (owned ? " owned" : "") + '">';
             html += '<div class="market-face-row">';
             html += '<div class="market-face-thumb market-shirt-thumb" aria-hidden="true">';
-            if (item.imageData) html += '<img src="' + item.imageData + '" alt="">';
+            if (thumbSrc) html += '<img src="' + thumbSrc + '" alt="" loading="lazy" onerror="this.style.opacity=0.3">';
             html += '</div>';
             html += '<div class="market-face-info">';
             html += '<div class="market-card-title">' + (item.name || "T-Shirt") + '</div>';
             html += '<div class="market-card-meta">T-Shirts · <span class="by-creator">By ' + by + '</span></div>';
-            html += '<div class="market-card-desc">Front of torso · Under 0.10 tax-free · 0.10+ is 90/10</div>';
+            html += '<div class="market-card-desc">' + (item.desc || (item.official ? "Official Azora design · Front of torso" : "Front of torso · Under 0.10 tax-free · 0.10+ is 90/10")) + '</div>';
             html += '</div></div>';
             html += '<div class="market-card-footer"><span class="market-price">' + priceLabel + '</span>';
             if (owned) html += ownedBtn();
@@ -13582,7 +13669,7 @@ function renderInventory() {
         }
         var isEq = isShirt ? (equippedShirt === id) : (isFace ? (equippedFace === id) : (equippedHair === id));
         var meta;
-        if (isShirt) meta = 'T-Shirts · <span class="by-creator">By ' + (item.creator || "Player") + '</span>';
+        if (isShirt) meta = 'T-Shirts · <span class="by-creator">By ' + (item.official ? "Azora" : (item.creator || item.by || "Player")) + '</span>';
         else if (isFace) meta = 'Faces · <span class="by-creator">By Azora</span>';
         else meta = 'Hair · <span class="by-creator">By Azora</span>' + (item.gender === "girl" ? " · Girl" : (item.gender === "boy" ? " · Boy" : ""));
 
@@ -13593,8 +13680,9 @@ function renderInventory() {
             html += '<div class="market-face-info"><div class="market-card-title">' + item.name + (isEq ? " ✓" : "") + '</div>';
             html += '<div class="market-card-meta">' + meta + '</div></div></div>';
         } else if (isShirt) {
+            var shirtSrc = item.imageData || item.file || "";
             html += '<div class="market-face-row"><div class="market-face-thumb market-shirt-thumb" aria-hidden="true">';
-            if (item.imageData) html += '<img src="' + item.imageData + '" alt="">';
+            if (shirtSrc) html += '<img src="' + shirtSrc + '" alt="" loading="lazy" onerror="this.style.opacity=0.3">';
             html += '</div><div class="market-face-info"><div class="market-card-title">' + (item.name || "T-Shirt") + (isEq ? " ✓" : "") + '</div>';
             html += '<div class="market-card-meta">' + meta + '</div></div></div>';
         } else {
