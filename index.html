@@ -233,6 +233,25 @@
                     <input type="checkbox" id="fallingTextToggle" checked onchange="toggleFallingText()"> Enable Falling Phrases
                 </label>
             </div>
+
+            <div class="settings-section">
+                <label class="settings-label">Broadcast popup duration</label>
+                <p class="settings-hint" style="margin:0 0 8px;">How long staff / system broadcast messages stay on your screen. Saved on this device.</p>
+                <div class="broadcast-duration-grid" id="broadcastDurationGrid" role="list">
+                    <button type="button" class="bdur-btn" data-ms="10000" onclick="setBroadcastDuration(10000)">10 seconds<span class="bdur-sub"></span></button>
+                    <button type="button" class="bdur-btn" data-ms="30000" onclick="setBroadcastDuration(30000)">30 seconds<span class="bdur-sub"></span></button>
+                    <button type="button" class="bdur-btn" data-ms="60000" onclick="setBroadcastDuration(60000)">1 minute<span class="bdur-sub bdur-default">(Default)</span></button>
+                    <button type="button" class="bdur-btn" data-ms="120000" onclick="setBroadcastDuration(120000)">2 minutes<span class="bdur-sub"></span></button>
+                    <button type="button" class="bdur-btn" data-ms="180000" onclick="setBroadcastDuration(180000)">3 minutes<span class="bdur-sub"></span></button>
+                    <button type="button" class="bdur-btn" data-ms="240000" onclick="setBroadcastDuration(240000)">4 minutes<span class="bdur-sub"></span></button>
+                    <button type="button" class="bdur-btn" data-ms="300000" onclick="setBroadcastDuration(300000)">5 minutes<span class="bdur-sub"></span></button>
+                    <button type="button" class="bdur-btn" data-ms="360000" onclick="setBroadcastDuration(360000)">6 minutes<span class="bdur-sub"></span></button>
+                    <button type="button" class="bdur-btn" data-ms="420000" onclick="setBroadcastDuration(420000)">7 minutes<span class="bdur-sub"></span></button>
+                    <button type="button" class="bdur-btn" data-ms="480000" onclick="setBroadcastDuration(480000)">8 minutes<span class="bdur-sub"></span></button>
+                    <button type="button" class="bdur-btn" data-ms="540000" onclick="setBroadcastDuration(540000)">9 minutes<span class="bdur-sub"></span></button>
+                    <button type="button" class="bdur-btn" data-ms="600000" onclick="setBroadcastDuration(600000)">10 minutes<span class="bdur-sub"></span></button>
+                </div>
+            </div>
             <div class="settings-section">
                 <label class="settings-label">Status</label>
                 <select id="statusSelect" onchange="setManualStatus(this.value)" class="settings-input">
@@ -293,6 +312,13 @@
     </div>
 </div>
 
+<div id="azoraBroadcastBanner" class="azora-broadcast-banner" style="display:none;" role="status" aria-live="polite">
+    <div class="azora-broadcast-inner">
+        <span class="azora-broadcast-label">Broadcast</span>
+        <span id="azoraBroadcastText" class="azora-broadcast-text"></span>
+        <button type="button" class="azora-broadcast-close" onclick="dismissAzoraBroadcast()" title="Dismiss">×</button>
+    </div>
+</div>
 <div id="serverMessage" class="server-message" style="display:none;">
     ⚠️ The website is currently experiencing heavy traffic.<br>
     Please try again in 10 minutes to 1 hour.<br><br>
@@ -1143,6 +1169,10 @@ if ("serviceWorker" in navigator) {
                 <input type="radio" name="omReview" value="owner"> I will review appeals myself
             </label>
         </div>
+
+        <h3 style="margin:16px 0 8px;color:#93c5fd;">Appeals inbox</h3>
+        <p style="font-size:0.8rem;color:#94a3b8;margin:0 0 8px;">Appeals arrive here about 1 minute after a user submits one. You decide accept or reject. Restores progress on accept.</p>
+        <div id="ownerAppealsInbox" class="owner-appeals-inbox"></div>
 
         <button type="button" id="omApplyBtn" class="btn-ban" onclick="applyOwnerModeration()" style="width:100%;margin:0 0 8px;">Apply ban</button>
         <button type="button" class="btn-unban" onclick="clearOwnerModerationFromConsole()" style="width:100%;margin:0 0 8px;">Clear ban / termination for this username</button>

@@ -500,12 +500,35 @@ function cloudBase() {
 }
 
 /** Public profile only — never send passwords */
-function buildPublicRegistryEntry(username, userId) {
+function buildPublicRegistryEntry(username, userId, createdAt) {
+    var ca = (typeof createdAt === "number" && createdAt > 0) ? createdAt : null;
+    // Prefer locked local account / registry createdAt so logins never rewrite history
+    if (!ca) {
+        try {
+            var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : {};
+            var key = Object.keys(map).find(function (k) {
+                return String(k).toLowerCase() === String(username).toLowerCase();
+            });
+            if (key && map[key] && map[key].createdAt) ca = map[key].createdAt;
+        } catch (e) {}
+    }
+    if (!ca) {
+        try {
+            var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+            for (var i = 0; i < reg.length; i++) {
+                if (reg[i] && String(reg[i].username || "").toLowerCase() === String(username).toLowerCase() && reg[i].createdAt) {
+                    ca = reg[i].createdAt;
+                    break;
+                }
+            }
+        } catch (e2) {}
+    }
+    if (!ca) ca = Date.now();
     return {
         username: username,
         userId: userId,
         isGuest: false,
-        createdAt: Date.now()
+        createdAt: ca
     };
 }
 
@@ -935,7 +958,7 @@ function seedCloudOwnerAndNextId() {
                             userId: "Aza: 0",
                             isGuest: false,
                             isOwner: true,
-                            createdAt: Date.now()
+                            createdAt: 0
                         }),
                         cache: "no-store"
                     });
@@ -970,7 +993,38 @@ function seedCloudOwnerAndNextId() {
     } catch (e) {}
 }
 try { seedCloudOwnerAndNextId(); } catch (e) {}
+try { if (typeof ensureSystemElement === 'function') ensureSystemElement(); } catch (e2) {}
 window.seedCloudOwnerAndNextId = seedCloudOwnerAndNextId;
+
+function seedCloudSystemElement() {
+    try {
+        if (typeof AZORA_CLOUD === "undefined" || !AZORA_CLOUD.isReady || !AZORA_CLOUD.isReady()) return;
+        var base = (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "");
+        var url = base + AZORA_CLOUD.registryPath + "/system.json";
+        fetch(url + "?ts=" + Date.now(), { cache: "no-store" })
+            .then(function (r) { return r.json(); })
+            .then(function (existing) {
+                if (existing && existing.username === "system" && existing.userId === "Aza: 2") return null;
+                return fetch(url, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        username: "system",
+                        userId: "Aza: 2",
+                        isGuest: false,
+                        isSystemElement: true,
+                        createdAt: 0,
+                        note: "System Element — platform robot, not a real player"
+                    }),
+                    cache: "no-store"
+                });
+            })
+            .catch(function () {});
+    } catch (e) {}
+}
+try { seedCloudSystemElement(); } catch (e) {}
+window.seedCloudSystemElement = seedCloudSystemElement;
+
 
 
 // --- Global server flags (from Staff Console / Firebase) ---
@@ -1450,6 +1504,40 @@ function migrateLegacyAccount() {
 function setLoggedInAccount(account) {
     // Persist full account + session flag so topbar switches after reload
     if (!account) return;
+    // NEVER rewrite createdAt on login — lock original join date
+    try {
+        var map0 = typeof getSavedAccounts === "function" ? getSavedAccounts() : {};
+        var key0 = Object.keys(map0).find(function (k) {
+            return String(k).toLowerCase() === String(account.username || "").toLowerCase();
+        });
+        if (key0 && map0[key0] && map0[key0].createdAt) {
+            account.createdAt = map0[key0].createdAt;
+        } else if (!account.createdAt) {
+            try {
+                var reg0 = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+                for (var ri = 0; ri < reg0.length; ri++) {
+                    if (reg0[ri] && String(reg0[ri].username || "").toLowerCase() === String(account.username || "").toLowerCase() && reg0[ri].createdAt) {
+                        account.createdAt = reg0[ri].createdAt;
+                        break;
+                    }
+                }
+            } catch (eR0) {}
+        }
+        // Update registry entry without changing createdAt
+        try {
+            var reg1 = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+            var hit = false;
+            for (var rj = 0; rj < reg1.length; rj++) {
+                if (reg1[rj] && String(reg1[rj].username || "").toLowerCase() === String(account.username || "").toLowerCase()) {
+                    if (!reg1[rj].createdAt && account.createdAt) reg1[rj].createdAt = account.createdAt;
+                    reg1[rj].userId = account.userId || reg1[rj].userId;
+                    hit = true;
+                    break;
+                }
+            }
+            if (hit) localStorage.setItem("azoraUserRegistry", JSON.stringify(reg1));
+        } catch (eR1) {}
+    } catch (eCA) {}
     if (account.isOwner || (typeof isOwnerUsername === "function" && isOwnerUsername(account.username))) {
         account.isOwner = true;
         if (typeof account.coins !== "number" || isNaN(account.coins) || account.coins < AZORA_OWNER_STARTING_COINS) {
@@ -1828,29 +1916,74 @@ function syncLocalIdsToCloud() {
         var base = (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "");
         var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : {};
         var maxN = 0;
+        // Always publish System Element
+        try {
+            var sysKey = encodeURIComponent("system");
+            fetch(base + AZORA_CLOUD.registryPath + "/" + sysKey + ".json", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    username: "system",
+                    userId: "Aza: 2",
+                    isGuest: false,
+                    isSystemElement: true,
+                    createdAt: 0,
+                    note: "System Element — platform robot, not a real player"
+                }),
+                cache: "no-store"
+            }).catch(function () {});
+        } catch (eSys) {}
         Object.keys(map || {}).forEach(function (k) {
             var a = map[k];
             if (!a || a.isGuest) return;
             var uname = a.username || k;
             var safeKey = encodeURIComponent(String(uname).toLowerCase().replace(/[.#$\/\[\]]/g, "_"));
+            var localCreated = a.createdAt || null;
             var entry = {
                 username: uname,
                 userId: a.userId || "Aza: 1",
                 isGuest: false,
                 isOwner: String(uname).toLowerCase() === "azora",
-                createdAt: a.createdAt || Date.now()
+                createdAt: localCreated || Date.now()
             };
             var n = parseAzaIdNumber(entry.userId);
             if (n > maxN) maxN = n;
-            fetch(base + AZORA_CLOUD.registryPath + "/" + safeKey + ".json", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(entry),
-                cache: "no-store"
-            }).catch(function () {});
+            // Preserve cloud createdAt if local is missing or cloud is older (never rewrite history)
+            fetch(base + AZORA_CLOUD.registryPath + "/" + safeKey + ".json?ts=" + Date.now(), { cache: "no-store" })
+                .then(function (r) { return r.json(); })
+                .then(function (existing) {
+                    if (existing && existing.createdAt && (!localCreated || existing.createdAt <= localCreated)) {
+                        entry.createdAt = existing.createdAt;
+                        // lock local too
+                        try {
+                            if (a && !a.createdAt) {
+                                a.createdAt = existing.createdAt;
+                                map[k] = a;
+                                if (typeof saveSavedAccounts === "function") saveSavedAccounts(map);
+                            }
+                        } catch (eL) {}
+                    } else if (localCreated) {
+                        entry.createdAt = localCreated;
+                    }
+                    return fetch(base + AZORA_CLOUD.registryPath + "/" + safeKey + ".json", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(entry),
+                        cache: "no-store"
+                    });
+                })
+                .catch(function () {
+                    fetch(base + AZORA_CLOUD.registryPath + "/" + safeKey + ".json", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(entry),
+                        cache: "no-store"
+                    }).catch(function () {});
+                });
         });
-        // nextId = max+1 (at least 1)
         var next = Math.max(1, maxN + 1);
+        // Keep Aza: 2 reserved for system — nextId at least 3 if system uses 2
+        if (next === 2) next = 3;
         fetch(base + AZORA_CLOUD.metaPath + "/nextId.json", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -1901,6 +2034,8 @@ function ensureOwnerAccount() {
         existing.isOwner = true;
         existing.username = AZORA_OWNER_NAME;
         existing.userId = "Aza: 0"; // reserved official ID
+        // Never rewrite createdAt
+        if (!existing.createdAt) existing.createdAt = 0;
         // Owner may have empty password ("no code")
         if (typeof existing.password !== "string") existing.password = "";
         if (typeof existing.coins !== "number" || isNaN(existing.coins)) {
@@ -14104,6 +14239,24 @@ function ownerTerminateUser(username, opts) {
     }
     if (!confirm("Permanently terminate " + username + "?\nThey can appeal via the blue appeal link.")) return false;
 
+    // Snapshot progress for possible appeal restore
+    var snapshot = null;
+    try {
+        var mapT = getSavedAccounts();
+        var keyT = Object.keys(mapT).find(function (k) {
+            return String(k).toLowerCase() === String(username).toLowerCase();
+        });
+        if (keyT && mapT[keyT]) {
+            snapshot = {
+                coins: mapT[keyT].coins || 0,
+                inventory: mapT[keyT].inventory || null,
+                avatar: mapT[keyT].avatar || null,
+                bio: mapT[keyT].bio || "",
+                createdAt: mapT[keyT].createdAt || null
+            };
+        }
+    } catch (eSnap) {}
+
     var r = getModerationRecords();
     r.terminations[username] = {
         username: username,
@@ -14113,8 +14266,9 @@ function ownerTerminateUser(username, opts) {
         reason: opts.reason || "Account terminated by Azora staff.",
         reasonCode: opts.reasonCode || "",
         reasonLabel: opts.reasonLabel || opts.reason || "Account terminated by Azora staff.",
-        reviewMode: opts.reviewMode === "owner" ? "owner" : "auto",
-        automated: !!opts.automated
+        reviewMode: "owner",
+        automated: false,
+        snapshot: snapshot
     };
     if (r.bans[username]) r.bans[username].active = false;
     saveModerationRecords(r);
@@ -14494,6 +14648,7 @@ function openOwnerModConsole(prefillUsername) {
         // do not force-clear — user can edit freely
     }
     setOwnerModMode(_ownerModMode || "ban");
+    try { processDueAppeals(); renderOwnerAppealsInbox(); } catch (eA) {}
     el.style.display = "flex";
     try { if (input) setTimeout(function () { input.focus(); }, 50); } catch (e) {}
 }
@@ -14630,7 +14785,26 @@ window.clearOwnerModerationFromConsole = clearOwnerModerationFromConsole;
 window.refreshOwnerModButton = refreshOwnerModButton;
 
 
-// ----- Automated appeal resolution (~10 minutes) -----
+// ----- Appeals: 1-minute delivery to Azora (owner judges). 90-day window. -----
+var AZORA_APPEAL_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
+var AZORA_APPEAL_DELIVER_MS = 60 * 1000;
+
+function getTerminationTimestamp(username) {
+    try {
+        var r = getModerationRecords();
+        var t = null;
+        Object.keys(r.terminations || {}).forEach(function (k) {
+            if (String(k).toLowerCase() === String(username).toLowerCase()) t = r.terminations[k];
+        });
+        if (!t) {
+            Object.keys(r.bans || {}).forEach(function (k) {
+                if (String(k).toLowerCase() === String(username).toLowerCase()) t = r.bans[k];
+            });
+        }
+        return (t && (t.at || t.from || t.fromMs)) || 0;
+    } catch (e) { return 0; }
+}
+
 function processDueAppeals() {
     var records = getModerationRecords();
     if (!records.appeals || !records.appeals.length) return;
@@ -14638,41 +14812,139 @@ function processDueAppeals() {
     var now = Date.now();
     records.appeals.forEach(function (a) {
         if (!a || a.status === "accepted" || a.status === "rejected") return;
-        if (a.reviewMode === "owner" || a.status === "pending_owner") return; // owner must decide
-        if (a.status !== "pending_auto" && a.status !== "pending") return;
-        var due = a.resolveAfter || ((a.at || 0) + 10 * 60 * 1000);
+        if (a.status === "pending_owner") return;
+        var due = a.deliverAfter || a.resolveAfter || ((a.at || 0) + AZORA_APPEAL_DELIVER_MS);
         if (now < due) return;
 
-        // Simple automated decision (family-safe heuristic)
-        var text = String(a.text || "").toLowerCase();
-        var accept = false;
-        if (a.punishmentReason === "mistake" || a.punishmentReason === "unsure") accept = true;
-        if (/\b(mistake|wrong account|accident|sorry|did not mean)\b/.test(text)) accept = true;
-        if (a.punishmentReason === "hacking" || a.punishmentReason === "explicit_upload") accept = false;
-        if (/\b(hack|exploit|cheat)\b/.test(text) && !/\b(did not|didn't|never)\b/.test(text)) accept = false;
+        var termAt = a.terminationAt || getTerminationTimestamp(a.username) || a.at || 0;
+        var age = now - termAt;
+        if (termAt && age > AZORA_APPEAL_WINDOW_MS) {
+            var daysAgo = Math.floor(age / 86400000);
+            var lastDate = new Date(termAt);
+            var ds = (lastDate.getMonth() + 1) + "/" + lastDate.getDate() + "/" + lastDate.getFullYear();
+            a.status = "rejected";
+            a.resolvedAt = now;
+            a.resolvedBy = "system-ai";
+            a.rejectMessage =
+                "It has been more than 90 days and we cannot get your account back. We only review accounts that have been terminated recently. Your last appeal was " +
+                ds + " (" + daysAgo + " days ago).";
+            changed = true;
+            return;
+        }
 
-        a.status = accept ? "accepted" : "rejected";
-        a.resolvedAt = now;
-        a.resolvedBy = "system";
-        changed = true;
-
-        if (accept) {
-            // Clear restriction for that user
+        // Deliver to owner after ~1 minute — no automated accept
+        if (a.status === "pending_auto" || a.status === "pending" || a.status === "delivering" || !a.status) {
+            a.status = "pending_owner";
+            a.deliveredAt = now;
+            a.reviewMode = "owner";
+            changed = true;
             try {
-                var u = a.username;
-                if (records.bans && records.bans[u]) records.bans[u].active = false;
-                if (records.terminations && records.terminations[u]) records.terminations[u].active = false;
-                Object.keys(records.bans || {}).forEach(function (k) {
-                    if (k.toLowerCase() === String(u).toLowerCase()) records.bans[k].active = false;
+                records.systemInbox = records.systemInbox || [];
+                records.systemInbox.unshift({
+                    kind: "appeal_ready",
+                    from: a.username,
+                    type: a.type,
+                    text: a.text,
+                    at: now,
+                    appealId: a.id,
+                    punishmentReason: a.punishmentReason,
+                    assetId: a.assetId || null
                 });
-                Object.keys(records.terminations || {}).forEach(function (k) {
-                    if (k.toLowerCase() === String(u).toLowerCase()) records.terminations[k].active = false;
-                });
-            } catch (eC) {}
+            } catch (eI) {}
         }
     });
     if (changed) saveModerationRecords(records);
 }
+
+function getOwnerPendingAppeals() {
+    try { processDueAppeals(); } catch (e) {}
+    var r = getModerationRecords();
+    return (r.appeals || []).filter(function (a) {
+        return a && a.status === "pending_owner";
+    });
+}
+
+function ownerAcceptAppeal(appealId) {
+    if (!isAzoraOwner()) { alert("Owner only."); return; }
+    var r = getModerationRecords();
+    var a = (r.appeals || []).find(function (x) { return x && x.id === appealId; });
+    if (!a) { alert("Appeal not found."); return; }
+    a.status = "accepted";
+    a.resolvedAt = Date.now();
+    a.resolvedBy = "Azora";
+    var u = a.username;
+    Object.keys(r.bans || {}).forEach(function (k) {
+        if (String(k).toLowerCase() === String(u).toLowerCase()) r.bans[k].active = false;
+    });
+    Object.keys(r.terminations || {}).forEach(function (k) {
+        if (String(k).toLowerCase() === String(u).toLowerCase()) {
+            var snap = r.terminations[k].snapshot;
+            if (snap) {
+                try {
+                    var map = getSavedAccounts();
+                    var key = Object.keys(map).find(function (kk) {
+                        return String(kk).toLowerCase() === String(u).toLowerCase();
+                    });
+                    if (key && map[key]) {
+                        if (typeof snap.coins === "number") map[key].coins = snap.coins;
+                        if (snap.inventory) map[key].inventory = snap.inventory;
+                        if (snap.avatar) map[key].avatar = snap.avatar;
+                        if (snap.bio != null) map[key].bio = snap.bio;
+                        saveSavedAccounts(map);
+                    }
+                } catch (eS) {}
+            }
+            r.terminations[k].active = false;
+            r.terminations[k].restoredAt = Date.now();
+        }
+    });
+    saveModerationRecords(r);
+    alert("Appeal accepted. " + u + "'s access and progress were restored.");
+    try { renderOwnerAppealsInbox(); } catch (e) {}
+}
+
+function ownerRejectAppeal(appealId) {
+    if (!isAzoraOwner()) { alert("Owner only."); return; }
+    var r = getModerationRecords();
+    var a = (r.appeals || []).find(function (x) { return x && x.id === appealId; });
+    if (!a) { alert("Appeal not found."); return; }
+    a.status = "rejected";
+    a.resolvedAt = Date.now();
+    a.resolvedBy = "Azora";
+    a.rejectMessage = "Your appeal has been rejected.";
+    saveModerationRecords(r);
+    alert("Appeal rejected for " + a.username + ".");
+    try { renderOwnerAppealsInbox(); } catch (e) {}
+}
+
+function renderOwnerAppealsInbox() {
+    var box = document.getElementById("ownerAppealsInbox");
+    if (!box) return;
+    var list = getOwnerPendingAppeals();
+    if (!list.length) {
+        box.innerHTML = "<p class='settings-hint' style='color:#94a3b8;'>No appeals waiting. New appeals arrive here about 1 minute after they are sent.</p>";
+        return;
+    }
+    box.innerHTML = list.map(function (a) {
+        var when = a.at ? new Date(a.at).toLocaleString() : "";
+        return '<div class="owner-appeal-card">' +
+            "<strong>" + String(a.username || "").replace(/</g, "&lt;") + "</strong> · " +
+            String(a.type || "appeal") + "<br>" +
+            "<span style='opacity:0.8;font-size:0.8rem;'>" + when + "</span>" +
+            (a.punishmentReason ? ("<br><em>" + String(a.punishmentReason).replace(/</g, "&lt;") + "</em>") : "") +
+            (a.assetId ? ("<br>Asset ID: " + String(a.assetId).replace(/</g, "&lt;")) : "") +
+            '<p style="margin:8px 0;white-space:pre-wrap;">' + String(a.text || "").replace(/</g, "&lt;") + "</p>" +
+            '<div style="display:flex;gap:8px;">' +
+            '<button type="button" onclick="ownerAcceptAppeal(\'' + a.id + '\')" style="flex:1;background:linear-gradient(180deg,#34d399,#059669);color:#fff;">Accept</button>' +
+            '<button type="button" onclick="ownerRejectAppeal(\'' + a.id + '\')" style="flex:1;background:linear-gradient(180deg,#f87171,#b91c1c);color:#fff;">Reject</button>' +
+            "</div></div>";
+    }).join("");
+}
+
+window.getOwnerPendingAppeals = getOwnerPendingAppeals;
+window.ownerAcceptAppeal = ownerAcceptAppeal;
+window.ownerRejectAppeal = ownerRejectAppeal;
+window.renderOwnerAppealsInbox = renderOwnerAppealsInbox;
 
 function getPendingAppealResultForCurrentUser() {
     try {
@@ -14704,9 +14976,11 @@ function showAppealResultPopup(appeal) {
     panel.className = "appeal-result-panel " + (ok ? "accepted" : "rejected");
     if (title) title.textContent = ok ? "Appeal accepted" : "Appeal rejected";
     if (msg) {
-        msg.textContent = ok
-            ? "Your appeal was accepted by system. Your account access has been restored."
-            : "Your appeal was rejected by system. The original moderation action remains in effect.";
+        if (ok) {
+            msg.textContent = "Your appeal was accepted. Your account access and progress have been restored.";
+        } else {
+            msg.textContent = appeal.rejectMessage || "Your appeal has been rejected. The original moderation action remains in effect.";
+        }
     }
     ov.style.display = "flex";
     window._pendingAppealResultId = appeal.id;
@@ -15279,3 +15553,190 @@ window.getIncomingFriendRequestsForMe = getIncomingFriendRequestsForMe;
 window.declineFriendRequest = declineFriendRequest;
 window.markChatRead = markChatRead;
 window.getUnreadCountForFriend = getUnreadCountForFriend;
+
+
+// ============================================================
+// Broadcast banners (from Staff Console → player screen)
+// ============================================================
+var AZORA_BROADCAST_DURATION_KEY = "azoraBroadcastDurationMs";
+var AZORA_BROADCAST_DEFAULT_MS = 60000;
+var _azoraBroadcastTimer = null;
+var _azoraBroadcastSeenId = null;
+
+function getBroadcastDurationMs() {
+    try {
+        var n = parseInt(localStorage.getItem(AZORA_BROADCAST_DURATION_KEY), 10);
+        if (!isNaN(n) && n >= 10000 && n <= 600000) return n;
+    } catch (e) {}
+    return AZORA_BROADCAST_DEFAULT_MS;
+}
+
+function setBroadcastDuration(ms) {
+    ms = parseInt(ms, 10);
+    if (isNaN(ms) || ms < 10000) ms = 10000;
+    if (ms > 600000) ms = 600000;
+    try { localStorage.setItem(AZORA_BROADCAST_DURATION_KEY, String(ms)); } catch (e) {}
+    refreshBroadcastDurationUI();
+    if (typeof showAzoraToast === "function") {
+        var label = ms === 60000 ? "1 minute (Default)" : (ms < 60000 ? (ms / 1000) + " seconds" : (ms / 60000) + " minutes");
+        showAzoraToast("Broadcast duration set to " + label);
+    }
+}
+window.setBroadcastDuration = setBroadcastDuration;
+
+function refreshBroadcastDurationUI() {
+    var cur = getBroadcastDurationMs();
+    var grid = document.getElementById("broadcastDurationGrid");
+    if (!grid) return;
+    var btns = grid.querySelectorAll(".bdur-btn");
+    for (var i = 0; i < btns.length; i++) {
+        var b = btns[i];
+        var ms = parseInt(b.getAttribute("data-ms"), 10);
+        var sub = b.querySelector(".bdur-sub");
+        var isSel = ms === cur;
+        if (isSel) b.classList.add("selected");
+        else b.classList.remove("selected");
+        if (sub) {
+            if (ms === 60000) {
+                // Always show (Default) on 1 minute; selected state is the border
+                sub.textContent = "(Default)";
+                sub.classList.add("bdur-default");
+            } else {
+                sub.classList.remove("bdur-default");
+                sub.textContent = isSel ? "Selected" : "";
+            }
+        }
+    }
+}
+window.refreshBroadcastDurationUI = refreshBroadcastDurationUI;
+
+function dismissAzoraBroadcast() {
+    var banner = document.getElementById("azoraBroadcastBanner");
+    if (banner) banner.style.display = "none";
+    if (_azoraBroadcastTimer) {
+        clearTimeout(_azoraBroadcastTimer);
+        _azoraBroadcastTimer = null;
+    }
+}
+window.dismissAzoraBroadcast = dismissAzoraBroadcast;
+
+/** Show a blue glowing broadcast at the top of Azora */
+function showAzoraBroadcast(text, opts) {
+    opts = opts || {};
+    text = String(text || "").trim();
+    if (!text) return;
+    var banner = document.getElementById("azoraBroadcastBanner");
+    var span = document.getElementById("azoraBroadcastText");
+    if (!banner || !span) return;
+    span.textContent = text;
+    banner.style.display = "block";
+    if (_azoraBroadcastTimer) clearTimeout(_azoraBroadcastTimer);
+    var dur = opts.durationMs != null ? opts.durationMs : getBroadcastDurationMs();
+    _azoraBroadcastTimer = setTimeout(function () {
+        dismissAzoraBroadcast();
+    }, dur);
+    // mark seen
+    if (opts.id) {
+        _azoraBroadcastSeenId = opts.id;
+        try { localStorage.setItem("azoraLastSeenBroadcastId", String(opts.id)); } catch (e) {}
+    }
+}
+window.showAzoraBroadcast = showAzoraBroadcast;
+
+function getMyUsernameForBroadcast() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc && acc.username && !acc.isGuest) return String(acc.username);
+    } catch (e) {}
+    return null;
+}
+
+function pollUserBroadcasts() {
+    var username = getMyUsernameForBroadcast();
+    if (!username) return;
+
+    // Local pending (same device / servers without cloud)
+    try {
+        var localKey = "azoraPendingUserBroadcast_" + username.toLowerCase();
+        var local = localStorage.getItem(localKey);
+        if (local) {
+            var payload = JSON.parse(local);
+            if (payload && payload.id && payload.id !== _azoraBroadcastSeenId) {
+                var lastSeen = localStorage.getItem("azoraLastSeenBroadcastId");
+                if (payload.id !== lastSeen) {
+                    showAzoraBroadcast(payload.text, { id: payload.id });
+                    localStorage.removeItem(localKey);
+                }
+            }
+        }
+    } catch (eL) {}
+
+    // Cloud
+    try {
+        if (typeof AZORA_CLOUD === "undefined" || !AZORA_CLOUD.isReady || !AZORA_CLOUD.isReady()) return;
+        var safe = encodeURIComponent(String(username).toLowerCase().replace(/[.#$\/\[\]]/g, "_"));
+        var url = (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "") + "/azoraUserBroadcasts/" + safe + ".json?ts=" + Date.now();
+        fetch(url, { cache: "no-store" })
+            .then(function (r) { return r.json(); })
+            .then(function (payload) {
+                if (!payload || !payload.text || !payload.id) return;
+                var lastSeen = null;
+                try { lastSeen = localStorage.getItem("azoraLastSeenBroadcastId"); } catch (e) {}
+                if (payload.id === lastSeen || payload.id === _azoraBroadcastSeenId) return;
+                // Only show if recent (within 15 minutes of send) so old messages don't spam
+                if (payload.at && Date.now() - payload.at > 15 * 60 * 1000) return;
+                showAzoraBroadcast(payload.text, { id: payload.id });
+            })
+            .catch(function () {});
+    } catch (eC) {}
+}
+
+function startUserBroadcastPolling() {
+    try { pollUserBroadcasts(); } catch (e) {}
+    setInterval(function () {
+        try { pollUserBroadcasts(); } catch (e2) {}
+    }, 8000);
+}
+
+// Hook into openSettings to refresh duration UI
+(function patchOpenSettingsForBroadcast() {
+    var prev = window.openSettings;
+    window.openSettings = function () {
+        if (typeof prev === "function") prev.apply(this, arguments);
+        else {
+            var ov = document.getElementById("settingsOverlay");
+            if (ov) ov.style.display = "flex";
+        }
+        try { refreshBroadcastDurationUI(); } catch (e) {}
+    };
+})();
+
+try {
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function () {
+            setTimeout(startUserBroadcastPolling, 1200);
+            setTimeout(refreshBroadcastDurationUI, 400);
+        });
+    } else {
+        setTimeout(startUserBroadcastPolling, 1200);
+        setTimeout(refreshBroadcastDurationUI, 400);
+    }
+} catch (eBootB) {}
+
+// Upgrade global site broadcast (from servers) to use same blue glow + duration
+(function enhanceApplyServerFlags() {
+    var orig = window.applyServerFlags;
+    if (typeof orig !== "function") return;
+    window.applyServerFlags = function (flags) {
+        orig(flags);
+        try {
+            if (flags && flags.broadcast && String(flags.broadcast).trim()) {
+                var id = "global_" + String(flags.broadcast).slice(0, 40) + "_" + (flags.updatedAt || "");
+                var last = localStorage.getItem("azoraLastSeenBroadcastId");
+                if (id !== last) {
+                    showAzoraBroadcast(String(flags.broadcast).trim(), { id: id });
+                }
+            }
+        } catch (e) {}
+    };
+})();

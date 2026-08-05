@@ -93,6 +93,27 @@
         .row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
         .row button, .row input { flex: 1; min-width: 140px; margin-bottom: 0; }
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        tr.user-row-clickable { cursor: pointer; transition: background 0.15s; }
+        tr.user-row-clickable:hover { background: rgba(30,96,255,0.18); }
+        .msg-hint { opacity: 0.55; font-size: 11px; margin-left: 4px; }
+        #userMsgModal {
+            display: none; position: fixed; inset: 0; z-index: 9999;
+            background: rgba(0,0,0,0.72); align-items: center; justify-content: center;
+            padding: 16px;
+        }
+        #userMsgModal.open { display: flex; }
+        #userMsgModal .modal-box {
+            background: #161b22; border: 1px solid #30363d; border-radius: 14px;
+            padding: 18px; width: min(420px, 100%); color: #e2e8f0;
+            box-shadow: 0 0 0 2px rgba(96,165,250,0.35), 0 16px 40px rgba(0,0,0,0.5);
+        }
+        #userMsgModal h3 { margin: 0 0 6px; font-size: 1.1rem; }
+        #userMsgModal .to-line { color: #93c5fd; font-size: 13px; margin-bottom: 12px; }
+        #userMsgModal textarea { margin-bottom: 12px; }
+        #userMsgModal .row-btns { display: flex; gap: 8px; }
+        #userMsgModal .row-btns button { flex: 1; }
+        #userMsgStatus { font-size: 12px; margin-top: 8px; color: #94a3b8; min-height: 18px; }
+
         th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #21262d; }
         th { color: #8b949e; background: #0d1117; }
         .uid { font-family: Consolas, monospace; color: #58a6ff; font-weight: bold; }
@@ -798,6 +819,9 @@ function refreshUsers() {
 
     if (!cloudReady()) {
         cachedUsers = local;
+        if (!cachedUsers.some(function (u) { return u && String(u.username || "").toLowerCase() === "system"; })) {
+            cachedUsers.push({ username: "system", userId: "Aza: 2", isSystemElement: true, createdAt: 0 });
+        }
         renderUsers();
         document.getElementById("statGlobal").textContent = local.length;
         document.getElementById("statNext").textContent = "Aza: " + local.length;
@@ -815,6 +839,20 @@ function refreshUsers() {
             }
             list.sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); });
             cachedUsers = list;
+            // Ensure System Element always appears
+            (function injectSystemElement() {
+                var has = cachedUsers.some(function (u) {
+                    return u && (String(u.username || "").toLowerCase() === "system" || u.userId === "Aza: 2");
+                });
+                if (!has) {
+                    cachedUsers.push({
+                        username: "system",
+                        userId: "Aza: 2",
+                        isSystemElement: true,
+                        createdAt: 0
+                    });
+                }
+            })();
             var maxN = list.length;
             list.forEach(function (u) {
                 var m = String(u.userId || "").match(/Aza:\s*(\d+)/i);
@@ -844,9 +882,14 @@ function renderUsers() {
         return;
     }
     tbody.innerHTML = list.slice().reverse().map(function (u) {
-        return '<tr><td class="uid">' + escapeHtml(u.userId || "—") + '</td><td>' +
-            escapeHtml(u.username || "—") + '</td><td>' +
-            (u.createdAt ? new Date(u.createdAt).toLocaleString() : "—") + '</td></tr>';
+        var uname = String(u.username || "");
+        var canMsg = uname && !u.isSystemElement && uname.toLowerCase() !== "system";
+        var click = canMsg
+            ? ' class="user-row-clickable" onclick="openUserMessageModal(\'' + uname.replace(/\\/g, "").replace(/'/g, "") + '\', \'' + escapeHtml(u.userId || "") + '\')" title="Click to message this user"'
+            : "";
+        return '<tr' + click + '><td class="uid">' + escapeHtml(u.userId || "—") + '</td><td>' +
+            escapeHtml(uname || "—") + (canMsg ? ' <span class="msg-hint">✉</span>' : '') + '</td><td>' +
+            (u.isSystemElement ? "System Element" : (u.createdAt ? new Date(u.createdAt).toLocaleString() : (u.createdAt === 0 ? "Platform" : "—"))) + '</td></tr>';
     }).join("");
 }
 
@@ -869,6 +912,82 @@ function escapeHtml(str) {
 }
 
 
+
+var _userMsgTarget = null;
+
+function openUserMessageModal(username, userId) {
+    _userMsgTarget = { username: username, userId: userId || "" };
+    var m = document.getElementById("userMsgModal");
+    var line = document.getElementById("userMsgToLine");
+    var ta = document.getElementById("userMsgText");
+    var st = document.getElementById("userMsgStatus");
+    if (line) line.textContent = "To: " + username + (userId ? " (" + userId + ")" : "");
+    if (ta) ta.value = "";
+    if (st) st.textContent = "";
+    if (m) m.classList.add("open");
+    if (ta) setTimeout(function () { ta.focus(); }, 50);
+}
+
+function closeUserMessageModal() {
+    var m = document.getElementById("userMsgModal");
+    if (m) m.classList.remove("open");
+    _userMsgTarget = null;
+}
+
+function userBroadcastPath(username) {
+    var safe = encodeURIComponent(String(username).toLowerCase().replace(/[.#$\/\[\]]/g, "_"));
+    return getFirebaseUrl() + "/azoraUserBroadcasts/" + safe + ".json";
+}
+
+function sendUserBroadcast() {
+    if (!_userMsgTarget || !_userMsgTarget.username) return;
+    var text = (document.getElementById("userMsgText").value || "").trim().slice(0, 280);
+    var st = document.getElementById("userMsgStatus");
+    if (!text) {
+        if (st) st.textContent = "Write a message first.";
+        return;
+    }
+    var payload = {
+        text: text,
+        from: "Azora",
+        to: _userMsgTarget.username,
+        userId: _userMsgTarget.userId || "",
+        at: Date.now(),
+        id: "ub_" + Date.now()
+    };
+    function doneLocal() {
+        try {
+            var key = "azoraPendingUserBroadcast_" + String(_userMsgTarget.username).toLowerCase();
+            localStorage.setItem(key, JSON.stringify(payload));
+            // also mirror for same-browser testing
+            localStorage.setItem("azoraLastUserBroadcast", JSON.stringify(payload));
+        } catch (e) {}
+        if (st) st.textContent = "Sent (local). They will see it on Azora.";
+        logStaff("LOCAL user broadcast → " + _userMsgTarget.username + ": " + text);
+        setTimeout(closeUserMessageModal, 900);
+    }
+    if (!cloudReady()) {
+        doneLocal();
+        return;
+    }
+    if (st) st.textContent = "Sending…";
+    fetch(userBroadcastPath(_userMsgTarget.username), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    }).then(function () {
+        doneLocal();
+        if (st) st.textContent = "Broadcast sent to " + _userMsgTarget.username + ".";
+        logStaff("CLOUD user broadcast → " + _userMsgTarget.username);
+    }).catch(function (e) {
+        doneLocal();
+        if (st) st.textContent = "Cloud failed — saved locally. " + e;
+    });
+}
+window.openUserMessageModal = openUserMessageModal;
+window.closeUserMessageModal = closeUserMessageModal;
+window.sendUserBroadcast = sendUserBroadcast;
+
 // azoraOwnerAutoUnlock — official Azora account bypasses staff password
 (function () {
     try {
@@ -888,5 +1007,19 @@ if (sessionStorage.getItem("azoraServerUnlocked") === "true") {
     refreshAll();
 }
 </script>
+
+<div id="userMsgModal" onclick="if(event.target===this)closeUserMessageModal()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <h3>Send broadcast to user</h3>
+    <div class="to-line" id="userMsgToLine">To: —</div>
+    <textarea id="userMsgText" maxlength="280" placeholder="Write a message that will appear at the top of their Azora screen…"></textarea>
+    <div class="row-btns">
+      <button type="button" class="btn-ok" onclick="sendUserBroadcast()">Send broadcast</button>
+      <button type="button" class="btn-ghost" onclick="closeUserMessageModal()">Cancel</button>
+    </div>
+    <div id="userMsgStatus"></div>
+  </div>
+</div>
+
 </body>
 </html>

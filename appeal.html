@@ -44,8 +44,7 @@
     <h1>Azora Appeals</h1>
     <p>Appeals go to <strong style="color:#93c5fd;">system</strong> (System Element · Aza: 2).</p>
     <div class="sys-note">
-        Automated reviews usually take about <strong>10 minutes</strong>. When you return, Azora will show whether your appeal was <span style="color:#4ade80;">accepted</span> or <span style="color:#f87171;">rejected</span>.
-        If the owner chose manual review, staff will decide instead.
+        Your appeal is delivered to <strong>Azora</strong> (owner) in about <strong>1 minute</strong>. The owner decides to accept or reject. You have about <strong>90 days</strong> after a termination to appeal. After that window, automated review may close the case.
     </div>
 
     <label for="appealUsername">Username</label>
@@ -149,6 +148,19 @@ function submitAppeal() {
         if (ban && ban.reviewMode) reviewMode = ban.reviewMode;
     } catch (e2) {}
 
+    var termAt = Date.now();
+    try {
+        var ban = (records.bans || {})[username] || (records.terminations || {})[username];
+        if (!ban) {
+            Object.keys(records.bans || {}).forEach(function (k) {
+                if (k.toLowerCase() === username.toLowerCase()) ban = records.bans[k];
+            });
+            Object.keys(records.terminations || {}).forEach(function (k) {
+                if (k.toLowerCase() === username.toLowerCase()) ban = records.terminations[k];
+            });
+        }
+        if (ban && (ban.at || ban.from || ban.fromMs)) termAt = ban.at || ban.from || ban.fromMs;
+    } catch (eT) {}
     var entry = {
         id: "apl_" + Date.now(),
         username: username,
@@ -157,9 +169,11 @@ function submitAppeal() {
         assetId: assetId || null,
         text: text,
         at: Date.now(),
-        resolveAfter: Date.now() + 10 * 60 * 1000, // ~10 minutes
-        reviewMode: reviewMode,
-        status: reviewMode === "owner" ? "pending_owner" : "pending_auto",
+        deliverAfter: Date.now() + 60 * 1000,
+        resolveAfter: Date.now() + 60 * 1000,
+        terminationAt: termAt,
+        reviewMode: "owner",
+        status: "delivering",
         to: "system",
         toUserId: "Aza: 2"
     };
@@ -178,9 +192,9 @@ function submitAppeal() {
     localStorage.setItem("azoraModerationRecords", JSON.stringify(records));
     status.className = "ok";
     if (reviewMode === "owner") {
-        status.textContent = "Appeal sent. The owner will review it manually.";
+        status.textContent = "Appeal sent. Azora (owner) will receive it in about 1 minute and decide.";
     } else {
-        status.textContent = "Appeal sent to system. Automated review takes about 10 minutes — come back later for the result.";
+        status.textContent = "Appeal sent. Azora (owner) will receive it in about 1 minute and decide.";
     }
     document.getElementById("appealText").value = "";
 }
