@@ -1075,6 +1075,8 @@ startFallingPhrases();
 
 // --- Settings Logic ---
 function openSettings() {
+    try { ensureCurrentAccountInAltSlots(); } catch (eS) {}
+
     document.getElementById("settingsOverlay").style.display = "flex";
     var me = typeof getMyUsername === "function" ? getMyUsername() : "";
     var sel = document.getElementById("statusSelect");
@@ -7964,32 +7966,36 @@ setTimeout(function () {
 function switchSettingsTab(tab) {
     var basic = document.getElementById("settingsPanelBasic");
     var security = document.getElementById("settingsPanelSecurity");
+    var accounts = document.getElementById("settingsPanelAccounts");
     var tabBasic = document.getElementById("settingsTabBasic");
     var tabSecurity = document.getElementById("settingsTabSecurity");
+    var tabAccounts = document.getElementById("settingsTabAccounts");
     if (!basic || !security) return;
 
-    var isGuest = localStorage.getItem("loggedIn") === "guest";
     var isFull = localStorage.getItem("loggedIn") === "true";
 
-    // Guests: Security is restricted
     if (tab === "security" && !isFull) {
-        if (tabSecurity) {
-            tabSecurity.classList.add("restricted");
-        }
-        // Still show the panel but locked content via refreshSecurityPanel
+        if (tabSecurity) tabSecurity.classList.add("restricted");
     }
 
+    if (basic) basic.style.display = "none";
+    if (security) security.style.display = "none";
+    if (accounts) accounts.style.display = "none";
+    if (tabBasic) tabBasic.classList.remove("active");
+    if (tabSecurity) tabSecurity.classList.remove("active");
+    if (tabAccounts) tabAccounts.classList.remove("active");
+
     if (tab === "security") {
-        basic.style.display = "none";
-        security.style.display = "block";
-        if (tabBasic) tabBasic.classList.remove("active");
+        if (security) security.style.display = "block";
         if (tabSecurity) tabSecurity.classList.add("active");
         refreshSecurityPanel();
+    } else if (tab === "accounts") {
+        if (accounts) accounts.style.display = "block";
+        if (tabAccounts) tabAccounts.classList.add("active");
+        try { refreshAltAccountsPanel(); } catch (eA) {}
     } else {
-        basic.style.display = "block";
-        security.style.display = "none";
+        if (basic) basic.style.display = "block";
         if (tabBasic) tabBasic.classList.add("active");
-        if (tabSecurity) tabSecurity.classList.remove("active");
     }
 }
 
@@ -14581,3 +14587,257 @@ try {
         setTimeout(checkAppealResultsOnBoot, 500);
     }
 } catch (eBootA) {}
+
+
+// ============================================================
+// Alt accounts (Settings → Accounts) — max 10 slots
+// ============================================================
+var AZORA_MAX_ALT_SLOTS = 10;
+
+function getAltSlots() {
+    try {
+        var arr = JSON.parse(localStorage.getItem("azoraAltSlots") || "[]");
+        if (!Array.isArray(arr)) arr = [];
+        // unique, preserve order
+        var seen = {};
+        var out = [];
+        arr.forEach(function (u) {
+            u = String(u || "").trim();
+            if (!u) return;
+            var k = u.toLowerCase();
+            if (seen[k]) return;
+            seen[k] = true;
+            out.push(u);
+        });
+        return out.slice(0, AZORA_MAX_ALT_SLOTS);
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveAltSlots(list) {
+    var seen = {};
+    var out = [];
+    (list || []).forEach(function (u) {
+        u = String(u || "").trim();
+        if (!u) return;
+        var k = u.toLowerCase();
+        if (seen[k]) return;
+        seen[k] = true;
+        out.push(u);
+    });
+    out = out.slice(0, AZORA_MAX_ALT_SLOTS);
+    localStorage.setItem("azoraAltSlots", JSON.stringify(out));
+    return out;
+}
+
+function ensureCurrentAccountInAltSlots() {
+    if (localStorage.getItem("loggedIn") !== "true") return getAltSlots();
+    var acc = null;
+    try { acc = JSON.parse(localStorage.getItem("azoraAccount") || "null"); } catch (e) {}
+    if (!acc || !acc.username || acc.isGuest) return getAltSlots();
+    var slots = getAltSlots();
+    var exists = slots.some(function (u) { return u.toLowerCase() === String(acc.username).toLowerCase(); });
+    if (!exists) {
+        if (slots.length >= AZORA_MAX_ALT_SLOTS) {
+            // keep slots full — don't force-add
+            return slots;
+        }
+        slots.push(acc.username);
+        saveAltSlots(slots);
+    }
+    return getAltSlots();
+}
+
+function addUsernameToAltSlots(username) {
+    username = String(username || "").trim();
+    if (!username) return { ok: false, reason: "missing" };
+    var slots = getAltSlots();
+    if (slots.some(function (u) { return u.toLowerCase() === username.toLowerCase(); })) {
+        return { ok: true, slots: slots, already: true };
+    }
+    if (slots.length >= AZORA_MAX_ALT_SLOTS) {
+        return { ok: false, reason: "full", slots: slots };
+    }
+    slots.push(username);
+    saveAltSlots(slots);
+    return { ok: true, slots: getAltSlots() };
+}
+
+function refreshAltAccountsPanel() {
+    var list = document.getElementById("altAccountsList");
+    var countEl = document.getElementById("altSlotCount");
+    if (!list) return;
+    ensureCurrentAccountInAltSlots();
+    var slots = getAltSlots();
+    if (countEl) countEl.textContent = slots.length + " / " + AZORA_MAX_ALT_SLOTS + " slots used";
+
+    var me = "";
+    try {
+        if (localStorage.getItem("loggedIn") === "true") {
+            var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+            if (acc && acc.username) me = acc.username;
+        }
+    } catch (e) {}
+
+    list.innerHTML = "";
+    if (!slots.length) {
+        list.innerHTML = "<p class='settings-hint'>No alt slots yet. Create an alt below or log in to add your current account.</p>";
+        return;
+    }
+
+    var map = {};
+    try { map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}"); } catch (e2) {}
+
+    slots.forEach(function (uname) {
+        var row = document.createElement("div");
+        row.className = "alt-account-row" + (me && me.toLowerCase() === uname.toLowerCase() ? " current" : "");
+        var saved = map[uname] || map[Object.keys(map).find(function (k) { return k.toLowerCase() === uname.toLowerCase(); }) ] || {};
+        var uid = saved.userId || "";
+        var meta = document.createElement("div");
+        meta.className = "alt-account-meta";
+        meta.innerHTML = "<strong></strong><span></span>";
+        meta.querySelector("strong").textContent = uname + (me && me.toLowerCase() === uname.toLowerCase() ? " (current)" : "");
+        meta.querySelector("span").textContent = uid ? ("ID " + uid) : "Saved on this device";
+        row.appendChild(meta);
+
+        if (!(me && me.toLowerCase() === uname.toLowerCase())) {
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.textContent = "Switch";
+            btn.onclick = function () { switchToAltAccount(uname); };
+            row.appendChild(btn);
+        } else {
+            var tag = document.createElement("button");
+            tag.type = "button";
+            tag.textContent = "Active";
+            tag.disabled = true;
+            tag.style.opacity = "0.7";
+            row.appendChild(tag);
+        }
+        list.appendChild(row);
+    });
+}
+
+function switchToAltAccount(username) {
+    username = String(username || "").trim();
+    if (!username) return;
+    var map = {};
+    try { map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}"); } catch (e) {}
+    var key = Object.keys(map).find(function (k) { return k.toLowerCase() === username.toLowerCase(); });
+    var account = key ? map[key] : null;
+    if (!account) {
+        alert("That alt is not saved on this device. Log in with it once first.");
+        return;
+    }
+    // Check ban/terminate
+    try {
+        if (typeof getActiveModerationForUser === "function") {
+            var mod = getActiveModerationForUser(account.username || username);
+            if (mod && mod.active) {
+                if (typeof setLoggedInAccount === "function") setLoggedInAccount(account);
+                localStorage.setItem("loggedIn", "true");
+                location.reload();
+                return;
+            }
+        }
+    } catch (eM) {}
+    if (typeof setLoggedInAccount === "function") setLoggedInAccount(account);
+    else {
+        localStorage.setItem("azoraAccount", JSON.stringify(account));
+        localStorage.setItem("loggedIn", "true");
+    }
+    addUsernameToAltSlots(account.username || username);
+    alert("Switched to " + (account.username || username) + ".");
+    location.reload();
+}
+
+function createAltAccountFromSettings() {
+    var err = document.getElementById("altCreateError");
+    function showErr(msg) {
+        if (err) { err.style.display = "block"; err.textContent = msg; }
+        else alert(msg);
+    }
+    if (err) { err.style.display = "none"; err.textContent = ""; }
+
+    if (localStorage.getItem("loggedIn") !== "true") {
+        showErr("Log in with a real account before creating alts.");
+        return;
+    }
+
+    var slots = getAltSlots();
+    if (slots.length >= AZORA_MAX_ALT_SLOTS) {
+        showErr("You already have 10 accounts in your alt list. Log out of all accounts before creating a new one.");
+        return;
+    }
+
+    var username = ((document.getElementById("altNewUsername") || {}).value || "").trim();
+    var password = (document.getElementById("altNewPassword") || {}).value || "";
+    var confirm = (document.getElementById("altNewPassword2") || {}).value || "";
+
+    if (!username || username.length < 2) { showErr("Username must be at least 2 characters."); return; }
+    if (!password) { showErr("Enter a password."); return; }
+    if (password !== confirm) { showErr("Passwords do not match."); return; }
+    if (typeof isOwnerUsername === "function" && isOwnerUsername(username)) {
+        showErr("That username is reserved.");
+        return;
+    }
+    if (typeof isUsernameTakenLocal === "function" && isUsernameTakenLocal(username)) {
+        showErr("That username is already taken on this device.");
+        return;
+    }
+
+    var localId = (typeof allocateNextUserId === "function") ? allocateNextUserId() : ("Aza: " + Date.now());
+    if (typeof finishCreateAccount === "function") {
+        // finishCreateAccount logs you into the new account — also add to slots
+        var add = addUsernameToAltSlots(username);
+        if (!add.ok && add.reason === "full") {
+            showErr("Alt slots are full (10/10). Log out of all first.");
+            return;
+        }
+        // Keep current in slots too
+        ensureCurrentAccountInAltSlots();
+        finishCreateAccount(username, password, localId, "");
+        addUsernameToAltSlots(username);
+        return;
+    }
+    showErr("Could not create account.");
+}
+
+function logoutAllAltAccounts() {
+    if (!confirm("Log out of ALL accounts on this device and clear all 10 alt slots?\nYou will need to log in again.")) return;
+    try {
+        localStorage.removeItem("azoraAltSlots");
+        localStorage.removeItem("loggedIn");
+        // keep azoraAccounts saved so passwords still work after re-login
+        // optional: clear session account
+        localStorage.removeItem("azoraAccount");
+    } catch (e) {}
+    alert("All accounts logged out. Alt slots cleared (0 / 10).");
+    location.reload();
+}
+
+// When finishing login/create, register into alt slots if space
+(function patchSetLoggedInForAlts() {
+    if (typeof setLoggedInAccount !== "function") return;
+    var _orig = setLoggedInAccount;
+    window.setLoggedInAccount = function (account) {
+        var r = _orig.apply(this, arguments);
+        try {
+            if (account && account.username && !account.isGuest) {
+                var slots = getAltSlots();
+                if (slots.length < AZORA_MAX_ALT_SLOTS || slots.some(function (u) { return u.toLowerCase() === String(account.username).toLowerCase(); })) {
+                    addUsernameToAltSlots(account.username);
+                }
+            }
+        } catch (e) {}
+        return r;
+    };
+})();
+
+window.getAltSlots = getAltSlots;
+window.refreshAltAccountsPanel = refreshAltAccountsPanel;
+window.switchToAltAccount = switchToAltAccount;
+window.createAltAccountFromSettings = createAltAccountFromSettings;
+window.logoutAllAltAccounts = logoutAllAltAccounts;
+window.ensureCurrentAccountInAltSlots = ensureCurrentAccountInAltSlots;

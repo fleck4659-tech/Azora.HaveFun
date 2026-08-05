@@ -4147,3 +4147,17 @@ footer {
     border: 0; border-radius: 10px; font-weight: 700;
     background: #1e40af; color: #fff; cursor: pointer;
 }
+
+.alt-accounts-list { display:flex; flex-direction:column; gap:8px; margin-top:8px; max-height:220px; overflow:auto; }
+.alt-account-row {
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:10px 12px; border-radius:10px; background:rgba(30,64,175,0.12);
+    border:1px solid rgba(59,130,246,0.35);
+}
+.alt-account-row.current { border-color:#3b82f6; background:rgba(30,64,175,0.22); }
+.alt-account-meta { min-width:0; }
+.alt-account-meta strong { display:block; font-size:0.92rem; }
+.alt-account-meta span { font-size:0.75rem; opacity:0.8; }
+.alt-account-row button { margin:0; flex-shrink:0; padding:8px 10px; font-size:0.8rem; }
+.settings-tabs { display:flex; flex-wrap:wrap; gap:6px; }
+.settings-tab { flex:1 1 auto; min-width:90px; }

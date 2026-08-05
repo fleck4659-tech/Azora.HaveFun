@@ -188,6 +188,7 @@
         <div class="settings-tabs">
             <button type="button" class="settings-tab active" id="settingsTabBasic" onclick="switchSettingsTab('basic')">Basic Settings</button>
             <button type="button" class="settings-tab" id="settingsTabSecurity" onclick="switchSettingsTab('security')">Security</button>
+            <button type="button" class="settings-tab" id="settingsTabAccounts" onclick="switchSettingsTab('accounts')">Accounts</button>
         </div>
 
         <!-- BASIC SETTINGS -->
@@ -265,6 +266,29 @@
 
         <hr style="margin:18px 0;">
         <button onclick="logoutUser()" style="background:#ff3b30;color:#ffffff;width:100%;">Log Out</button>
+        
+        <!-- ACCOUNTS / ALTS -->
+        <div id="settingsPanelAccounts" class="settings-panel" style="display:none;">
+            <div class="settings-section">
+                <label class="settings-label">Alt accounts</label>
+                <p class="settings-hint" style="margin-top:0;">You can keep up to <strong>10</strong> accounts ready to switch. To create another after that, log out of all first.</p>
+                <p id="altSlotCount" class="settings-hint">0 / 10 slots used</p>
+                <div id="altAccountsList" class="alt-accounts-list"></div>
+            </div>
+            <div class="settings-section">
+                <label class="settings-label">Create a new Alt</label>
+                <input id="altNewUsername" type="text" class="settings-input" placeholder="New username" maxlength="24" autocomplete="off">
+                <input id="altNewPassword" type="password" class="settings-input" placeholder="Password" style="margin-top:8px;" autocomplete="new-password">
+                <input id="altNewPassword2" type="password" class="settings-input" placeholder="Confirm password" style="margin-top:8px;" autocomplete="new-password">
+                <p id="altCreateError" class="account-error" style="display:none;margin-top:8px;"></p>
+                <button type="button" id="altCreateBtn" onclick="createAltAccountFromSettings()" style="width:100%;margin-top:10px;background:linear-gradient(180deg,#3b82f6,#1e40af);color:#fff;">Create Alt account</button>
+            </div>
+            <div class="settings-section">
+                <button type="button" onclick="logoutAllAltAccounts()" style="width:100%;background:#111;color:#fff;border:1px solid #444;">Log out of all accounts</button>
+                <small class="settings-hint">Clears all 10 slots so you can create new alts. You will need to log in again.</small>
+            </div>
+        </div>
+
         <button onclick="closeSettings()" style="width:100%;">Close</button>
     </div>
 </div>
