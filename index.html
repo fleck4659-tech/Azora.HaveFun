@@ -1046,7 +1046,7 @@ if ("serviceWorker" in navigator) {
 
 <!-- Owner Moderation Console (stable — not inside profile) -->
 <div id="ownerModConsole" class="overlay" style="display:none;z-index:100000;">
-    <div class="popup owner-mod-console" style="max-width:min(420px,calc(100vw - 20px));text-align:left;">
+    <div class="popup owner-mod-console owner-mod-dark" style="max-width:min(420px,calc(100vw - 20px));text-align:left;">
         <h2 style="margin-top:0;text-align:center;">🛡️ Owner Moderation</h2>
         <p style="font-size:0.85rem;color:#64748b;text-align:center;margin-top:0;">Only visible to Azora. Bans &amp; terminations apply by username.</p>
 
@@ -1086,11 +1086,31 @@ if ("serviceWorker" in navigator) {
         </select>
 
         <label for="omNotes"><strong>Extra notes</strong> (optional)</label>
-        <input id="omNotes" type="text" placeholder="Optional staff notes" style="width:100%;box-sizing:border-box;padding:10px;margin:6px 0 12px;border-radius:8px;border:1px solid #cbd5e1;">
+        <input id="omNotes" type="text" placeholder="Optional staff notes" style="width:100%;box-sizing:border-box;padding:10px;margin:6px 0 12px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#f1f5f9;">
+
+        <label><strong>Appeal review mode</strong></label>
+        <div id="omReviewMode" style="margin:6px 0 12px;padding:10px;border-radius:10px;background:#111827;border:1px solid #334155;">
+            <label style="display:flex;gap:8px;align-items:center;margin:0 0 8px;font-weight:500;">
+                <input type="radio" name="omReview" value="auto" checked> Automated system reviews appeals (~10 minutes)
+            </label>
+            <label style="display:flex;gap:8px;align-items:center;margin:0;font-weight:500;">
+                <input type="radio" name="omReview" value="owner"> I will review appeals myself
+            </label>
+        </div>
 
         <button type="button" id="omApplyBtn" class="btn-ban" onclick="applyOwnerModeration()" style="width:100%;margin:0 0 8px;">Apply ban</button>
         <button type="button" class="btn-unban" onclick="clearOwnerModerationFromConsole()" style="width:100%;margin:0 0 8px;">Clear ban / termination for this username</button>
         <button type="button" class="secondary" onclick="closeOwnerModConsole()" style="width:100%;margin:0;">Close</button>
+    </div>
+</div>
+
+
+<!-- Appeal result (after ~10 min automated review) -->
+<div id="appealResultOverlay" class="appeal-result-overlay" style="display:none;">
+    <div id="appealResultPanel" class="appeal-result-panel">
+        <h2 id="appealResultTitle">Appeal update</h2>
+        <p id="appealResultMessage"></p>
+        <button type="button" onclick="closeAppealResultPopup()">OK</button>
     </div>
 </div>
 

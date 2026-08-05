@@ -6,29 +6,46 @@
     <title>Azora Appeals</title>
     <link rel="stylesheet" href="appeal.css">
     <style>
-        body { background: #e8eef7; }
-        .appeal-box { max-width: 480px; margin: 24px auto; background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 8px 30px rgba(15,23,42,0.08); }
+        body { background: #0b1220; color: #e2e8f0; margin: 0; font-family: system-ui, sans-serif; }
+        .appeal-box {
+            max-width: 480px; margin: 28px auto; background: #0f172a; border-radius: 16px;
+            padding: 24px; border: 1px solid #1e3a5f; box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+        }
         .logo { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; }
-        label { display: block; font-weight: 700; margin: 12px 0 6px; font-size: 0.9rem; }
-        input, select, textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid #cbd5e1; font: inherit; }
+        h1 { color: #fff; margin: 12px 0; }
+        label { display: block; font-weight: 700; margin: 12px 0 6px; font-size: 0.9rem; color: #e2e8f0; }
+        input, select, textarea {
+            width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px;
+            border: 1px solid #334155; background: #1e293b; color: #f8fafc; font: inherit;
+        }
         textarea { min-height: 110px; resize: vertical; }
-        button { margin-top: 14px; width: 100%; padding: 12px; border: 0; border-radius: 10px; background: linear-gradient(180deg,#3b82f6,#1d4ed8); color: #fff; font-weight: 700; cursor: pointer; }
-        .sys-note { background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; margin: 12px 0; }
-        .ok { color: #047857; font-weight: 700; }
-        .err { color: #b91c1c; font-weight: 700; }
+        button {
+            margin-top: 14px; width: 100%; padding: 12px; border: 0; border-radius: 10px;
+            background: linear-gradient(180deg,#1d4ed8,#1e3a8a); color: #fff; font-weight: 700; cursor: pointer;
+        }
+        .sys-note {
+            background: #111827; border: 1px solid #1e3a5f; border-radius: 10px;
+            padding: 10px 12px; font-size: 0.88rem; margin: 12px 0; color: #cbd5e1;
+        }
+        .ok { color: #4ade80; font-weight: 700; }
+        .err { color: #f87171; font-weight: 700; }
         .hidden { display: none !important; }
-        .hint { font-size: 0.8rem; color: #64748b; margin: 4px 0 0; }
-        #assetIdWrap { margin-top: 8px; padding: 12px; background: #f8fafc; border-radius: 10px; border: 1px dashed #94a3b8; }
+        .hint { font-size: 0.8rem; color: #94a3b8; margin: 4px 0 0; }
+        #assetIdWrap {
+            margin-top: 8px; padding: 12px; background: #111827; border-radius: 10px;
+            border: 1px dashed #334155;
+        }
+        a { color: #93c5fd; }
     </style>
 </head>
 <body>
 <div class="appeal-box">
     <img src="logo.jpg" class="logo" alt="Azora Logo">
     <h1>Azora Appeals</h1>
-    <p>Appeals are reviewed via <strong>system</strong> (System Element · Aza: 2).</p>
+    <p>Appeals go to <strong style="color:#93c5fd;">system</strong> (System Element · Aza: 2).</p>
     <div class="sys-note">
-        Pick <strong>one</strong> reason that best matches why you received this action.
-        If it involves content you uploaded, enter that item’s ID.
+        Automated reviews usually take about <strong>10 minutes</strong>. When you return, Azora will show whether your appeal was <span style="color:#4ade80;">accepted</span> or <span style="color:#f87171;">rejected</span>.
+        If the owner chose manual review, staff will decide instead.
     </div>
 
     <label for="appealUsername">Username</label>
@@ -79,8 +96,7 @@ function onAppealTypeChange() {
 }
 function onPunishmentReasonChange() {
     var v = document.getElementById("punishmentReason").value;
-    var needId = (v === "explicit_upload");
-    document.getElementById("assetIdWrap").classList.toggle("hidden", !needId);
+    document.getElementById("assetIdWrap").classList.toggle("hidden", v !== "explicit_upload");
 }
 (function () {
     try {
@@ -118,6 +134,21 @@ function submitAppeal() {
     if (!records.appeals) records.appeals = [];
     if (!records.systemInbox) records.systemInbox = [];
 
+    // Inherit review mode from active ban/termination if present
+    var reviewMode = "auto";
+    try {
+        var ban = (records.bans || {})[username] || (records.terminations || {})[username];
+        if (!ban) {
+            Object.keys(records.bans || {}).forEach(function (k) {
+                if (k.toLowerCase() === username.toLowerCase()) ban = records.bans[k];
+            });
+            Object.keys(records.terminations || {}).forEach(function (k) {
+                if (k.toLowerCase() === username.toLowerCase()) ban = records.terminations[k];
+            });
+        }
+        if (ban && ban.reviewMode) reviewMode = ban.reviewMode;
+    } catch (e2) {}
+
     var entry = {
         id: "apl_" + Date.now(),
         username: username,
@@ -126,9 +157,11 @@ function submitAppeal() {
         assetId: assetId || null,
         text: text,
         at: Date.now(),
+        resolveAfter: Date.now() + 10 * 60 * 1000, // ~10 minutes
+        reviewMode: reviewMode,
+        status: reviewMode === "owner" ? "pending_owner" : "pending_auto",
         to: "system",
-        toUserId: "Aza: 2",
-        status: "pending"
+        toUserId: "Aza: 2"
     };
     records.appeals.unshift(entry);
     records.systemInbox.unshift({
@@ -139,11 +172,16 @@ function submitAppeal() {
         assetId: assetId || null,
         text: text,
         at: Date.now(),
-        appealId: entry.id
+        appealId: entry.id,
+        reviewMode: reviewMode
     });
     localStorage.setItem("azoraModerationRecords", JSON.stringify(records));
     status.className = "ok";
-    status.textContent = "Appeal sent to system (Aza: 2).";
+    if (reviewMode === "owner") {
+        status.textContent = "Appeal sent. The owner will review it manually.";
+    } else {
+        status.textContent = "Appeal sent to system. Automated review takes about 10 minutes — come back later for the result.";
+    }
     document.getElementById("appealText").value = "";
 }
 </script>

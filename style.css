@@ -4067,3 +4067,83 @@ footer {
 .om-mode.active-term { background:#dc2626 !important; color:#fff !important; border-color:#b91c1c !important; }
 .owner-mod-console label { display:block; margin-top:4px; }
 .owner-mod-console .hidden { display:none !important; }
+
+
+/* ===== Dark moderation / appeals (black, dark grey, dark blue, white) ===== */
+.mod-lock-overlay {
+    background: rgba(15, 23, 42, 0.94) !important;
+}
+.mod-lock-panel {
+    background: #0f172a !important;
+    color: #f8fafc !important;
+    border: 1px solid #1e3a5f !important;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.55) !important;
+}
+.mod-lock-brand { color: #93c5fd !important; }
+.mod-lock-panel h1 { color: #ffffff !important; }
+.mod-lock-msg { color: #cbd5e1 !important; }
+.mod-lock-duration {
+    background: #1e293b !important;
+    color: #93c5fd !important;
+    border: 1px solid #334155;
+}
+.mod-lock-reason {
+    background: #1e293b !important;
+    border-color: #1e3a5f !important;
+    color: #e2e8f0 !important;
+}
+.mod-lock-fine { color: #94a3b8 !important; }
+.mod-lock-signout { background: #334155 !important; color: #f8fafc !important; }
+.appeal-link-blue {
+    background: #1e3a8a !important;
+    color: #ffffff !important;
+    text-decoration: none !important;
+    border: 1px solid #3b82f6;
+}
+.mod-lock-kind.ban { background: #3b2f1a; color: #fdba74; }
+.mod-lock-kind.termination { background: #3f1d1d; color: #fca5a5; }
+
+.owner-mod-dark {
+    background: #0f172a !important;
+    color: #f1f5f9 !important;
+    border: 1px solid #1e3a5f !important;
+}
+.owner-mod-dark h2 { color: #fff !important; }
+.owner-mod-dark input[type="text"],
+.owner-mod-dark input[type="number"],
+.owner-mod-dark select {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border: 1px solid #334155 !important;
+}
+.owner-mod-dark label { color: #e2e8f0 !important; }
+
+.appeal-result-overlay {
+    position: fixed; inset: 0; z-index: 1000001;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(15, 23, 42, 0.88);
+    padding: 16px;
+}
+.appeal-result-panel {
+    width: min(400px, 100%);
+    background: #0f172a;
+    color: #f8fafc;
+    border-radius: 14px;
+    padding: 22px 20px;
+    text-align: center;
+}
+.appeal-result-panel.accepted {
+    border: 3px solid #22c55e;
+    box-shadow: 0 0 0 4px rgba(34,197,94,0.2);
+}
+.appeal-result-panel.rejected {
+    border: 3px solid #ef4444;
+    box-shadow: 0 0 0 4px rgba(239,68,68,0.2);
+}
+.appeal-result-panel h2 { margin: 0 0 10px; color: #fff; }
+.appeal-result-panel p { color: #cbd5e1; line-height: 1.45; }
+.appeal-result-panel button {
+    margin-top: 12px; width: 100%; padding: 12px;
+    border: 0; border-radius: 10px; font-weight: 700;
+    background: #1e40af; color: #fff; cursor: pointer;
+}

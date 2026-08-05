@@ -1978,6 +1978,9 @@ function showUsernameTakenError(username) {
     if (u) { try { u.focus(); u.select(); } catch (e) {} }
 }
 
+// Multiple accounts allowed on one device — no artificial limit
+var AZORA_MULTI_ACCOUNT_NO_LIMIT = true;
+
 function createAccount() {
     if (typeof clearAccountError === "function") clearAccountError();
     var username = document.getElementById("username").value.trim();
@@ -2005,7 +2008,7 @@ function createAccount() {
     }
 
     migrateLegacyAccount();
-    try { runPlatformAccountWipeOnce(); } catch (e) {}
+    // Multi-account mode: do NOT wipe other local accounts on create
 
     if (!email) {
         var skip = confirm(
@@ -2365,7 +2368,7 @@ function buildAvatarFace(headColor, gender) {
 function makeAvatarHair(hairColor, headY, headSize, styleId) {
     if (typeof THREE === "undefined") return null;
     hairColor = hairColor || "#4a3728";
-    headY = (typeof headY === "number") ? headY : 1.12;
+    headY = (typeof headY === "number") ? headY : 1.02;
     headSize = headSize || 0.65;
     styleId = styleId || "hair_girl_default";
 
@@ -2483,7 +2486,7 @@ function applyGenderVisualsToCustomizer(gender, colors) {
         else styleId = "hair_boy_none";
     }
     if (styleId && styleId !== "hair_boy_none" && styleId !== "none") {
-        var hair = makeAvatarHair(colors.hair || "#4a3728", headMesh ? headMesh.position.y : 1.12, 0.65, styleId);
+        var hair = makeAvatarHair(colors.hair || "#4a3728", headMesh ? headMesh.position.y : 1.02, 0.65, styleId);
         if (hair) avatarCharacterGroup.add(hair);
     }
     if (gender === "girl" || gender === "female") {
@@ -2500,7 +2503,7 @@ function applyGenderVisualsToCustomizer(gender, colors) {
             avatarCharacterGroup.remove(faceGroup);
         }
         faceGroup = buildAvatarFace(colors.head || "#ffcc00", gender);
-        faceGroup.position.y = headMesh ? headMesh.position.y : 1.12;
+        faceGroup.position.y = headMesh ? headMesh.position.y : 1.02;
         avatarCharacterGroup.add(faceGroup);
     } catch (e) {}
 }
@@ -2539,12 +2542,12 @@ function init3DAvatar() {
 
     // Blocky head
     headMesh = makeBox(0.65, 0.65, 0.65, 0xffcc00);
-    headMesh.position.y = 1.12;
+    headMesh.position.y = 1.02;
     characterGroup.add(headMesh);
 
     // Simple face on front
     faceGroup = buildAvatarFace(0xffcc00, (typeof getAvatarGender === "function" ? getAvatarGender() : "boy"));
-    faceGroup.position.y = 1.12;
+    faceGroup.position.y = 1.02;
     characterGroup.add(faceGroup);
 
     // Blocky torso
@@ -3292,7 +3295,7 @@ function applyAvatarScales(scales) {
     try {
         headMesh.scale.set(h, h, h);
         // Keep head roughly stacked on torso
-        headMesh.position.y = 0.3 + 0.5 * t + 0.32 * h + 0.18;
+        headMesh.position.y = 0.3 + 0.5 * t + 0.325 * h;
 
         if (faceGroup) {
             faceGroup.scale.set(h, h, h);
@@ -3990,7 +3993,7 @@ function ensureAIAvatarPreview() {
     }
     var group = new THREE.Group();
     var head = boxMesh(0.65, 0.65, 0.65, 0xffcc00);
-    head.position.y = 1.12;
+    head.position.y = 1.02;
     var torso = boxMesh(0.85, 1.0, 0.45, 0x1e60ff);
     torso.position.y = 0.3;
     var la = boxMesh(0.35, 1.0, 0.35, 0xffcc00);
@@ -13885,6 +13888,7 @@ function ownerBanUser(username, opts) {
         reason: opts.reason || "Banned by Azora staff.",
         reasonCode: opts.reasonCode || "",
         reasonLabel: opts.reasonLabel || opts.reason || "Banned by Azora staff.",
+        reviewMode: opts.reviewMode === "owner" ? "owner" : "auto",
         automated: !!opts.automated
     };
     // clear termination if any when issuing temp ban
@@ -13936,6 +13940,7 @@ function ownerTerminateUser(username, opts) {
         reason: opts.reason || "Account terminated by Azora staff.",
         reasonCode: opts.reasonCode || "",
         reasonLabel: opts.reasonLabel || opts.reason || "Account terminated by Azora staff.",
+        reviewMode: opts.reviewMode === "owner" ? "owner" : "auto",
         automated: !!opts.automated
     };
     if (r.bans[username]) r.bans[username].active = false;
@@ -13973,15 +13978,24 @@ function ownerClearModeration(username) {
 }
 
 function ownerOverrideRestoreAccess() {
-    if (!isAzoraOwner()) {
-        alert("Owner override is only for the Azora account.");
+    // HARD lock: only official Azora owner session may use this
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Owner override denied.");
         return;
     }
     var me = null;
     try { me = JSON.parse(localStorage.getItem("azoraAccount") || "null"); } catch (e) {}
-    if (!me || !isOwnerUsername(me.username)) {
-        alert("Owner override is only for the Azora account.");
+    if (!me || me.isGuest || !isOwnerUsername(me.username) || !isAzoraOwner()) {
+        alert("Owner override denied. Only the official Azora account can use this.");
         return;
+    }
+    // Must also match exact owner id when present
+    if (me.userId && String(me.userId).replace(/\s/g, "") !== "Aza:0" && String(me.userId) !== "Aza: 0") {
+        // still allow if username is Azora (legacy)
+        if (!isOwnerUsername(me.username)) {
+            alert("Owner override denied.");
+            return;
+        }
     }
     ownerClearModeration(me.username);
     var ov = document.getElementById("moderationLockOverlay");
@@ -14054,7 +14068,12 @@ function showModerationLockScreen(mod, username) {
     }
 
     if (own) {
-        own.style.display = isOwnerUsername(username) ? "block" : "none";
+        // Only the real Azora owner session sees override — never other players
+        var showOverride = false;
+        try {
+            showOverride = isOwnerUsername(username) && isAzoraOwner() && localStorage.getItem("loggedIn") === "true";
+        } catch (eO) { showOverride = false; }
+        own.style.display = showOverride ? "block" : "none";
     }
 }
 
@@ -14361,12 +14380,20 @@ function applyOwnerModeration() {
             return;
         }
         var fromMs = Date.now();
+        var reviewMode = "auto";
+        try {
+            var radios = document.querySelectorAll('input[name="omReview"]');
+            for (var ri = 0; ri < radios.length; ri++) {
+                if (radios[ri].checked) reviewMode = radios[ri].value;
+            }
+        } catch (eR) {}
         if (ownerBanUser(user, {
             fromMs: fromMs,
             untilMs: fromMs + durationMs,
             reason: fullReason,
             reasonCode: reasonCode,
-            reasonLabel: reasonLabel
+            reasonLabel: reasonLabel,
+            reviewMode: reviewMode
         })) {
             closeOwnerModConsole();
             if (typeof getMyUsername === "function" && getMyUsername() === user) {
@@ -14374,10 +14401,18 @@ function applyOwnerModeration() {
             }
         }
     } else {
+        var reviewModeT = "auto";
+        try {
+            var radiosT = document.querySelectorAll('input[name="omReview"]');
+            for (var rti = 0; rti < radiosT.length; rti++) {
+                if (radiosT[rti].checked) reviewModeT = radiosT[rti].value;
+            }
+        } catch (eRT) {}
         if (ownerTerminateUser(user, {
             reason: fullReason,
             reasonCode: reasonCode,
-            reasonLabel: reasonLabel
+            reasonLabel: reasonLabel,
+            reviewMode: reviewModeT
         })) {
             closeOwnerModConsole();
             if (typeof getMyUsername === "function" && getMyUsername() === user) {
@@ -14420,3 +14455,129 @@ window.closeOwnerModConsole = closeOwnerModConsole;
 window.applyOwnerModeration = applyOwnerModeration;
 window.clearOwnerModerationFromConsole = clearOwnerModerationFromConsole;
 window.refreshOwnerModButton = refreshOwnerModButton;
+
+
+// ----- Automated appeal resolution (~10 minutes) -----
+function processDueAppeals() {
+    var records = getModerationRecords();
+    if (!records.appeals || !records.appeals.length) return;
+    var changed = false;
+    var now = Date.now();
+    records.appeals.forEach(function (a) {
+        if (!a || a.status === "accepted" || a.status === "rejected") return;
+        if (a.reviewMode === "owner" || a.status === "pending_owner") return; // owner must decide
+        if (a.status !== "pending_auto" && a.status !== "pending") return;
+        var due = a.resolveAfter || ((a.at || 0) + 10 * 60 * 1000);
+        if (now < due) return;
+
+        // Simple automated decision (family-safe heuristic)
+        var text = String(a.text || "").toLowerCase();
+        var accept = false;
+        if (a.punishmentReason === "mistake" || a.punishmentReason === "unsure") accept = true;
+        if (/\b(mistake|wrong account|accident|sorry|did not mean)\b/.test(text)) accept = true;
+        if (a.punishmentReason === "hacking" || a.punishmentReason === "explicit_upload") accept = false;
+        if (/\b(hack|exploit|cheat)\b/.test(text) && !/\b(did not|didn't|never)\b/.test(text)) accept = false;
+
+        a.status = accept ? "accepted" : "rejected";
+        a.resolvedAt = now;
+        a.resolvedBy = "system";
+        changed = true;
+
+        if (accept) {
+            // Clear restriction for that user
+            try {
+                var u = a.username;
+                if (records.bans && records.bans[u]) records.bans[u].active = false;
+                if (records.terminations && records.terminations[u]) records.terminations[u].active = false;
+                Object.keys(records.bans || {}).forEach(function (k) {
+                    if (k.toLowerCase() === String(u).toLowerCase()) records.bans[k].active = false;
+                });
+                Object.keys(records.terminations || {}).forEach(function (k) {
+                    if (k.toLowerCase() === String(u).toLowerCase()) records.terminations[k].active = false;
+                });
+            } catch (eC) {}
+        }
+    });
+    if (changed) saveModerationRecords(records);
+}
+
+function getPendingAppealResultForCurrentUser() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (!acc || !acc.username || acc.isGuest) return null;
+        var records = getModerationRecords();
+        var shown = {};
+        try { shown = JSON.parse(localStorage.getItem("azoraAppealResultsShown") || "{}"); } catch (e) {}
+        var list = records.appeals || [];
+        for (var i = 0; i < list.length; i++) {
+            var a = list[i];
+            if (!a || String(a.username).toLowerCase() !== String(acc.username).toLowerCase()) continue;
+            if (a.status !== "accepted" && a.status !== "rejected") continue;
+            if (shown[a.id]) continue;
+            return a;
+        }
+    } catch (e) {}
+    return null;
+}
+
+function showAppealResultPopup(appeal) {
+    if (!appeal) return;
+    var ov = document.getElementById("appealResultOverlay");
+    var panel = document.getElementById("appealResultPanel");
+    var title = document.getElementById("appealResultTitle");
+    var msg = document.getElementById("appealResultMessage");
+    if (!ov || !panel) return;
+    var ok = appeal.status === "accepted";
+    panel.className = "appeal-result-panel " + (ok ? "accepted" : "rejected");
+    if (title) title.textContent = ok ? "Appeal accepted" : "Appeal rejected";
+    if (msg) {
+        msg.textContent = ok
+            ? "Your appeal was accepted by system. Your account access has been restored."
+            : "Your appeal was rejected by system. The original moderation action remains in effect.";
+    }
+    ov.style.display = "flex";
+    window._pendingAppealResultId = appeal.id;
+}
+
+function closeAppealResultPopup() {
+    var ov = document.getElementById("appealResultOverlay");
+    if (ov) ov.style.display = "none";
+    try {
+        var shown = JSON.parse(localStorage.getItem("azoraAppealResultsShown") || "{}");
+        if (window._pendingAppealResultId) shown[window._pendingAppealResultId] = Date.now();
+        localStorage.setItem("azoraAppealResultsShown", JSON.stringify(shown));
+    } catch (e) {}
+    // If accepted, reload so lock screen clears
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc && acc.username) {
+            var mod = getActiveModerationForUser(acc.username);
+            if (!mod || !mod.active) location.reload();
+        }
+    } catch (e2) {}
+}
+
+function checkAppealResultsOnBoot() {
+    try {
+        processDueAppeals();
+        var result = getPendingAppealResultForCurrentUser();
+        if (result) {
+            setTimeout(function () { showAppealResultPopup(result); }, 600);
+        }
+    } catch (e) {}
+}
+
+window.processDueAppeals = processDueAppeals;
+window.showAppealResultPopup = showAppealResultPopup;
+window.closeAppealResultPopup = closeAppealResultPopup;
+window.checkAppealResultsOnBoot = checkAppealResultsOnBoot;
+
+try {
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function () {
+            setTimeout(checkAppealResultsOnBoot, 500);
+        });
+    } else {
+        setTimeout(checkAppealResultsOnBoot, 500);
+    }
+} catch (eBootA) {}
