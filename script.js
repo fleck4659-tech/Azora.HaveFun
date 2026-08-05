@@ -1435,21 +1435,29 @@ function migrateLegacyAccount() {
 
 function setLoggedInAccount(account) {
     // Persist full account + session flag so topbar switches after reload
-    if (account && (account.isOwner || (typeof isOwnerUsername === "function" && isOwnerUsername(account.username)))) {
+    if (!account) return;
+    if (account.isOwner || (typeof isOwnerUsername === "function" && isOwnerUsername(account.username))) {
         account.isOwner = true;
         if (typeof account.coins !== "number" || isNaN(account.coins) || account.coins < AZORA_OWNER_STARTING_COINS) {
             account.coins = AZORA_OWNER_STARTING_COINS;
         }
+    } else {
+        // Normal / alt accounts: never inherit owner wealth
+        if (typeof account.coins !== "number" || isNaN(account.coins)) account.coins = 0;
+        if (!account.inventory || typeof account.inventory !== "object") {
+            account.inventory = { items: [], equipped: { hair: null, face: null, shirt: null } };
+        }
     }
-    if (account && typeof account.coins === "number") {
-        try { localStorage.setItem("azoraCoins", String(account.coins)); } catch (eC) {}
-    }
+    try { localStorage.setItem("azoraCoins", String(account.coins || 0)); } catch (eC) {}
     // Save session FIRST so isAzoraOwner() works for grants below
     localStorage.setItem("azoraAccount", JSON.stringify(account));
     localStorage.setItem("loggedIn", "true");
-    // Owner owns every official catalog item (must run after session is saved)
     try {
-        if (account && (account.isOwner || (typeof isOwnerUsername === "function" && isOwnerUsername(account.username)))) {
+        if (typeof persistActiveAccount === "function") persistActiveAccount(account);
+    } catch (eP) {}
+    // ONLY the official Azora owner gets the full catalog — never alts
+    try {
+        if (account.isOwner || (typeof isOwnerUsername === "function" && isOwnerUsername(account.username))) {
             if (typeof grantAllOfficialItemsToOwner === "function") grantAllOfficialItemsToOwner();
         }
     } catch (eOwn) {}
@@ -1483,6 +1491,8 @@ function finishCreateAccount(username, password, userId, email) {
         isGuest: false,
         gender: gender,
         avatar: avatar,
+        coins: 0,
+        inventory: { items: [], equipped: { hair: null, face: null, shirt: null } },
         createdAt: Date.now()
     };
     map[username] = account;
@@ -2370,7 +2380,7 @@ function buildAvatarFace(headColor, gender) {
 function makeAvatarHair(hairColor, headY, headSize, styleId) {
     if (typeof THREE === "undefined") return null;
     hairColor = hairColor || "#4a3728";
-    headY = (typeof headY === "number") ? headY : 1.02;
+    headY = (typeof headY === "number") ? headY : 1.12;
     headSize = headSize || 0.65;
     styleId = styleId || "hair_girl_default";
 
@@ -2488,7 +2498,7 @@ function applyGenderVisualsToCustomizer(gender, colors) {
         else styleId = "hair_boy_none";
     }
     if (styleId && styleId !== "hair_boy_none" && styleId !== "none") {
-        var hair = makeAvatarHair(colors.hair || "#4a3728", headMesh ? headMesh.position.y : 1.02, 0.65, styleId);
+        var hair = makeAvatarHair(colors.hair || "#4a3728", headMesh ? headMesh.position.y : 1.12, 0.65, styleId);
         if (hair) avatarCharacterGroup.add(hair);
     }
     if (gender === "girl" || gender === "female") {
@@ -2505,7 +2515,7 @@ function applyGenderVisualsToCustomizer(gender, colors) {
             avatarCharacterGroup.remove(faceGroup);
         }
         faceGroup = buildAvatarFace(colors.head || "#ffcc00", gender);
-        faceGroup.position.y = headMesh ? headMesh.position.y : 1.02;
+        faceGroup.position.y = headMesh ? headMesh.position.y : 1.12;
         avatarCharacterGroup.add(faceGroup);
     } catch (e) {}
 }
@@ -2544,12 +2554,12 @@ function init3DAvatar() {
 
     // Blocky head
     headMesh = makeBox(0.65, 0.65, 0.65, 0xffcc00);
-    headMesh.position.y = 1.02;
+    headMesh.position.y = 1.12;
     characterGroup.add(headMesh);
 
     // Simple face on front
     faceGroup = buildAvatarFace(0xffcc00, (typeof getAvatarGender === "function" ? getAvatarGender() : "boy"));
-    faceGroup.position.y = 1.02;
+    faceGroup.position.y = 1.12;
     characterGroup.add(faceGroup);
 
     // Blocky torso
@@ -3995,7 +4005,7 @@ function ensureAIAvatarPreview() {
     }
     var group = new THREE.Group();
     var head = boxMesh(0.65, 0.65, 0.65, 0xffcc00);
-    head.position.y = 1.02;
+    head.position.y = 1.12;
     var torso = boxMesh(0.85, 1.0, 0.45, 0x1e60ff);
     torso.position.y = 0.3;
     var la = boxMesh(0.35, 1.0, 0.35, 0xffcc00);
@@ -4055,7 +4065,7 @@ function paintAIPreviewState(state) {
         var l = clampAvatarScale(s.legs, 0.6, 1.6);
 
         m.head.scale.set(h, h, h);
-        m.head.position.y = 0.3 + 0.5 * t + 0.32 * h + 0.18;
+        m.head.position.y = 0.3 + 0.5 * t + 0.325 * h;
         m.torso.scale.set(t, t, t * 0.98);
         m.torso.position.y = 0.3;
         var armX = 0.42 * t + 0.22 * a;
@@ -12354,12 +12364,12 @@ function creditOfficialCatalogSale(price, buyerName, itemName) {
 function getCoins() {
     try {
         var acc = getActiveAccount();
-        if (acc && typeof acc.coins === "number" && !isNaN(acc.coins)) {
-            return Math.max(0, Math.round(acc.coins * 1000) / 1000);
+        if (acc && !acc.isGuest) {
+            var c = (typeof acc.coins === "number" && !isNaN(acc.coins)) ? acc.coins : 0;
+            return Math.max(0, Math.round(c * 1000) / 1000);
         }
-        var n = parseFloat(localStorage.getItem("azoraCoins") || "0");
-        if (isNaN(n)) n = 0;
-        return Math.max(0, Math.round(n * 1000) / 1000);
+        // Guests / logged out only — do not leak other accounts' balances
+        return 0;
     } catch (e) { return 0; }
 }
 
@@ -12655,12 +12665,38 @@ window.claimDailyGift = claimDailyGift;
 window.surpriseNormGame = surpriseNormGame;
 window.refreshFunTopbar = refreshFunTopbar;
 
+function inventoryStorageKey(username) {
+    var u = String(username || "").trim().toLowerCase();
+    if (!u) return "azoraInventory__none";
+    return "azoraInventory::" + u;
+}
+
+function emptyInventory() {
+    return { items: [], equipped: { hair: null, face: null, shirt: null } };
+}
+
 function getInventory() {
     try {
-        var raw = JSON.parse(localStorage.getItem("azoraInventory") || "null");
-        if (!raw || typeof raw !== "object") {
-            raw = { items: [], equipped: { hair: null, face: null, shirt: null } };
+        var acc = typeof getActiveAccount === "function" ? getActiveAccount() : null;
+        var username = acc && acc.username ? acc.username : "";
+        // Prefer inventory stored on the account object
+        if (acc && acc.inventory && typeof acc.inventory === "object") {
+            var rawA = acc.inventory;
+            if (!Array.isArray(rawA.items)) rawA.items = [];
+            if (!rawA.equipped || typeof rawA.equipped !== "object") rawA.equipped = { hair: null, face: null, shirt: null };
+            if (!("shirt" in rawA.equipped)) rawA.equipped.shirt = null;
+            return rawA;
         }
+        var key = inventoryStorageKey(username);
+        var raw = JSON.parse(localStorage.getItem(key) || "null");
+        // Migration: only for owner, allow one-time read of legacy global inventory
+        if ((!raw || typeof raw !== "object") && username && typeof isOwnerUsername === "function" && isOwnerUsername(username)) {
+            try {
+                var legacy = JSON.parse(localStorage.getItem("azoraInventory") || "null");
+                if (legacy && typeof legacy === "object") raw = legacy;
+            } catch (eL) {}
+        }
+        if (!raw || typeof raw !== "object") raw = emptyInventory();
         if (!Array.isArray(raw.items)) raw.items = [];
         if (!raw.equipped || typeof raw.equipped !== "object") raw.equipped = { hair: null, face: null, shirt: null };
         if (!("shirt" in raw.equipped)) raw.equipped.shirt = null;
@@ -12668,13 +12704,25 @@ function getInventory() {
         if (typeof raw.equipped.hair === "undefined") raw.equipped.hair = null;
         return raw;
     } catch (e) {
-        return { items: [], equipped: { hair: null, face: null } };
+        return emptyInventory();
     }
 }
 
 function saveInventory(inv) {
     try {
-        localStorage.setItem("azoraInventory", JSON.stringify(inv));
+        if (!inv || typeof inv !== "object") inv = emptyInventory();
+        var acc = typeof getActiveAccount === "function" ? getActiveAccount() : null;
+        var username = acc && acc.username ? acc.username : "";
+        if (acc && !acc.isGuest) {
+            acc.inventory = inv;
+            if (typeof persistActiveAccount === "function") persistActiveAccount(acc);
+            else {
+                localStorage.setItem("azoraAccount", JSON.stringify(acc));
+            }
+        }
+        if (username) {
+            localStorage.setItem(inventoryStorageKey(username), JSON.stringify(inv));
+        }
     } catch (e) {}
 }
 
@@ -14722,6 +14770,15 @@ function refreshAltAccountsPanel() {
 function switchToAltAccount(username) {
     username = String(username || "").trim();
     if (!username) return;
+    // Save CURRENT account economy before leaving
+    try {
+        var cur = typeof getActiveAccount === "function" ? getActiveAccount() : null;
+        if (cur && cur.username && !cur.isGuest) {
+            cur.coins = typeof getCoins === "function" ? getCoins() : (cur.coins || 0);
+            cur.inventory = typeof getInventory === "function" ? getInventory() : (cur.inventory || { items: [], equipped: {} });
+            if (typeof persistActiveAccount === "function") persistActiveAccount(cur);
+        }
+    } catch (eFlush) {}
     var map = {};
     try { map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}"); } catch (e) {}
     var key = Object.keys(map).find(function (k) { return k.toLowerCase() === username.toLowerCase(); });
@@ -14729,6 +14786,11 @@ function switchToAltAccount(username) {
     if (!account) {
         alert("That alt is not saved on this device. Log in with it once first.");
         return;
+    }
+    // Ensure alt does not inherit missing fields from owner
+    if (!(account.isOwner || (typeof isOwnerUsername === "function" && isOwnerUsername(account.username)))) {
+        if (typeof account.coins !== "number" || isNaN(account.coins)) account.coins = 0;
+        if (!account.inventory) account.inventory = { items: [], equipped: { hair: null, face: null, shirt: null } };
     }
     // Check ban/terminate
     try {

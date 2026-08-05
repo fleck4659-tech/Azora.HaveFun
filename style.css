@@ -4161,3 +4161,81 @@ footer {
 .alt-account-row button { margin:0; flex-shrink:0; padding:8px 10px; font-size:0.8rem; }
 .settings-tabs { display:flex; flex-wrap:wrap; gap:6px; }
 .settings-tab { flex:1 1 auto; min-width:90px; }
+
+.chat-btn-wrap { position: relative; }
+.chat-badge, .chat-inline-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #ef4444 !important;
+    color: #fff !important;
+    font-size: 11px;
+    font-weight: bold;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+    line-height: 1;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.35);
+}
+.chat-inline-badge { position: relative; top: 0; right: 0; display: inline-flex; margin-left: 6px; vertical-align: middle; }
+.chat-side-label {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+    padding: 8px 8px 4px;
+}
+.friend-requests-chat-section { border-bottom: 1px solid rgba(255,255,255,0.12); padding-bottom: 8px; margin-bottom: 4px; }
+.friend-request-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    margin: 4px 6px;
+    border-radius: 10px;
+    background: rgba(239,68,68,0.12);
+    border: 1px solid rgba(239,68,68,0.35);
+}
+.friend-request-item .fr-name { font-weight: 700; font-size: 0.9rem; }
+.friend-request-item .fr-actions { display: flex; gap: 6px; }
+.friend-request-item .fr-actions button { flex: 1; margin: 0; padding: 6px 8px; font-size: 0.78rem; }
+.friend-item { position: relative; }
+.friend-item .unread-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+}
+.typing-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100050;
+    background: #0f172a;
+    color: #f8fafc;
+    border: 1px solid #3b82f6;
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    display: none;
+    max-width: min(360px, calc(100vw - 24px));
+    text-align: center;
+}
