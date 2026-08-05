@@ -1,3 +1,14 @@
+
+// Scrub legacy forced 99999 display when account balance differs
+(function scrubStaleCoinDisplay() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (!acc || acc.isGuest) return;
+        if (typeof acc.coins === "number" && !isNaN(acc.coins)) {
+            localStorage.setItem("azoraCoins", String(acc.coins));
+        }
+    } catch (e) {}
+})();
 console.log("%c[Azora] script.js v59.2 House + topbar","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
@@ -988,7 +999,7 @@ function applyServerFlags(flags) {
     }
     // Coins display sync if present
     try {
-        var coins = localStorage.getItem("azoraCoins");
+        var coins = (typeof getCoins === "function") ? String(getCoins()) : (localStorage.getItem("azoraCoins") || "0");
         var el = document.getElementById("bucks");
         if (el && coins !== null) el.textContent = coins;
     } catch (e) {}
@@ -1003,8 +1014,11 @@ function loadServerFlags() {
         } catch (e) {}
         // coins
         try {
-            var el = document.getElementById("bucks");
-            if (el) el.textContent = localStorage.getItem("azoraCoins") || "0";
+            if (typeof updateCoinsUI === "function") updateCoinsUI();
+            else {
+                var el = document.getElementById("bucks");
+                if (el && typeof getCoins === "function") el.textContent = String(getCoins());
+            }
         } catch (e) {}
     }
 
@@ -2114,10 +2128,6 @@ function loginAccount() {
         var owner = ensureOwnerAccount();
         owner.isOwner = true;
         setLoggedInAccount(owner);
-        try {
-            var coins = parseInt(localStorage.getItem("azoraCoins") || "0", 10) || 0;
-            if (coins < 99999) localStorage.setItem("azoraCoins", "99999");
-        } catch (e) {}
         clearAccountError();
         // Allow testing bans on owner — lock screen will show; owner override available
         try {
@@ -6678,6 +6688,7 @@ function openChatPanel() {
     } catch (e) {}
     renderFriendsList();
     renderAIChatHistoryList();
+    try { updateChatBadge(); } catch (eB0) {}
     // Default: open AI companion (available to accounts and guests)
     selectChatFriend(AZORA_AI_ID);
 }
@@ -6744,6 +6755,8 @@ function renderFriendsList() {
 
     updateAICompanionListItem();
     list.innerHTML = "";
+    try { renderChatFriendRequests(); } catch (eR) {}
+    try { updateChatBadge(); } catch (eB) {}
 
     if (isGuest) {
         if (noMsg) {
@@ -6768,10 +6781,12 @@ function renderFriendsList() {
         var item = document.createElement("div");
         item.className = "friend-item" + (currentChatFriend === friend ? " active" : "");
         var last = getFriendLastTalked(friend);
+        var unread = getUnreadCountForFriend(friend);
         item.innerHTML =
             '<div class="friend-avatar">' + String(friend)[0].toUpperCase() + '</div>' +
             '<div class="friend-meta"><span>' + escapeHtml(friend) + '</span><small>' +
-            escapeHtml(formatLastTalked(last)) + '</small></div>';
+            escapeHtml(formatLastTalked(last)) + '</small></div>' +
+            (unread > 0 ? '<span class="unread-badge">' + (unread > 99 ? "99+" : unread) + '</span>' : '');
         item.onclick = function () { selectChatFriend(friend); };
         list.appendChild(item);
     });
@@ -6812,8 +6827,12 @@ function selectChatFriend(friend) {
         try { startCloudChatPolling(); } catch (e) {}
     }
     document.getElementById("chatInputRow").style.display = "flex";
+    try {
+        if (friend && friend !== AZORA_AI_ID) markChatRead(friend);
+    } catch (eRead) {}
     renderFriendsList();
     renderChatMessages();
+    try { updateChatBadge(); } catch (eB2) {}
 }
 
 function getChatKey(a, b) {
@@ -7527,8 +7546,11 @@ function sendChatMessage() {
     localStorage.setItem(key, JSON.stringify(messages));
     try { archivePlayerMessage("with:" + currentChatFriend, entry); } catch (e) {}
     try { pushChatMessageToCloud(key, entry); } catch (e) {}
+    try { notifyPeerUnread(currentChatFriend, me); } catch (eU) {}
     renderChatMessages();
+    try { updateChatBadge(); } catch (eB3) {}
 
+    // Local typing dots for sender UX only; peer gets typing notification separately
     showChatTyping();
     if (chatTypingTimer) clearTimeout(chatTypingTimer);
     chatTypingTimer = setTimeout(function () {
@@ -7929,8 +7951,7 @@ document.addEventListener("input", function (e) {
             if (typeof isAzoraOwner === "function" && isAzoraOwner()) {
                 var pb = document.getElementById("profileButton");
                 if (pb) pb.textContent = "Owner · Azora";
-                var el = document.getElementById("bucks");
-                if (el) el.textContent = localStorage.getItem("azoraCoins") || "99999";
+                try { if (typeof updateCoinsUI === "function") updateCoinsUI(); } catch (eUI) {}
             }
         } catch (e) {}
     }
@@ -12514,21 +12535,91 @@ function isDailyGiftClaimedToday() {
 /** Called on login / app load — does NOT auto-grant coins anymore; UI button claims. */
 function checkDailyLoginReward() {
     try {
-        // Membership yield can still auto-check
         if (typeof claimMembershipMonthlyYield === "function") {
             try { claimMembershipMonthlyYield(); } catch (e2) {}
         }
-        // Global 5-month platform airdrops
         if (typeof checkPlatformAirdrop === "function") {
             try { checkPlatformAirdrop(); } catch (e3) {}
         }
-        refreshFunTopbar();
+        try { refreshFunTopbar(); } catch (e4) {}
+        // Show claim popup once per local calendar day (resets 12:00 AM local)
+        try {
+            var logged = localStorage.getItem("loggedIn");
+            if (logged === "true" || logged === "guest") {
+                if (!hasClaimedDailyToday()) {
+                    setTimeout(function () { openDailyClaimPopup(); }, 900);
+                }
+            }
+        } catch (e5) {}
     } catch (e) {
         console.warn("[Azora] daily check", e);
     }
 }
 
-function claimDailyGift() {
+function getDailyRewardAmount(streak) {
+    // Base 0.05 for everyone; small streak bonus
+    var reward = 0.05;
+    streak = Number(streak) || 1;
+    if (streak >= 7) reward = 0.12;
+    else if (streak >= 3) reward = 0.08;
+    return Math.round(reward * 1000) / 1000;
+}
+
+function openDailyClaimPopup() {
+    var ov = document.getElementById("dailyClaimOverlay");
+    if (!ov) return;
+    if (hasClaimedDailyToday()) return;
+    var streak = getLoginStreak();
+    var last = localStorage.getItem("azoraLastDailyClaim") || "";
+    var yesterday = getYesterdayKey();
+    var previewStreak = (last === yesterday) ? (streak + 1) : 1;
+    var reward = getDailyRewardAmount(previewStreak);
+    var title = document.getElementById("dailyClaimTitle");
+    if (title) title.textContent = "You have just gotten " + reward.toFixed(2) + " AzoraCoins!";
+    var btn = document.getElementById("dailyClaimBtn");
+    var success = document.getElementById("dailyClaimSuccess");
+    if (btn) { btn.style.display = "block"; btn.disabled = false; }
+    if (success) success.style.display = "none";
+    ov.style.display = "flex";
+    ov.setAttribute("aria-hidden", "false");
+}
+
+function closeDailyClaimPopup() {
+    var ov = document.getElementById("dailyClaimOverlay");
+    if (ov) {
+        ov.style.display = "none";
+        ov.setAttribute("aria-hidden", "true");
+    }
+}
+
+function runDailyCoinAnimation(done) {
+    var fx = document.getElementById("dailyClaimCoinsFx");
+    if (!fx) { if (done) done(); return; }
+    fx.innerHTML = "";
+    var count = 10;
+    for (var i = 0; i < count; i++) {
+        (function (idx) {
+            setTimeout(function () {
+                var coin = document.createElement("div");
+                coin.className = "daily-fly-coin";
+                // Fly toward top-right (balance area) — slow then faster feel via duration
+                var dx = 40 + Math.random() * 90;
+                var dy = -80 - Math.random() * 70;
+                var dur = (1.35 - idx * 0.07) + "s"; // later coins finish quicker
+                coin.style.setProperty("--dx", dx + "px");
+                coin.style.setProperty("--dy", dy + "px");
+                coin.style.setProperty("--dur", dur);
+                fx.appendChild(coin);
+                // force reflow
+                void coin.offsetWidth;
+                coin.classList.add("go");
+            }, idx * 90);
+        })(i);
+    }
+    setTimeout(function () { if (done) done(); }, count * 90 + 1400);
+}
+
+function claimDailyGiftAnimated() {
     try {
         var logged = localStorage.getItem("loggedIn");
         if (!logged || logged === "") {
@@ -12539,29 +12630,57 @@ function claimDailyGift() {
         var last = localStorage.getItem("azoraLastDailyClaim") || "";
         if (last === today) {
             showAzoraToast("You already claimed today's gift. Come back tomorrow!");
+            closeDailyClaimPopup();
             refreshFunTopbar();
             return;
         }
+        var btn = document.getElementById("dailyClaimBtn");
+        if (btn) btn.disabled = true;
+
         var yesterday = getYesterdayKey();
         var streak = getLoginStreak();
         if (last === yesterday) streak += 1;
         else streak = 1;
-        localStorage.setItem("azoraLoginStreak", String(streak));
-        localStorage.setItem("azoraLastDailyClaim", today);
+        var reward = getDailyRewardAmount(streak);
 
-        // Small reward that scales a little with streak (still low economy)
-        var reward = 0.05;
-        if (streak >= 7) reward = 0.12;
-        else if (streak >= 3) reward = 0.08;
-        if (typeof addCoins === "function") addCoins(reward);
-        showAzoraToast("+" + reward.toFixed(2) + " AzoraCoins! 🔥 " + streak + "-day streak");
-        if (typeof playClickSound === "function") try { playClickSound(); } catch (e3) {}
-        else if (typeof playUiClick === "function") try { playUiClick(); } catch (e4) {}
-        refreshFunTopbar();
+        // Grant after a short delay into the animation (slow start → speeds up visually)
+        runDailyCoinAnimation(function () {
+            localStorage.setItem("azoraLoginStreak", String(streak));
+            localStorage.setItem("azoraLastDailyClaim", today);
+            if (typeof addCoins === "function") addCoins(reward);
+            try { if (typeof updateCoinsUI === "function") updateCoinsUI(); } catch (eU) {}
+            try { refreshFunTopbar(); } catch (eR) {}
+            if (btn) btn.style.display = "none";
+            var success = document.getElementById("dailyClaimSuccess");
+            if (success) success.style.display = "block";
+            try {
+                if (typeof playClickSound === "function") playClickSound();
+                else if (typeof playUiClick === "function") playUiClick();
+            } catch (eS) {}
+        });
+    } catch (e) {
+        console.warn("[Azora] claim daily animated", e);
+    }
+}
+
+function claimDailyGift() {
+    // Topbar chip still works — opens the same claim flow
+    try {
+        if (hasClaimedDailyToday()) {
+            showAzoraToast("You already claimed today's gift. Come back tomorrow!");
+            refreshFunTopbar();
+            return;
+        }
+        openDailyClaimPopup();
     } catch (e) {
         console.warn("[Azora] claim daily", e);
     }
 }
+
+window.openDailyClaimPopup = openDailyClaimPopup;
+window.closeDailyClaimPopup = closeDailyClaimPopup;
+window.claimDailyGiftAnimated = claimDailyGiftAnimated;
+window.getDailyRewardAmount = getDailyRewardAmount;
 
 var AZORA_FUN_TIPS = [
     "Explore Norm Games and meet new friends!",
@@ -14903,3 +15022,260 @@ window.switchToAltAccount = switchToAltAccount;
 window.createAltAccountFromSettings = createAltAccountFromSettings;
 window.logoutAllAltAccounts = logoutAllAltAccounts;
 window.ensureCurrentAccountInAltSlots = ensureCurrentAccountInAltSlots;
+
+
+// ============================================================
+// Chat badges: friend requests + unread messages + typing pings
+// ============================================================
+
+function getIncomingFriendRequestsForMe() {
+    var me = typeof getMyUsername === "function" ? getMyUsername() : "";
+    if (!me) return [];
+    var data = typeof getSocialData === "function" ? getSocialData() : {};
+    var incoming = [];
+    Object.keys(data || {}).forEach(function (user) {
+        if (!user || user === me) return;
+        var blob = data[user] || {};
+        var outs = blob.friendRequests || [];
+        if (outs.indexOf(me) !== -1) {
+            // they sent a request to me, and we are not already friends
+            var mine = data[me] || {};
+            if ((mine.friends || []).indexOf(user) === -1) incoming.push(user);
+        }
+    });
+    return incoming;
+}
+
+function renderChatFriendRequests() {
+    var section = document.getElementById("friendRequestsChatSection");
+    var list = document.getElementById("friendRequestsChatList");
+    var badge = document.getElementById("chatRequestBadge");
+    if (!list) return;
+    var incoming = getIncomingFriendRequestsForMe();
+    list.innerHTML = "";
+    if (!incoming.length) {
+        if (section) section.style.display = "none";
+        if (badge) badge.style.display = "none";
+        return;
+    }
+    if (section) section.style.display = "block";
+    if (badge) {
+        badge.style.display = "inline-flex";
+        badge.textContent = String(incoming.length);
+    }
+    incoming.forEach(function (user) {
+        var row = document.createElement("div");
+        row.className = "friend-request-item";
+        row.innerHTML =
+            '<div class="fr-name">' + escapeHtml(user) + ' wants to be friends</div>' +
+            '<div class="fr-actions">' +
+            '<button type="button" data-act="accept">Accept</button>' +
+            '<button type="button" data-act="decline" class="secondary">Decline</button>' +
+            "</div>";
+        row.querySelector('[data-act="accept"]').onclick = function (e) {
+            e.stopPropagation();
+            try { acceptFriend(user); } catch (err) {}
+            try { renderFriendsList(); updateChatBadge(); } catch (err2) {}
+        };
+        row.querySelector('[data-act="decline"]').onclick = function (e) {
+            e.stopPropagation();
+            try { declineFriendRequest(user); } catch (err) {}
+            try { renderFriendsList(); updateChatBadge(); } catch (err2) {}
+        };
+        list.appendChild(row);
+    });
+}
+
+function declineFriendRequest(fromUser) {
+    var me = getMyUsername();
+    if (!me || !fromUser) return;
+    var data = getSocialData();
+    var their = ensureUserSocial(data, fromUser);
+    their.friendRequests = (their.friendRequests || []).filter(function (u) { return u !== me; });
+    saveSocialData(data);
+    try {
+        if (typeof pushUserSocialToCloud === "function") pushUserSocialToCloud(fromUser, their);
+    } catch (e) {}
+}
+
+function getChatReadMap() {
+    try {
+        var m = JSON.parse(localStorage.getItem("azoraChatRead") || "{}");
+        return m && typeof m === "object" ? m : {};
+    } catch (e) { return {}; }
+}
+function saveChatReadMap(m) {
+    try { localStorage.setItem("azoraChatRead", JSON.stringify(m || {})); } catch (e) {}
+}
+
+function markChatRead(friend) {
+    var me = getMyUsername();
+    if (!me || !friend) return;
+    var key = getChatKey(me, friend);
+    var messages = [];
+    try { messages = JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) {}
+    var lastAt = 0;
+    messages.forEach(function (m) { if (m && m.at && m.at > lastAt) lastAt = m.at; });
+    var map = getChatReadMap();
+    map[key] = Math.max(lastAt, Date.now());
+    saveChatReadMap(map);
+    // clear peer unread directed at me
+    try {
+        var peer = JSON.parse(localStorage.getItem("azoraChatPeerUnread") || "{}");
+        var pk = me + "::" + friend;
+        if (peer[pk]) { delete peer[pk]; localStorage.setItem("azoraChatPeerUnread", JSON.stringify(peer)); }
+    } catch (e2) {}
+}
+
+function getUnreadCountForFriend(friend) {
+    var me = getMyUsername();
+    if (!me || !friend) return 0;
+    var key = getChatKey(me, friend);
+    var messages = [];
+    try { messages = JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) {}
+    var map = getChatReadMap();
+    var lastRead = map[key] || 0;
+    var n = 0;
+    messages.forEach(function (m) {
+        if (!m || !m.at) return;
+        if (m.from === me) return;
+        if (m.at > lastRead) n++;
+    });
+    return n;
+}
+
+function getTotalUnreadMessages() {
+    var me = getMyUsername();
+    if (!me) return 0;
+    var data = getSocialData();
+    var myData = ensureUserSocial(data, me);
+    var total = 0;
+    (myData.friends || []).forEach(function (f) {
+        total += getUnreadCountForFriend(f);
+    });
+    return total;
+}
+
+function notifyPeerUnread(friend, fromUser) {
+    // Local cross-tab / same-device simulation of unread for the peer account
+    try {
+        var peer = JSON.parse(localStorage.getItem("azoraChatPeerUnread") || "{}");
+        var pk = String(friend) + "::" + String(fromUser);
+        peer[pk] = (peer[pk] || 0) + 1;
+        localStorage.setItem("azoraChatPeerUnread", JSON.stringify(peer));
+    } catch (e) {}
+}
+
+function updateChatBadge() {
+    var badge = document.getElementById("chatBadge");
+    if (!badge) return;
+    var requests = 0;
+    var unread = 0;
+    try { requests = getIncomingFriendRequestsForMe().length; } catch (e) {}
+    try { unread = getTotalUnreadMessages(); } catch (e2) {}
+    var total = requests + unread;
+    if (total > 0) {
+        badge.style.display = "flex";
+        badge.textContent = total > 99 ? "99+" : String(total);
+    } else {
+        badge.style.display = "none";
+        badge.textContent = "0";
+    }
+}
+
+// —— Typing notifications ("come check you out") ——
+function setTypingStatus(toUser, isTyping) {
+    var me = getMyUsername();
+    if (!me || !toUser || toUser === AZORA_AI_ID) return;
+    try {
+        var map = JSON.parse(localStorage.getItem("azoraTypingStatus") || "{}");
+        var key = String(toUser) + "::" + String(me);
+        if (isTyping) {
+            map[key] = { from: me, to: toUser, at: Date.now() };
+        } else {
+            delete map[key];
+        }
+        localStorage.setItem("azoraTypingStatus", JSON.stringify(map));
+    } catch (e) {}
+}
+
+function checkIncomingTypingNotifications() {
+    var me = getMyUsername();
+    if (!me) return;
+    var map = {};
+    try { map = JSON.parse(localStorage.getItem("azoraTypingStatus") || "{}"); } catch (e) {}
+    var now = Date.now();
+    var active = null;
+    Object.keys(map).forEach(function (k) {
+        var row = map[k];
+        if (!row || row.to !== me) return;
+        if (now - (row.at || 0) > 4000) return; // stale
+        // Don't spam if chat already open with them
+        var chatOpen = false;
+        try {
+            var ov = document.getElementById("chatOverlay");
+            chatOpen = ov && ov.style.display !== "none" && currentChatFriend === row.from;
+        } catch (e2) {}
+        if (!chatOpen) active = row;
+    });
+    if (active) showTypingToast(active.from);
+}
+
+function showTypingToast(fromUser) {
+    var el = document.getElementById("typingToast");
+    if (!el) {
+        el = document.createElement("div");
+        el.id = "typingToast";
+        el.className = "typing-toast";
+        document.body.appendChild(el);
+    }
+    el.textContent = fromUser + " is typing — come check you out!";
+    el.style.display = "block";
+    clearTimeout(window._typingToastTimer);
+    window._typingToastTimer = setTimeout(function () {
+        el.style.display = "none";
+    }, 2800);
+}
+
+function wireChatInputTyping() {
+    var input = document.getElementById("chatInput");
+    if (!input || input._azoraTypingWired) return;
+    input._azoraTypingWired = true;
+    var stopTimer = null;
+    input.addEventListener("input", function () {
+        if (!currentChatFriend || currentChatFriend === AZORA_AI_ID) return;
+        setTypingStatus(currentChatFriend, true);
+        clearTimeout(stopTimer);
+        stopTimer = setTimeout(function () {
+            setTypingStatus(currentChatFriend, false);
+        }, 1500);
+    });
+    input.addEventListener("blur", function () {
+        if (currentChatFriend) setTypingStatus(currentChatFriend, false);
+    });
+}
+
+// Poll badges + typing
+(function startChatBadgePolling() {
+    function tick() {
+        try { updateChatBadge(); } catch (e) {}
+        try { checkIncomingTypingNotifications(); } catch (e2) {}
+        try { wireChatInputTyping(); } catch (e3) {}
+    }
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function () {
+            tick();
+            setInterval(tick, 2500);
+        });
+    } else {
+        tick();
+        setInterval(tick, 2500);
+    }
+})();
+
+window.updateChatBadge = updateChatBadge;
+window.renderChatFriendRequests = renderChatFriendRequests;
+window.getIncomingFriendRequestsForMe = getIncomingFriendRequestsForMe;
+window.declineFriendRequest = declineFriendRequest;
+window.markChatRead = markChatRead;
+window.getUnreadCountForFriend = getUnreadCountForFriend;

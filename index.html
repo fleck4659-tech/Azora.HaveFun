@@ -930,6 +930,23 @@ if ("serviceWorker" in navigator) {
 }
 </script>
 
+
+<!-- Daily AzoraCoins claim -->
+<div id="dailyClaimOverlay" class="overlay daily-claim-overlay" style="display:none;" aria-hidden="true">
+    <div class="popup daily-claim-popup" role="dialog" aria-labelledby="dailyClaimTitle">
+        <div class="daily-claim-coins-fx" id="dailyClaimCoinsFx" aria-hidden="true"></div>
+        <div class="daily-claim-icon">🪙</div>
+        <h2 id="dailyClaimTitle">You have just gotten 0.05 AzoraCoins!</h2>
+        <p id="dailyClaimSub" class="daily-claim-sub">A small daily reward for logging in. Resets at 12:00 AM local time.</p>
+        <button type="button" id="dailyClaimBtn" class="daily-claim-btn" onclick="claimDailyGiftAnimated()">CLAIM</button>
+        <div id="dailyClaimSuccess" class="daily-claim-success" style="display:none;">
+            <p class="daily-claim-success-title">You&apos;re all set!</p>
+            <p class="daily-claim-success-msg">Go play some games, customize your avatar, make some games — your choice!</p>
+            <button type="button" class="daily-claim-done" onclick="closeDailyClaimPopup()">CONTINUE</button>
+        </div>
+    </div>
+</div>
+
 <!-- Marketplace -->
 <div id="marketplaceOverlay" class="overlay" style="display:none;">
     <div class="popup market-popup" style="max-width:min(420px,calc(100vw - 16px));text-align:left;">
