@@ -4430,3 +4430,34 @@ footer {
 @media (max-width: 420px) {
     .broadcast-duration-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+.mod-lock-note {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #111827;
+    border: 1px solid #475569;
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    text-align: left;
+}
+.notif-item.notif-report {
+    border-left: 3px solid #f87171;
+}
+.notif-report-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+.notif-report-actions button {
+    flex: 1;
+    font-size: 0.75rem;
+    padding: 6px 8px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #fff;
+    font-weight: 700;
+}
+.notif-btn-ban { background: linear-gradient(180deg, #fbbf24, #d97706); color: #111 !important; }
+.notif-btn-term { background: linear-gradient(180deg, #f87171, #b91c1c); }

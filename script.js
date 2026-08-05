@@ -414,56 +414,83 @@ function openReportUser(username) {
         alert("You cannot report yourself.");
         return;
     }
+    window._reportTargetUsername = String(username);
+    var ov = document.getElementById("reportUserOverlay");
+    var t = document.getElementById("reportUserTarget");
+    var sel = document.getElementById("reportReasonSelect");
+    var det = document.getElementById("reportDetails");
+    var err = document.getElementById("reportFormError");
+    if (t) t.textContent = "Reporting: " + username;
+    if (sel) sel.value = "";
+    if (det) det.value = "";
+    if (err) { err.style.display = "none"; err.textContent = ""; }
+    if (ov) ov.style.display = "flex";
+}
 
-    var reasons = [
-        "Harassment or bullying",
-        "Inappropriate language",
-        "Spam or scams",
-        "Impersonation",
-        "Other safety concern"
-    ];
-    var reasonText = "Report " + username + "?\n\nPick a reason number:\n";
-    reasons.forEach(function (r, idx) { reasonText += (idx + 1) + ") " + r + "\n"; });
-    reasonText += "\nType 1–5:";
-    var pick = prompt(reasonText, "1");
-    if (pick === null) return;
-    var n = parseInt(pick, 10);
-    if (!(n >= 1 && n <= reasons.length)) {
-        alert("Please enter a number from 1 to " + reasons.length + ".");
+function closeReportUser() {
+    var ov = document.getElementById("reportUserOverlay");
+    if (ov) ov.style.display = "none";
+    window._reportTargetUsername = null;
+}
+
+function submitReportUser() {
+    var username = window._reportTargetUsername;
+    if (!username) return;
+    var sel = document.getElementById("reportReasonSelect");
+    var det = document.getElementById("reportDetails");
+    var err = document.getElementById("reportFormError");
+    var reason = sel ? String(sel.value || "").trim() : "";
+    if (!reason) {
+        if (err) { err.style.display = "block"; err.textContent = "Please select a reason."; }
         return;
     }
-    var details = prompt("Optional: add a short note for moderators (keep it respectful).", "");
-    if (details === null) details = "";
-    details = String(details).slice(0, 240);
-
-    // Auto-mod on the report note itself
-    var mod = azoraAutoModerate(details || "ok");
-    if (details && !mod.ok) {
-        alert(mod.reason);
-        return;
+    var details = det ? String(det.value || "").trim().slice(0, 240) : "";
+    if (details && typeof azoraAutoModerate === "function") {
+        var mod = azoraAutoModerate(details);
+        if (!mod.ok) {
+            if (err) { err.style.display = "block"; err.textContent = mod.reason || "That note is not allowed."; }
+            return;
+        }
     }
-
+    var me = (typeof getMyUsername === "function") ? getMyUsername() : "Player";
     var entry = {
+        id: "rep_" + Date.now(),
         reported: username,
         by: me || "unknown",
-        reason: reasons[n - 1],
+        reason: reason,
         details: details,
         at: Date.now(),
         status: "pending"
     };
     saveReport(entry);
+
+    // Notify Azora (owner) in notifications
+    var msg = "Report: " + username + " — " + reason;
+    if (details) msg += " (" + details + ")";
+    msg += " · by " + (me || "someone");
+    try {
+        if (typeof pushNotification === "function") {
+            pushNotification("Azora", msg, "report", {
+                reported: username,
+                reason: reason,
+                details: details,
+                by: me,
+                reportId: entry.id
+            });
+        }
+    } catch (eN) {}
+
+    closeReportUser();
     if (typeof showAzoraToast === "function") {
-        showAzoraToast("Report submitted. Thank you for helping keep Azora safe.");
+        showAzoraToast("Report submitted. Azora has been notified.");
     } else {
-        alert("Report submitted. Thank you for helping keep Azora safe.");
+        alert("Report submitted. Azora has been notified.");
     }
 }
 
-window.getBlockedUsers = getBlockedUsers;
-window.isUserBlocked = isUserBlocked;
-window.blockUser = blockUser;
-window.unblockUser = unblockUser;
 window.openReportUser = openReportUser;
+window.closeReportUser = closeReportUser;
+window.submitReportUser = submitReportUser;
 window.azoraAutoModerate = azoraAutoModerate;
 
 
@@ -7957,13 +7984,14 @@ function saveNotifications(username, list) {
     localStorage.setItem("azoraNotifications", JSON.stringify(all));
 }
 
-function pushNotification(toUsername, message, type) {
+function pushNotification(toUsername, message, type, meta) {
     if (!toUsername) return;
     try { playAzoraSfx("notification"); } catch (e) {}
     var notif = {
         id: "n_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
         message: message,
         type: type || "info",
+        meta: meta || null,
         read: false,
         at: Date.now()
     };
@@ -8044,11 +8072,21 @@ function renderNotifList() {
         return;
     }
     listEl.innerHTML = "";
+    var isOwner = false;
+    try { isOwner = typeof isAzoraOwner === "function" && isAzoraOwner(); } catch (eO) {}
     list.forEach(function (n) {
         var div = document.createElement("div");
-        div.className = "notif-item" + (n.read ? "" : " unread");
+        div.className = "notif-item" + (n.read ? "" : " unread") + (n.type === "report" ? " notif-report" : "");
         var timeStr = new Date(n.at).toLocaleString();
-        div.innerHTML = escapeHtml(n.message) + '<span class="notif-time">' + timeStr + '</span>';
+        var html = escapeHtml(n.message) + '<span class="notif-time">' + timeStr + '</span>';
+        if (isOwner && n.type === "report" && n.meta && n.meta.reported) {
+            var reported = String(n.meta.reported).replace(/'/g, "");
+            html += '<div class="notif-report-actions">' +
+                '<button type="button" class="notif-btn-ban" onclick="event.stopPropagation();openOwnerModFromReport(\'' + reported + '\',\'ban\')">Ban user</button>' +
+                '<button type="button" class="notif-btn-term" onclick="event.stopPropagation();openOwnerModFromReport(\'' + reported + '\',\'termination\')">Terminate</button>' +
+                '</div>';
+        }
+        div.innerHTML = html;
         div.onclick = function () {
             n.read = true;
             saveNotifications(me, list);
@@ -8058,6 +8096,20 @@ function renderNotifList() {
         listEl.appendChild(div);
     });
 }
+
+function openOwnerModFromReport(username, mode) {
+    try { closeNotifPanel(); } catch (e) {}
+    if (typeof openOwnerModConsole === "function") {
+        openOwnerModConsole(username);
+    }
+    if (typeof setOwnerModMode === "function") {
+        setOwnerModMode(mode === "termination" ? "termination" : "ban");
+    }
+    var input = document.getElementById("omUsername");
+    if (input) input.value = username || "";
+}
+window.openOwnerModFromReport = openOwnerModFromReport;
+
 
 function markAllNotifsRead() {
     var me = getMyUsername();
@@ -12704,6 +12756,10 @@ function openDailyClaimPopup() {
     var ov = document.getElementById("dailyClaimOverlay");
     if (!ov) return;
     if (hasClaimedDailyToday()) return;
+    try {
+        var dk = (typeof getTodayKey === "function") ? getTodayKey() : "";
+        if (localStorage.getItem("azoraDailyClaimDismissed") === dk) return;
+    } catch (eD) {}
     var streak = getLoginStreak();
     var last = localStorage.getItem("azoraLastDailyClaim") || "";
     var yesterday = getYesterdayKey();
@@ -12725,6 +12781,11 @@ function closeDailyClaimPopup() {
         ov.style.display = "none";
         ov.setAttribute("aria-hidden", "true");
     }
+    // Prevent reopen loop until they claim or a new day
+    try {
+        var dk = (typeof getTodayKey === "function") ? getTodayKey() : String(Date.now());
+        localStorage.setItem("azoraDailyClaimDismissed", dk);
+    } catch (e) {}
 }
 
 function runDailyCoinAnimation(done) {
@@ -12782,6 +12843,7 @@ function claimDailyGiftAnimated() {
         runDailyCoinAnimation(function () {
             localStorage.setItem("azoraLoginStreak", String(streak));
             localStorage.setItem("azoraLastDailyClaim", today);
+            try { localStorage.removeItem("azoraDailyClaimDismissed"); } catch (eD2) {}
             if (typeof addCoins === "function") addCoins(reward);
             try { if (typeof updateCoinsUI === "function") updateCoinsUI(); } catch (eU) {}
             try { refreshFunTopbar(); } catch (eR) {}
@@ -14126,6 +14188,7 @@ function getActiveModerationForUser(username) {
             reason: term.reason || "Your account has been terminated.",
             reasonLabel: term.reasonLabel || term.reason || "Your account has been terminated.",
             reasonCode: term.reasonCode || "",
+            note: term.note || "",
             at: term.at,
             by: term.by || "Azora",
             until: null
@@ -14153,6 +14216,7 @@ function getActiveModerationForUser(username) {
             reason: ban.reason || "Your account is temporarily banned.",
             reasonLabel: ban.reasonLabel || ban.reason || "Your account is temporarily banned.",
             reasonCode: ban.reasonCode || "",
+            note: ban.note || "",
             at: ban.at,
             by: ban.by || "Azora",
             until: until,
@@ -14196,8 +14260,9 @@ function ownerBanUser(username, opts) {
         reason: opts.reason || "Banned by Azora staff.",
         reasonCode: opts.reasonCode || "",
         reasonLabel: opts.reasonLabel || opts.reason || "Banned by Azora staff.",
-        reviewMode: opts.reviewMode === "owner" ? "owner" : "auto",
-        automated: !!opts.automated
+        reviewMode: "owner",
+        automated: false,
+        note: opts.note || ""
     };
     // clear termination if any when issuing temp ban
     if (r.terminations[username]) {
@@ -14268,6 +14333,7 @@ function ownerTerminateUser(username, opts) {
         reasonLabel: opts.reasonLabel || opts.reason || "Account terminated by Azora staff.",
         reviewMode: "owner",
         automated: false,
+        note: opts.note || "",
         snapshot: snapshot
     };
     if (r.bans[username]) r.bans[username].active = false;
@@ -14385,12 +14451,31 @@ function showModerationLockScreen(mod, username) {
 
     if (reasonBox) {
         var label = mod.reasonLabel || mod.reason || "";
+        // Prefer clean reason without appended note
+        if (mod.note && label.indexOf(" — ") !== -1) {
+            label = label.split(" — ")[0];
+        }
         if (label) {
             reasonBox.style.display = "block";
             reasonBox.innerHTML = "<strong>Reason:</strong> " + String(label).replace(/</g, "&lt;");
         } else {
             reasonBox.style.display = "none";
             reasonBox.innerHTML = "";
+        }
+    }
+
+    var noteBox = document.getElementById("modLockNoteBox");
+    if (noteBox) {
+        var noteText = mod.note || "";
+        if (!noteText && mod.reason && String(mod.reason).indexOf(" — ") !== -1) {
+            noteText = String(mod.reason).split(" — ").slice(1).join(" — ");
+        }
+        if (noteText) {
+            noteBox.style.display = "block";
+            noteBox.innerHTML = "<strong>Note:</strong> " + String(noteText).replace(/</g, "&lt;");
+        } else {
+            noteBox.style.display = "none";
+            noteBox.innerHTML = "";
         }
     }
 
@@ -14654,6 +14739,7 @@ function openOwnerModConsole(prefillUsername) {
 }
 
 function closeOwnerModConsole() {
+    window._ownerModClosedAt = Date.now();
     var el = document.getElementById("ownerModConsole");
     if (el) el.style.display = "none";
 }
@@ -14708,20 +14794,14 @@ function applyOwnerModeration() {
             return;
         }
         var fromMs = Date.now();
-        var reviewMode = "auto";
-        try {
-            var radios = document.querySelectorAll('input[name="omReview"]');
-            for (var ri = 0; ri < radios.length; ri++) {
-                if (radios[ri].checked) reviewMode = radios[ri].value;
-            }
-        } catch (eR) {}
         if (ownerBanUser(user, {
             fromMs: fromMs,
             untilMs: fromMs + durationMs,
             reason: fullReason,
             reasonCode: reasonCode,
             reasonLabel: reasonLabel,
-            reviewMode: reviewMode
+            note: extra,
+            reviewMode: "owner"
         })) {
             closeOwnerModConsole();
             if (typeof getMyUsername === "function" && getMyUsername() === user) {
@@ -14729,18 +14809,12 @@ function applyOwnerModeration() {
             }
         }
     } else {
-        var reviewModeT = "auto";
-        try {
-            var radiosT = document.querySelectorAll('input[name="omReview"]');
-            for (var rti = 0; rti < radiosT.length; rti++) {
-                if (radiosT[rti].checked) reviewModeT = radiosT[rti].value;
-            }
-        } catch (eRT) {}
         if (ownerTerminateUser(user, {
             reason: fullReason,
             reasonCode: reasonCode,
             reasonLabel: reasonLabel,
-            reviewMode: reviewModeT
+            note: extra,
+            reviewMode: "owner"
         })) {
             closeOwnerModConsole();
             if (typeof getMyUsername === "function" && getMyUsername() === user) {
@@ -14966,6 +15040,11 @@ function getPendingAppealResultForCurrentUser() {
 }
 
 function showAppealResultPopup(appeal) {
+    if (!appeal || !appeal.id) return;
+    try {
+        var shown0 = JSON.parse(localStorage.getItem("azoraAppealResultsShown") || "{}");
+        if (shown0[appeal.id]) return;
+    } catch (e0) {}
     if (!appeal) return;
     var ov = document.getElementById("appealResultOverlay");
     var panel = document.getElementById("appealResultPanel");
@@ -14989,6 +15068,7 @@ function showAppealResultPopup(appeal) {
 function closeAppealResultPopup() {
     var ov = document.getElementById("appealResultOverlay");
     if (ov) ov.style.display = "none";
+    window._appealResultShownThisSession = true;
     try {
         var shown = JSON.parse(localStorage.getItem("azoraAppealResultsShown") || "{}");
         if (window._pendingAppealResultId) shown[window._pendingAppealResultId] = Date.now();
@@ -15007,8 +15087,10 @@ function closeAppealResultPopup() {
 function checkAppealResultsOnBoot() {
     try {
         processDueAppeals();
+        if (window._appealResultShownThisSession) return;
         var result = getPendingAppealResultForCurrentUser();
         if (result) {
+            window._appealResultShownThisSession = true;
             setTimeout(function () { showAppealResultPopup(result); }, 600);
         }
     } catch (e) {}

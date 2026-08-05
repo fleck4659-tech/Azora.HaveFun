@@ -1117,6 +1117,30 @@ if ("serviceWorker" in navigator) {
 
 
 <!-- Owner Moderation Console (stable — not inside profile) -->
+
+<div id="reportUserOverlay" class="overlay" style="display:none;z-index:100050;">
+    <div class="popup" style="max-width:min(360px,calc(100vw - 24px));text-align:left;background:#0f172a;color:#e2e8f0;border:1px solid #334155;">
+        <h2 style="margin-top:0;text-align:center;">Report user</h2>
+        <p id="reportUserTarget" style="color:#93c5fd;font-size:0.9rem;margin:0 0 10px;"></p>
+        <label for="reportReasonSelect"><strong>Reason</strong></label>
+        <select id="reportReasonSelect" class="settings-input" style="width:100%;margin:6px 0 12px;background:#1e293b;color:#f1f5f9;border:1px solid #334155;border-radius:8px;padding:10px;">
+            <option value="">Select a reason…</option>
+            <option value="Harassment or bullying">Harassment or bullying</option>
+            <option value="Inappropriate language">Inappropriate language</option>
+            <option value="Spam or scams">Spam or scams</option>
+            <option value="Impersonation">Impersonation</option>
+            <option value="Other safety concern">Other safety concern</option>
+        </select>
+        <label for="reportDetails"><strong>Details</strong> (optional)</label>
+        <textarea id="reportDetails" maxlength="240" rows="3" placeholder="Add a short respectful note for Azora staff…" style="width:100%;box-sizing:border-box;margin:6px 0 12px;padding:10px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#f1f5f9;resize:vertical;"></textarea>
+        <p id="reportFormError" style="color:#f87171;font-size:0.85rem;display:none;margin:0 0 8px;"></p>
+        <div style="display:flex;gap:8px;">
+            <button type="button" onclick="submitReportUser()" style="flex:1;background:linear-gradient(180deg,#f87171,#b91c1c);color:#fff;">Submit report</button>
+            <button type="button" class="secondary" onclick="closeReportUser()" style="flex:1;">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <div id="ownerModConsole" class="overlay" style="display:none;z-index:100000;">
     <div class="popup owner-mod-console owner-mod-dark" style="max-width:min(420px,calc(100vw - 20px));text-align:left;">
         <h2 style="margin-top:0;text-align:center;">🛡️ Owner Moderation</h2>
@@ -1158,17 +1182,9 @@ if ("serviceWorker" in navigator) {
         </select>
 
         <label for="omNotes"><strong>Extra notes</strong> (optional)</label>
-        <input id="omNotes" type="text" placeholder="Optional staff notes" style="width:100%;box-sizing:border-box;padding:10px;margin:6px 0 12px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#f1f5f9;">
+        <input id="omNotes" type="text" placeholder="Note the player will see, e.g. Your account doesn't follow Azora's rules." style="width:100%;box-sizing:border-box;padding:10px;margin:6px 0 12px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#f1f5f9;">
 
-        <label><strong>Appeal review mode</strong></label>
-        <div id="omReviewMode" style="margin:6px 0 12px;padding:10px;border-radius:10px;background:#111827;border:1px solid #334155;">
-            <label style="display:flex;gap:8px;align-items:center;margin:0 0 8px;font-weight:500;">
-                <input type="radio" name="omReview" value="auto" checked> Automated system reviews appeals (~10 minutes)
-            </label>
-            <label style="display:flex;gap:8px;align-items:center;margin:0;font-weight:500;">
-                <input type="radio" name="omReview" value="owner"> I will review appeals myself
-            </label>
-        </div>
+        <p style="font-size:0.8rem;color:#94a3b8;margin:0 0 12px;">Appeals are always reviewed by you (Azora). There is no automated system review.</p>
 
         <h3 style="margin:16px 0 8px;color:#93c5fd;">Appeals inbox</h3>
         <p style="font-size:0.8rem;color:#94a3b8;margin:0 0 8px;">Appeals arrive here about 1 minute after a user submits one. You decide accept or reject. Restores progress on accept.</p>
@@ -1181,7 +1197,7 @@ if ("serviceWorker" in navigator) {
 </div>
 
 
-<!-- Appeal result (after ~10 min automated review) -->
+<!-- Appeal result (owner decision) -->
 <div id="appealResultOverlay" class="appeal-result-overlay" style="display:none;">
     <div id="appealResultPanel" class="appeal-result-panel">
         <h2 id="appealResultTitle">Appeal update</h2>
@@ -1202,6 +1218,7 @@ if ("serviceWorker" in navigator) {
         <p id="modLockMessage" class="mod-lock-msg"></p>
         <div id="modLockDuration" class="mod-lock-duration"></div>
         <div id="modLockReasonBox" class="mod-lock-reason" style="display:none;"></div>
+        <div id="modLockNoteBox" class="mod-lock-note" style="display:none;"></div>
         <a id="modLockAppealLink" class="appeal-link-blue" href="appeal.html">Submit an appeal</a>
         <p class="mod-lock-fine">Appeals are delivered to <strong>system</strong> (System Element · Aza: 2).</p>
         <div id="modLockOwnerOverride" style="display:none;margin-top:14px;width:100%;">
