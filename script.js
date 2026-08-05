@@ -14091,7 +14091,50 @@ function getModerationRecords() {
 }
 
 function saveModerationRecords(r) {
-    localStorage.setItem("azoraModerationRecords", JSON.stringify(r || {}));
+    try { localStorage.setItem("azoraModerationRecords", JSON.stringify(r || {})); } catch (e) {}
+    // Push to cloud so other devices / live sessions see bans immediately
+    try {
+        if (typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()) {
+            var url = (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "") + "/azoraModeration.json";
+            fetch(url, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(r || {})
+            }).catch(function () {});
+        }
+    } catch (e2) {}
+}
+
+function pullModerationFromCloud(done) {
+    try {
+        if (typeof AZORA_CLOUD === "undefined" || !AZORA_CLOUD.isReady || !AZORA_CLOUD.isReady()) {
+            if (done) done(false);
+            return;
+        }
+        var url = (AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "") + "/azoraModeration.json?ts=" + Date.now();
+        fetch(url, { cache: "no-store" })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data && typeof data === "object") {
+                    // Merge cloud into local (cloud wins for bans/terms; keep local appeals too)
+                    var local = getModerationRecords();
+                    if (data.bans) local.bans = data.bans;
+                    if (data.terminations) local.terminations = data.terminations;
+                    if (Array.isArray(data.appeals)) {
+                        // prefer longer list
+                        local.appeals = data.appeals;
+                    }
+                    if (data.restores) local.restores = data.restores;
+                    try { localStorage.setItem("azoraModerationRecords", JSON.stringify(local)); } catch (e) {}
+                    if (done) done(true, local);
+                    return;
+                }
+                if (done) done(false);
+            })
+            .catch(function () { if (done) done(false); });
+    } catch (e) {
+        if (done) done(false);
+    }
 }
 
 /** Ensure System Element exists in registry / public search (not a real player) */
@@ -14250,7 +14293,7 @@ function ownerBanUser(username, opts) {
     }
 
     var r = getModerationRecords();
-    r.bans[username] = {
+    var banEntry = {
         username: username,
         active: true,
         from: fromMs,
@@ -14264,10 +14307,12 @@ function ownerBanUser(username, opts) {
         automated: false,
         note: opts.note || ""
     };
+    r.bans[username] = banEntry;
+    r.bans[username.toLowerCase()] = banEntry;
     // clear termination if any when issuing temp ban
-    if (r.terminations[username]) {
-        r.terminations[username].active = false;
-    }
+    Object.keys(r.terminations || {}).forEach(function (k) {
+        if (k.toLowerCase() === username.toLowerCase()) r.terminations[k].active = false;
+    });
     saveModerationRecords(r);
 
     // notify system inbox
@@ -14365,8 +14410,21 @@ function ownerClearModeration(username) {
     Object.keys(r.terminations).forEach(function (k) {
         if (k.toLowerCase() === username.toLowerCase()) r.terminations[k].active = false;
     });
+    if (!r.restores) r.restores = {};
+    r.restores[username] = { at: Date.now(), by: "Azora" };
+    r.restores[username.toLowerCase()] = { at: Date.now(), by: "Azora" };
     saveModerationRecords(r);
-    alert("Cleared ban/termination for " + username + ".");
+    // If clearing self (testing), show restore popup now
+    try {
+        var me = getMyUsername();
+        if (me && me.toLowerCase() === username.toLowerCase()) {
+            var lock = document.getElementById("moderationLockOverlay");
+            if (lock) lock.style.display = "none";
+            _liveModLastSig = "";
+            showAccessRestoredPopup();
+        }
+    } catch (eS) {}
+    alert("Cleared ban/termination for " + username + ". They will see: Your access has been restored!");
     return true;
 }
 
@@ -14972,8 +15030,12 @@ function ownerAcceptAppeal(appealId) {
             r.terminations[k].restoredAt = Date.now();
         }
     });
+    a.acceptMessage = "Your appeal was accepted. Your account access and progress have been restored.";
+    if (!r.restores) r.restores = {};
+    r.restores[u] = { at: Date.now(), by: "Azora", fromAppeal: true };
+    r.restores[String(u).toLowerCase()] = { at: Date.now(), by: "Azora", fromAppeal: true };
     saveModerationRecords(r);
-    alert("Appeal accepted. " + u + "'s access and progress were restored.");
+    alert("Appeal accepted. " + u + " will see an accepted popup and restored access.");
     try { renderOwnerAppealsInbox(); } catch (e) {}
 }
 
@@ -15822,3 +15884,179 @@ try {
         } catch (e) {}
     };
 })();
+
+
+// ============================================================
+// Live moderation (ban/terminate without reopening the app)
+// ============================================================
+var _liveModLastSig = "";
+var _pendingModAfterGameError = null;
+
+function isPlayerInGameOverlay() {
+    try {
+        var n = document.getElementById("normGameOverlay");
+        if (n && n.style.display && n.style.display !== "none") return true;
+        var g = document.getElementById("gamePlayOverlay");
+        if (g && g.style.display && g.style.display !== "none") return true;
+        var p = document.getElementById("gamePreviewOverlay");
+        if (p && p.style.display && p.style.display !== "none") return true;
+    } catch (e) {}
+    return false;
+}
+
+function generateModErrorCode(mod) {
+    // Stable-looking fake error for UX: Error: 000-series
+    var base = 100;
+    try {
+        if (mod && mod.kind === "termination") base = 300;
+        else if (mod && mod.kind === "ban") base = 200;
+        var n = (Date.now() % 700) + base;
+        return String(n).padStart(3, "0");
+    } catch (e) {
+        return "000";
+    }
+}
+
+function showGameModErrorThenLock(mod, username) {
+    _pendingModAfterGameError = { mod: mod, username: username };
+    var ov = document.getElementById("modGameErrorOverlay");
+    var codeEl = document.getElementById("modGameErrorCode");
+    if (codeEl) codeEl.textContent = "Error: " + generateModErrorCode(mod);
+    if (ov) {
+        ov.style.display = "flex";
+        ov.setAttribute("aria-hidden", "false");
+    } else {
+        // fallback: lock immediately
+        leaveGameModError();
+    }
+}
+
+function leaveGameModError() {
+    var ov = document.getElementById("modGameErrorOverlay");
+    if (ov) {
+        ov.style.display = "none";
+        ov.setAttribute("aria-hidden", "true");
+    }
+    // Close any game overlays
+    try {
+        if (typeof leaveNormGame === "function") leaveNormGame(true);
+    } catch (e1) {}
+    try {
+        if (typeof closeGamePlay === "function") closeGamePlay();
+    } catch (e2) {}
+    try {
+        if (typeof closeGamePreview === "function") closeGamePreview();
+    } catch (e3) {}
+    try {
+        var n = document.getElementById("normGameOverlay");
+        if (n) n.style.display = "none";
+        var g = document.getElementById("gamePlayOverlay");
+        if (g) g.style.display = "none";
+    } catch (e4) {}
+
+    var pending = _pendingModAfterGameError;
+    _pendingModAfterGameError = null;
+    if (pending && pending.mod) {
+        showModerationLockScreen(pending.mod, pending.username);
+    }
+}
+window.leaveGameModError = leaveGameModError;
+
+function showAccessRestoredPopup() {
+    var ov = document.getElementById("accessRestoredOverlay");
+    if (!ov) {
+        if (typeof showAzoraToast === "function") showAzoraToast("Your access has been restored!");
+        return;
+    }
+    ov.style.display = "flex";
+    ov.setAttribute("aria-hidden", "false");
+}
+function closeAccessRestoredPopup() {
+    var ov = document.getElementById("accessRestoredOverlay");
+    if (ov) {
+        ov.style.display = "none";
+        ov.setAttribute("aria-hidden", "true");
+    }
+}
+window.showAccessRestoredPopup = showAccessRestoredPopup;
+window.closeAccessRestoredPopup = closeAccessRestoredPopup;
+
+function applyLiveModerationState() {
+    try {
+        if (localStorage.getItem("loggedIn") !== "true") return;
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (!acc || !acc.username || acc.isGuest) return;
+        var username = acc.username;
+
+        // Restores
+        try {
+            var r = getModerationRecords();
+            var restores = r.restores || {};
+            var key = null;
+            Object.keys(restores).forEach(function (k) {
+                if (k.toLowerCase() === String(username).toLowerCase()) key = k;
+            });
+            if (key && restores[key] && restores[key].at) {
+                var rid = String(restores[key].at);
+                var seen = localStorage.getItem("azoraRestoreSeen") || "";
+                if (rid !== seen) {
+                    localStorage.setItem("azoraRestoreSeen", rid);
+                    // only show if not currently banned
+                    var still = getActiveModerationForUser(username);
+                    if (!still) {
+                        var lock = document.getElementById("moderationLockOverlay");
+                        if (lock) lock.style.display = "none";
+                        showAccessRestoredPopup();
+                    }
+                }
+            }
+        } catch (eR) {}
+
+        var mod = getActiveModerationForUser(username);
+        var sig = mod ? (mod.kind + "|" + (mod.at || "") + "|" + (mod.until || "")) : "";
+        if (sig === _liveModLastSig) {
+            // still locked? keep lock visible
+            if (mod && mod.active) {
+                var ov = document.getElementById("moderationLockOverlay");
+                if (ov && ov.style.display === "none" && !_pendingModAfterGameError) {
+                    // was closed somehow — re-apply
+                    if (isPlayerInGameOverlay()) showGameModErrorThenLock(mod, username);
+                    else showModerationLockScreen(mod, username);
+                }
+            }
+            return;
+        }
+        _liveModLastSig = sig;
+
+        if (mod && mod.active) {
+            if (isPlayerInGameOverlay()) {
+                showGameModErrorThenLock(mod, username);
+            } else {
+                showModerationLockScreen(mod, username);
+            }
+        }
+    } catch (e) {}
+}
+
+function startLiveModerationPolling() {
+    function tick() {
+        pullModerationFromCloud(function () {
+            applyLiveModerationState();
+            try { if (typeof checkAppealResultsOnBoot === "function") checkAppealResultsOnBoot(); } catch (e) {}
+        });
+        // even without cloud
+        applyLiveModerationState();
+    }
+    setTimeout(tick, 800);
+    setInterval(tick, 4000);
+}
+
+try {
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function () {
+            setTimeout(startLiveModerationPolling, 600);
+        });
+    } else {
+        setTimeout(startLiveModerationPolling, 600);
+    }
+} catch (eLM) {}

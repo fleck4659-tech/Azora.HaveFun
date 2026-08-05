@@ -1206,6 +1206,26 @@ if ("serviceWorker" in navigator) {
     </div>
 </div>
 
+
+<!-- In-game moderation disconnect error (blur) -->
+<div id="modGameErrorOverlay" class="mod-game-error-overlay" style="display:none;" aria-hidden="true">
+    <div class="mod-game-error-panel" role="alertdialog" aria-modal="true">
+        <h2>Something went wrong</h2>
+        <p>Please try again later.</p>
+        <p class="mod-game-error-code" id="modGameErrorCode">Error: 000</p>
+        <button type="button" class="mod-game-error-leave" onclick="leaveGameModError()">Leave</button>
+    </div>
+</div>
+
+<!-- Access restored (blue glow) -->
+<div id="accessRestoredOverlay" class="access-restored-overlay" style="display:none;" aria-hidden="true">
+    <div class="access-restored-panel" role="dialog" aria-modal="true">
+        <h2>Your access has been restored!</h2>
+        <p>You can use Azora again. Welcome back.</p>
+        <button type="button" onclick="closeAccessRestoredPopup()">OK</button>
+    </div>
+</div>
+
 <!-- Moderation lock (ban / terminate) — full screen professional -->
 <div id="moderationLockOverlay" class="mod-lock-overlay" style="display:none;">
     <div class="mod-lock-panel" role="dialog" aria-modal="true">
