@@ -4550,3 +4550,152 @@ footer {
     color: #fff !important;
     font-weight: 800 !important;
 }
+
+/* —— Donate AzoraCoins —— */
+.profile-name-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 0 0 4px;
+}
+.profile-name-row h2 {
+    margin: 0;
+}
+.profile-donate-btn {
+    appearance: none;
+    border: 2px solid #86efac !important;
+    outline: none;
+    border-radius: 999px !important;
+    padding: 6px 14px !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.02em;
+    color: #fff !important;
+    background: linear-gradient(180deg, #22c55e 0%, #16a34a 55%, #052e16 100%) !important;
+    box-shadow: 0 0 0 1px rgba(134, 239, 172, 0.35), 0 4px 12px rgba(22, 163, 74, 0.35);
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+.profile-donate-btn:hover {
+    filter: brightness(1.06);
+    box-shadow: 0 0 0 2px #86efac, 0 6px 16px rgba(22, 163, 74, 0.45);
+}
+.profile-donate-btn:active {
+    transform: scale(0.97);
+}
+
+.donate-popup {
+    max-width: min(380px, calc(100vw - 20px));
+    text-align: left;
+    background: #0f172a !important;
+    color: #e2e8f0 !important;
+    border: 1px solid #1e293b;
+}
+.donate-target-label {
+    text-align: center;
+    margin: 0 0 10px;
+    font-weight: 700;
+    color: #86efac;
+}
+.donate-balance-line {
+    text-align: center;
+    margin: 0 0 14px;
+    font-size: 0.92rem;
+    opacity: 0.9;
+}
+.donate-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+.donate-amount-wrap {
+    flex: 1 1 140px;
+}
+.donate-amount-wrap label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: #94a3b8;
+}
+.donate-amount-wrap input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 2px solid #22c55e;
+    background: #020617;
+    color: #f8fafc;
+    font-size: 16px;
+    font-weight: 700;
+}
+.donate-all-btn {
+    flex: 1 1 140px;
+    padding: 10px 12px !important;
+    border-radius: 10px !important;
+    border: 2px solid #86efac !important;
+    background: linear-gradient(180deg, #22c55e 0%, #14532d 100%) !important;
+    color: #fff !important;
+    font-weight: 800 !important;
+    font-size: 13px !important;
+}
+.donate-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+}
+.donate-continue-btn,
+.donate-yes-btn {
+    flex: 1;
+    padding: 12px !important;
+    border: none !important;
+    border-radius: 12px !important;
+    background: linear-gradient(180deg, #22c55e, #15803d) !important;
+    color: #fff !important;
+    font-weight: 800 !important;
+}
+.donate-cancel-btn,
+.donate-no-btn {
+    flex: 1;
+    padding: 12px !important;
+    border: 1px solid #475569 !important;
+    border-radius: 12px !important;
+    background: #1e293b !important;
+    color: #e2e8f0 !important;
+    font-weight: 700 !important;
+}
+.donate-process-popup {
+    text-align: center;
+    max-width: min(320px, calc(100vw - 24px));
+}
+.donate-spinner {
+    width: 42px;
+    height: 42px;
+    margin: 4px auto 0;
+    border-radius: 50%;
+    border: 4px solid rgba(134, 239, 172, 0.25);
+    border-top-color: #22c55e;
+    animation: donateSpin 0.8s linear infinite;
+}
+.donate-spinner.done {
+    animation: none;
+    border-color: #22c55e;
+    background: #14532d;
+    position: relative;
+}
+.donate-spinner.fail {
+    animation: none;
+    border-color: #ef4444;
+    background: #7f1d1d;
+}
+@keyframes donateSpin {
+    to { transform: rotate(360deg); }
+}
+
+/* Parental controls */
+#parentalControlsSection .settings-input {
+    margin-top: 0;
+}

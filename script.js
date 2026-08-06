@@ -6159,6 +6159,7 @@ function openGuestProfile() {
     // Guests have no username — User ID is shown at username size
     document.getElementById("profileUsername").textContent = "";
     document.getElementById("profileUsername").style.display = "none";
+    try { var _gdb = document.getElementById("profileDonateBtn"); if (_gdb) { _gdb.style.display = "none"; _gdb.onclick = null; } } catch (e) {}
     var _pb = document.getElementById("profileBadges");
     if (_pb) { _pb.innerHTML = ""; _pb.style.display = "none"; }
 
@@ -6242,6 +6243,26 @@ function openUserProfile(username) {
 
     document.getElementById("profileUsername").textContent = username;
     document.getElementById("profileUsername").style.display = "block";
+    try {
+        var _donBtn = document.getElementById("profileDonateBtn");
+        if (_donBtn) {
+            var _meDon = (typeof getMyUsername === "function") ? getMyUsername() : null;
+            var _canDonate = localStorage.getItem("loggedIn") === "true" && _meDon && _meDon !== username;
+            if (_canDonate) {
+                try {
+                    var _accD = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+                    if (_accD && _accD.isGuest) _canDonate = false;
+                } catch (_eD) {}
+            }
+            if (_canDonate) {
+                _donBtn.style.display = "inline-flex";
+                _donBtn.onclick = function () { openDonateOverlay(username); };
+            } else {
+                _donBtn.style.display = "none";
+                _donBtn.onclick = null;
+            }
+        }
+    } catch (_eDon) {}
     try { if (typeof renderProfileBadges === "function") renderProfileBadges(username); } catch (eB) {}
 
     // Public User ID (smaller, below username for normal accounts)
@@ -8274,6 +8295,7 @@ function refreshSecurityPanel() {
         if (loggedIn === "guest") tabSecurity.classList.add("restricted");
         else tabSecurity.classList.remove("restricted");
     }
+    try { if (typeof refreshParentalControlsUI === "function") refreshParentalControlsUI(); } catch (eP) {}
 }
 
 function changePassword() {
@@ -13830,6 +13852,10 @@ function openBuyAzoraCoins() {
             return;
         }
     } catch (e) {}
+    if (typeof isParentalPurchaseLocked === "function" && isParentalPurchaseLocked()) {
+        alert("Purchase lock is ON. A parent must enter the passkey in Settings → Security to allow buying AzoraCoins or subscriptions. You can still receive daily gifts, donations, and in-game rewards.");
+        return;
+    }
     var el = document.getElementById("buyCoinsOverlay");
     if (!el) {
         // fallback to old membership overlay
@@ -13923,6 +13949,17 @@ function goToCheckout(opts) {
             return;
         }
     } catch (e) {}
+    if (typeof isParentalPurchaseLocked === "function" && isParentalPurchaseLocked()) {
+        alert("Purchase lock is ON. A parent must unlock it in Settings → Security before you can buy.");
+        return;
+    }
+    if (typeof checkParentalDailyPurchaseLimit === "function") {
+        var limMsg = checkParentalDailyPurchaseLimit(id, type);
+        if (limMsg) {
+            alert(limMsg);
+            return;
+        }
+    }
 
     // Build a clear summary so the player knows what they are about to buy
     var label = id;
@@ -16148,3 +16185,598 @@ try {
         setTimeout(startLiveModerationPolling, 600);
     }
 } catch (eLM) {}
+
+
+/* ============================================================
+   Donate AzoraCoins + Parental purchase lock (v62)
+   ============================================================ */
+var _donateTargetUser = null;
+var _donatePendingAmount = 0;
+var _donateProcessTimer = null;
+
+function getDonateFirebaseBase() {
+    try {
+        if (typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()) {
+            return String(AZORA_CLOUD.firebaseUrl || "").replace(/\/$/, "");
+        }
+    } catch (e) {}
+    return "";
+}
+
+function openDonateOverlay(username) {
+    username = String(username || "").trim();
+    if (!username) return;
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Log in with an account to donate AzoraCoins.");
+        return;
+    }
+    var me = typeof getMyUsername === "function" ? getMyUsername() : null;
+    if (!me) {
+        alert("Log in with an account to donate AzoraCoins.");
+        return;
+    }
+    if (me.toLowerCase() === username.toLowerCase()) {
+        alert("You cannot donate to yourself.");
+        return;
+    }
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc && acc.isGuest) {
+            alert("Guests cannot donate. Create an account first.");
+            return;
+        }
+    } catch (e) {}
+
+    _donateTargetUser = username;
+    var ov = document.getElementById("donateOverlay");
+    if (!ov) return;
+    var label = document.getElementById("donateTargetLabel");
+    if (label) label.textContent = "To: " + username;
+    var bal = document.getElementById("donateBalanceText");
+    if (bal) bal.textContent = (typeof formatCoins === "function" ? formatCoins(getCoins()) : getCoins());
+    var inp = document.getElementById("donateAmountInput");
+    if (inp) inp.value = "0.05";
+    var err = document.getElementById("donateFormError");
+    if (err) { err.style.display = "none"; err.textContent = ""; }
+    try { if (typeof closeProfile === "function") closeProfile(); } catch (e2) {}
+    ov.style.display = "flex";
+    if (typeof playClickSound === "function") try { playClickSound(); } catch (e3) {}
+}
+
+function closeDonateOverlay() {
+    var ov = document.getElementById("donateOverlay");
+    if (ov) ov.style.display = "none";
+}
+
+function setDonateAllAmount() {
+    var bal = getCoins();
+    var inp = document.getElementById("donateAmountInput");
+    if (inp) inp.value = String(Math.max(0, Math.round(bal * 1000) / 1000));
+}
+
+function cancelDonateConfirm() {
+    var c = document.getElementById("donateConfirmOverlay");
+    if (c) c.style.display = "none";
+    var ov = document.getElementById("donateOverlay");
+    if (ov) ov.style.display = "flex";
+}
+
+function confirmDonatePrompt() {
+    var err = document.getElementById("donateFormError");
+    function fail(msg) {
+        if (err) { err.textContent = msg; err.style.display = "block"; }
+        else alert(msg);
+    }
+    if (!_donateTargetUser) {
+        fail("No recipient selected.");
+        return;
+    }
+    var raw = document.getElementById("donateAmountInput");
+    var amount = raw ? parseFloat(raw.value) : NaN;
+    if (isNaN(amount) || amount < 0.05) {
+        fail("The lowest you can donate is 0.05 AzoraCoins.");
+        return;
+    }
+    amount = Math.round(amount * 1000) / 1000;
+    _donatePendingAmount = amount;
+    var conf = document.getElementById("donateConfirmOverlay");
+    var txt = document.getElementById("donateConfirmText");
+    if (txt) {
+        txt.textContent = "Donate " + (typeof formatCoins === "function" ? formatCoins(amount) : amount) +
+            " AzoraCoins to " + _donateTargetUser + "?";
+    }
+    var ov = document.getElementById("donateOverlay");
+    if (ov) ov.style.display = "none";
+    if (conf) conf.style.display = "flex";
+}
+
+function closeDonateProcess() {
+    if (_donateProcessTimer) {
+        clearTimeout(_donateProcessTimer);
+        _donateProcessTimer = null;
+    }
+    var p = document.getElementById("donateProcessOverlay");
+    if (p) p.style.display = "none";
+    closeDonateOverlay();
+    var c = document.getElementById("donateConfirmOverlay");
+    if (c) c.style.display = "none";
+}
+
+function startDonateTransaction() {
+    var conf = document.getElementById("donateConfirmOverlay");
+    if (conf) conf.style.display = "none";
+    var amount = _donatePendingAmount;
+    var target = _donateTargetUser;
+    var bal = getCoins();
+    var over = amount > bal + 1e-9;
+
+    var proc = document.getElementById("donateProcessOverlay");
+    var title = document.getElementById("donateProcessTitle");
+    var msg = document.getElementById("donateProcessMsg");
+    var spin = document.getElementById("donateProcessSpinner");
+    var closeBtn = document.getElementById("donateProcessCloseBtn");
+    if (closeBtn) closeBtn.style.display = "none";
+    if (spin) {
+        spin.className = "donate-spinner";
+    }
+    if (title) title.textContent = "Processing…";
+    if (msg) msg.textContent = over
+        ? "Checking balance…"
+        : ("Sending " + (typeof formatCoins === "function" ? formatCoins(amount) : amount) + " to " + target + "…");
+    if (proc) proc.style.display = "flex";
+
+    var waitMs = over ? 5000 : 10000;
+    if (_donateProcessTimer) clearTimeout(_donateProcessTimer);
+    _donateProcessTimer = setTimeout(function () {
+        _donateProcessTimer = null;
+        if (over) {
+            if (spin) spin.className = "donate-spinner fail";
+            if (title) title.textContent = "Transaction failed";
+            if (msg) {
+                msg.textContent = "Donated way more than balance (" +
+                    (typeof formatCoins === "function" ? formatCoins(bal) : bal) + " AzoraCoins)";
+            }
+            if (closeBtn) closeBtn.style.display = "block";
+            return;
+        }
+        // Final balance check at commit time
+        var cur = getCoins();
+        if (amount > cur + 1e-9) {
+            if (spin) spin.className = "donate-spinner fail";
+            if (title) title.textContent = "Transaction failed";
+            if (msg) {
+                msg.textContent = "Donated way more than balance (" +
+                    (typeof formatCoins === "function" ? formatCoins(cur) : cur) + " AzoraCoins)";
+            }
+            if (closeBtn) closeBtn.style.display = "block";
+            return;
+        }
+        var ok = commitDonateTransaction(target, amount);
+        if (!ok) {
+            if (spin) spin.className = "donate-spinner fail";
+            if (title) title.textContent = "Transaction failed";
+            if (msg) msg.textContent = "Something went wrong. Please try again.";
+            if (closeBtn) closeBtn.style.display = "block";
+            return;
+        }
+        if (spin) spin.className = "donate-spinner done";
+        if (title) title.textContent = "Complete!";
+        if (msg) {
+            msg.textContent = target + " has received " +
+                (typeof formatCoins === "function" ? formatCoins(amount) : amount) +
+                " Coins from you!";
+        }
+        if (closeBtn) closeBtn.style.display = "block";
+        try { if (typeof updateCoinsUI === "function") updateCoinsUI(); } catch (e) {}
+        try { if (typeof renderCoinsDropdown === "function") renderCoinsDropdown(); } catch (e2) {}
+    }, waitMs);
+}
+
+function commitDonateTransaction(toUser, amount) {
+    amount = Math.round((Number(amount) || 0) * 1000) / 1000;
+    if (amount < 0.05) return false;
+    var me = typeof getMyUsername === "function" ? getMyUsername() : null;
+    if (!me || !toUser) return false;
+    if (!spendCoins(amount)) return false;
+
+    var ts = Date.now();
+    var id = "don_" + ts + "_" + Math.random().toString(36).slice(2, 8);
+    var row = {
+        id: id,
+        toUser: toUser,
+        fromUser: me,
+        itemName: "Donation",
+        amount: amount,
+        fee: false,
+        collected: false,
+        type: "donation",
+        at: ts,
+        availableAt: ts + 60000 // 1 minute in pending
+    };
+
+    // Local ledger (recipient may be same device)
+    try {
+        var ledger = typeof getSalesLedger === "function" ? getSalesLedger() : [];
+        ledger.unshift(row);
+        if (typeof saveSalesLedger === "function") saveSalesLedger(ledger);
+    } catch (e) {}
+
+    // Also stash under recipient-specific key so other accounts on this device see it
+    try {
+        var key = "azoraPendingDonations_" + String(toUser).trim().toLowerCase();
+        var list = JSON.parse(localStorage.getItem(key) || "[]");
+        if (!Array.isArray(list)) list = [];
+        list.unshift(row);
+        localStorage.setItem(key, JSON.stringify(list));
+    } catch (e2) {}
+
+    // Cloud push for other devices
+    try {
+        var base = getDonateFirebaseBase();
+        if (base) {
+            var path = base + "/azoraDonations/" + encodeURIComponent(String(toUser).trim().toLowerCase()) + "/" + encodeURIComponent(id) + ".json";
+            fetch(path, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(row)
+            }).catch(function () {});
+        }
+    } catch (e3) {}
+
+    // Notify recipient
+    try {
+        if (typeof pushNotification === "function") {
+            pushNotification(toUser, me + " donated " + (typeof formatCoins === "function" ? formatCoins(amount) : amount) + " AzoraCoins to you!", "donation");
+        }
+    } catch (e4) {}
+
+    return true;
+}
+
+/** Mature donation pending rows into balance after 1 minute */
+function processMaturedDonations() {
+    try {
+        var acc = typeof getActiveAccount === "function" ? getActiveAccount() : null;
+        if (!acc || acc.isGuest || !acc.username) return;
+        var uname = acc.username;
+        var now = Date.now();
+        var matured = [];
+
+        // From global sales ledger
+        try {
+            var ledger = typeof getSalesLedger === "function" ? getSalesLedger() : [];
+            var changed = false;
+            ledger.forEach(function (row) {
+                if (!row || row.collected) return;
+                if (String(row.toUser || "").toLowerCase() !== String(uname).toLowerCase()) return;
+                if (row.type !== "donation" && row.itemName !== "Donation") return;
+                var avail = row.availableAt || ((row.at || 0) + 60000);
+                if (now >= avail) {
+                    matured.push(row);
+                    row.collected = true;
+                    changed = true;
+                }
+            });
+            if (changed && typeof saveSalesLedger === "function") saveSalesLedger(ledger);
+        } catch (e) {}
+
+        // From per-user local key
+        try {
+            var key = "azoraPendingDonations_" + String(uname).trim().toLowerCase();
+            var list = JSON.parse(localStorage.getItem(key) || "[]");
+            if (!Array.isArray(list)) list = [];
+            var keep = [];
+            list.forEach(function (row) {
+                if (!row) return;
+                var avail = row.availableAt || ((row.at || 0) + 60000);
+                if (!row.collected && now >= avail) {
+                    // avoid double-count if already in matured by id
+                    var exists = matured.some(function (m) { return m.id === row.id; });
+                    if (!exists) matured.push(row);
+                    row.collected = true;
+                } else if (!row.collected) {
+                    keep.push(row);
+                }
+            });
+            localStorage.setItem(key, JSON.stringify(keep));
+        } catch (e2) {}
+
+        // Pull cloud donations
+        try {
+            var base = getDonateFirebaseBase();
+            if (base) {
+                var url = base + "/azoraDonations/" + encodeURIComponent(String(uname).trim().toLowerCase()) + ".json";
+                fetch(url).then(function (r) { return r.json(); }).then(function (data) {
+                    if (!data || typeof data !== "object") return;
+                    var extra = 0;
+                    var ids = {};
+                    Object.keys(data).forEach(function (k) {
+                        var row = data[k];
+                        if (!row || row.collected) return;
+                        var avail = row.availableAt || ((row.at || 0) + 60000);
+                        if (now < avail) return;
+                        if (ids[row.id]) return;
+                        ids[row.id] = true;
+                        extra += Number(row.amount) || 0;
+                        // mark collected in cloud
+                        try {
+                            fetch(base + "/azoraDonations/" + encodeURIComponent(String(uname).trim().toLowerCase()) + "/" + encodeURIComponent(k) + ".json", {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify(Object.assign({}, row, { collected: true }))
+                            }).catch(function () {});
+                        } catch (eC) {}
+                    });
+                    extra = Math.round(extra * 1000) / 1000;
+                    if (extra > 0 && typeof addCoins === "function") {
+                        addCoins(extra);
+                        if (typeof showAzoraToast === "function") {
+                            showAzoraToast("+" + (typeof formatCoins === "function" ? formatCoins(extra) : extra) + " AzoraCoins from donations!");
+                        }
+                        if (typeof updateCoinsUI === "function") updateCoinsUI();
+                    }
+                }).catch(function () {});
+            }
+        } catch (e3) {}
+
+        if (matured.length) {
+            var total = 0;
+            matured.forEach(function (m) { total += Number(m.amount) || 0; });
+            total = Math.round(total * 1000) / 1000;
+            if (total > 0 && typeof addCoins === "function") {
+                addCoins(total);
+                if (typeof showAzoraToast === "function") {
+                    showAzoraToast("+" + (typeof formatCoins === "function" ? formatCoins(total) : total) + " AzoraCoins from donations!");
+                }
+                if (typeof updateCoinsUI === "function") updateCoinsUI();
+                if (typeof renderCoinsDropdown === "function") renderCoinsDropdown();
+            }
+        }
+    } catch (eAll) {}
+}
+
+// Show donations in pending panel even before mature
+(function enhancePendingForDonations() {
+    try {
+        var _origOpen = window.openPendingCoins;
+        // processMatured runs on interval; openPending still uses ledger
+    } catch (e) {}
+})();
+
+try {
+    setInterval(processMaturedDonations, 5000);
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function () { setTimeout(processMaturedDonations, 1200); });
+    } else {
+        setTimeout(processMaturedDonations, 1200);
+    }
+} catch (eDonPoll) {}
+
+window.openDonateOverlay = openDonateOverlay;
+window.closeDonateOverlay = closeDonateOverlay;
+window.setDonateAllAmount = setDonateAllAmount;
+window.confirmDonatePrompt = confirmDonatePrompt;
+window.cancelDonateConfirm = cancelDonateConfirm;
+window.startDonateTransaction = startDonateTransaction;
+window.closeDonateProcess = closeDonateProcess;
+window.processMaturedDonations = processMaturedDonations;
+
+/* —— Parental Controls —— */
+function parentalStorageKey() {
+    var me = typeof getMyUsername === "function" ? getMyUsername() : null;
+    if (!me) return "azoraParental__none";
+    return "azoraParental_" + String(me).trim().toLowerCase();
+}
+
+function getParentalSettings() {
+    try {
+        var raw = localStorage.getItem(parentalStorageKey());
+        var o = raw ? JSON.parse(raw) : null;
+        if (!o || typeof o !== "object") o = {};
+        return {
+            enabled: !!o.enabled,
+            passkey: String(o.passkey || ""),
+            dailyLimit: Math.max(0, Number(o.dailyLimit) || 0),
+            spentToday: Math.max(0, Number(o.spentToday) || 0),
+            spentDayKey: String(o.spentDayKey || "")
+        };
+    } catch (e) {
+        return { enabled: false, passkey: "", dailyLimit: 0, spentToday: 0, spentDayKey: "" };
+    }
+}
+
+function saveParentalSettings(s) {
+    try {
+        localStorage.setItem(parentalStorageKey(), JSON.stringify(s || {}));
+    } catch (e) {}
+}
+
+function isParentalPurchaseLocked() {
+    try {
+        if (localStorage.getItem("loggedIn") !== "true") return false;
+        var s = getParentalSettings();
+        return !!s.enabled;
+    } catch (e) { return false; }
+}
+
+function parentalTodayKey() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function checkParentalDailyPurchaseLimit(packOrTierId, type) {
+    var s = getParentalSettings();
+    if (s.enabled) {
+        return "Purchase lock is ON. Buying is disabled until a parent unlocks it.";
+    }
+    if (!(s.dailyLimit > 0)) return null;
+    // Estimate coins from pack
+    var coins = 0;
+    try {
+        if (type === "pack" && typeof AZORA_COIN_PACKS !== "undefined") {
+            for (var i = 0; i < AZORA_COIN_PACKS.length; i++) {
+                if (AZORA_COIN_PACKS[i].id === packOrTierId) {
+                    coins = Number(AZORA_COIN_PACKS[i].coins) || 0;
+                    break;
+                }
+            }
+        } else if (typeof getMemberTierById === "function") {
+            var t = getMemberTierById(packOrTierId);
+            if (t) coins = Number(t.monthlyCoins) || 0;
+        }
+    } catch (e) {}
+    var day = parentalTodayKey();
+    var spent = (s.spentDayKey === day) ? (s.spentToday || 0) : 0;
+    if (spent + coins > s.dailyLimit + 1e-9) {
+        return "Daily parental purchase limit reached (" +
+            (typeof formatCoins === "function" ? formatCoins(s.dailyLimit) : s.dailyLimit) +
+            " AzoraCoins / day).";
+    }
+    return null;
+}
+
+function recordParentalPurchaseSpend(coins) {
+    var s = getParentalSettings();
+    if (!(s.dailyLimit > 0)) return;
+    var day = parentalTodayKey();
+    if (s.spentDayKey !== day) {
+        s.spentDayKey = day;
+        s.spentToday = 0;
+    }
+    s.spentToday = Math.round((s.spentToday + (Number(coins) || 0)) * 1000) / 1000;
+    saveParentalSettings(s);
+}
+
+function refreshParentalControlsUI() {
+    var state = document.getElementById("parentalLockState");
+    var enableBox = document.getElementById("parentalEnableBox");
+    var disableBox = document.getElementById("parentalDisableBox");
+    var limitInp = document.getElementById("parentalDailyLimit");
+    var err = document.getElementById("parentalError");
+    var ok = document.getElementById("parentalSuccess");
+    if (err) { err.style.display = "none"; err.textContent = ""; }
+    if (ok) { ok.style.display = "none"; ok.textContent = ""; }
+
+    var logged = localStorage.getItem("loggedIn");
+    var section = document.getElementById("parentalControlsSection");
+    if (section) {
+        if (logged !== "true") {
+            section.style.opacity = "0.55";
+            section.style.pointerEvents = "none";
+        } else {
+            section.style.opacity = "1";
+            section.style.pointerEvents = "auto";
+        }
+    }
+
+    var s = getParentalSettings();
+    if (state) state.textContent = s.enabled ? "On" : "Off";
+    if (limitInp && document.activeElement !== limitInp) {
+        limitInp.value = String(s.dailyLimit || 0);
+    }
+    if (enableBox) enableBox.style.display = s.enabled ? "none" : "block";
+    if (disableBox) disableBox.style.display = s.enabled ? "block" : "none";
+}
+
+function enableParentalPurchaseLock() {
+    var err = document.getElementById("parentalError");
+    var ok = document.getElementById("parentalSuccess");
+    function fail(m) {
+        if (err) { err.textContent = m; err.style.display = "block"; }
+        else alert(m);
+        if (ok) ok.style.display = "none";
+    }
+    if (localStorage.getItem("loggedIn") !== "true") {
+        fail("Sign in with a full account first.");
+        return;
+    }
+    var p1 = (document.getElementById("parentalNewPasskey") || {}).value || "";
+    var p2 = (document.getElementById("parentalNewPasskey2") || {}).value || "";
+    p1 = String(p1).trim();
+    p2 = String(p2).trim();
+    if (!/^\d{8}$/.test(p1)) {
+        fail("Passkey must be exactly 8 digits.");
+        return;
+    }
+    if (p1 !== p2) {
+        fail("Passkeys do not match.");
+        return;
+    }
+    var limitInp = document.getElementById("parentalDailyLimit");
+    var limit = limitInp ? parseFloat(limitInp.value) : 0;
+    if (isNaN(limit) || limit < 0) limit = 0;
+    var s = getParentalSettings();
+    s.enabled = true;
+    s.passkey = p1;
+    s.dailyLimit = Math.round(limit * 1000) / 1000;
+    saveParentalSettings(s);
+    if (document.getElementById("parentalNewPasskey")) document.getElementById("parentalNewPasskey").value = "";
+    if (document.getElementById("parentalNewPasskey2")) document.getElementById("parentalNewPasskey2").value = "";
+    if (ok) {
+        ok.textContent = "Purchase lock is ON. Buying AzoraCoins and subscriptions is blocked on this account.";
+        ok.style.display = "block";
+    }
+    refreshParentalControlsUI();
+    if (typeof showAzoraToast === "function") showAzoraToast("Parental purchase lock enabled");
+}
+
+function disableParentalPurchaseLock() {
+    var err = document.getElementById("parentalError");
+    var ok = document.getElementById("parentalSuccess");
+    function fail(m) {
+        if (err) { err.textContent = m; err.style.display = "block"; }
+        else alert(m);
+        if (ok) ok.style.display = "none";
+    }
+    var s = getParentalSettings();
+    if (!s.enabled) {
+        fail("Purchase lock is already off.");
+        return;
+    }
+    var entered = (document.getElementById("parentalUnlockPasskey") || {}).value || "";
+    entered = String(entered).trim();
+    if (entered !== s.passkey) {
+        fail("Incorrect passkey.");
+        return;
+    }
+    var limitInp = document.getElementById("parentalDailyLimit");
+    var limit = limitInp ? parseFloat(limitInp.value) : s.dailyLimit;
+    if (isNaN(limit) || limit < 0) limit = 0;
+    s.enabled = false;
+    s.dailyLimit = Math.round(limit * 1000) / 1000;
+    // keep passkey stored so re-enable can reuse, but require new set on enable path
+    saveParentalSettings(s);
+    if (document.getElementById("parentalUnlockPasskey")) document.getElementById("parentalUnlockPasskey").value = "";
+    if (ok) {
+        ok.textContent = "Purchase lock is OFF. Buying AzoraCoins is restored.";
+        ok.style.display = "block";
+    }
+    refreshParentalControlsUI();
+    if (typeof showAzoraToast === "function") showAzoraToast("Parental purchase lock disabled");
+}
+
+// Persist daily limit field when changed while lock on/off
+(function bindParentalLimitSave() {
+    function bind() {
+        var limitInp = document.getElementById("parentalDailyLimit");
+        if (!limitInp || limitInp._azoraBound) return;
+        limitInp._azoraBound = true;
+        limitInp.addEventListener("change", function () {
+            var s = getParentalSettings();
+            var v = parseFloat(limitInp.value);
+            if (isNaN(v) || v < 0) v = 0;
+            s.dailyLimit = Math.round(v * 1000) / 1000;
+            saveParentalSettings(s);
+        });
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind);
+    else bind();
+})();
+
+window.isParentalPurchaseLocked = isParentalPurchaseLocked;
+window.enableParentalPurchaseLock = enableParentalPurchaseLock;
+window.disableParentalPurchaseLock = disableParentalPurchaseLock;
+window.refreshParentalControlsUI = refreshParentalControlsUI;
+window.checkParentalDailyPurchaseLimit = checkParentalDailyPurchaseLimit;
+window.recordParentalPurchaseSpend = recordParentalPurchaseSpend;
+

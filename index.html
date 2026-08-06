@@ -13,7 +13,7 @@
     <link rel="manifest" href="manifest-azora.json">
     <link rel="apple-touch-icon" href="logo.jpg">
     <link rel="icon" href="logo.jpg">
-    <link rel="stylesheet" href="style.css?v=61.0">
+    <link rel="stylesheet" href="style.css?v=62.0">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -280,6 +280,26 @@
             <div class="settings-section">
                 <label class="settings-label">Account</label>
                 <p id="securityAccountInfo" class="settings-hint" style="margin-top:6px;">Sign in with a full account to manage security.</p>
+            </div>
+            <div class="settings-section" id="parentalControlsSection">
+                <label class="settings-label">👨‍👩‍👧 Parental Controls</label>
+                <p class="settings-hint" style="margin:0 0 8px;">Parents can lock Buy AzoraCoins &amp; subscriptions on this account. Daily login gifts, donations, and in-game rewards still work.</p>
+                <div id="parentalStatusLine" class="settings-hint" style="margin-bottom:8px;">Purchase lock: <strong id="parentalLockState">Off</strong></div>
+                <label class="settings-hint" style="display:block;margin-bottom:4px;">Daily purchase limit (AzoraCoins from Buy AzoraCoins — 0 = no limit)</label>
+                <input type="number" id="parentalDailyLimit" class="settings-input" min="0" step="0.01" value="0" placeholder="0 = unlimited">
+                <div id="parentalEnableBox" style="margin-top:10px;">
+                    <label class="settings-hint" style="display:block;margin-bottom:4px;">Create an 8-digit passkey to turn lock ON</label>
+                    <input type="password" id="parentalNewPasskey" class="settings-input" maxlength="8" inputmode="numeric" pattern="[0-9]*" placeholder="8 digits" autocomplete="new-password">
+                    <input type="password" id="parentalNewPasskey2" class="settings-input" maxlength="8" inputmode="numeric" pattern="[0-9]*" placeholder="Confirm passkey" style="margin-top:6px;" autocomplete="new-password">
+                    <button type="button" onclick="enableParentalPurchaseLock()" style="width:100%;margin-top:10px;background:linear-gradient(180deg,#16a34a,#14532d);color:#fff;">Turn ON purchase lock</button>
+                </div>
+                <div id="parentalDisableBox" style="margin-top:10px;display:none;">
+                    <label class="settings-hint" style="display:block;margin-bottom:4px;">Enter passkey to turn lock OFF</label>
+                    <input type="password" id="parentalUnlockPasskey" class="settings-input" maxlength="8" inputmode="numeric" pattern="[0-9]*" placeholder="8-digit passkey" autocomplete="off">
+                    <button type="button" onclick="disableParentalPurchaseLock()" style="width:100%;margin-top:10px;background:linear-gradient(180deg,#64748b,#334155);color:#fff;">Turn OFF purchase lock</button>
+                </div>
+                <p id="parentalError" class="account-error" style="display:none;margin-top:8px;"></p>
+                <p id="parentalSuccess" class="security-success" style="display:none;margin-top:8px;"></p>
             </div>
         </div>
 
@@ -627,7 +647,10 @@
 <div id="profileOverlay" class="overlay" style="display:none;">
     <div class="popup profile-popup" style="max-width:min(360px,calc(100vw - 20px));">
         <img src="logo.jpg" class="popupLogo" alt="Avatar" id="profileAvatarImg">
-        <h2 id="profileUsername">Username</h2>
+        <div class="profile-name-row">
+            <h2 id="profileUsername">Username</h2>
+            <button type="button" id="profileDonateBtn" class="profile-donate-btn" style="display:none;" title="Donate AzoraCoins">Donate</button>
+        </div>
         <div id="profileBadges" class="profile-badges" style="display:none;"></div>
         <div id="profileUserId" class="profile-user-id"></div>
         <div id="profileStatus" class="profile-status"><span class="status-dot offline"></span> Offline</div>
@@ -946,7 +969,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=61.0"></script>
+<script src="script.js?v=62.0"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {
@@ -1086,6 +1109,49 @@ if ("serviceWorker" in navigator) {
     </div>
 </div>
 
+
+
+<!-- Donate AzoraCoins -->
+<div id="donateOverlay" class="overlay" style="display:none;">
+    <div class="popup donate-popup">
+        <h2 style="text-align:center;margin:0 0 6px;">Donate AzoraCoins</h2>
+        <p id="donateTargetLabel" class="donate-target-label">To: Player</p>
+        <p class="donate-balance-line">Your balance: <strong id="donateBalanceText">0</strong> 🪙</p>
+        <div class="donate-row">
+            <div class="donate-amount-wrap">
+                <label for="donateAmountInput">Amount</label>
+                <input type="number" id="donateAmountInput" min="0.05" step="0.01" value="0.05" placeholder="0.05">
+            </div>
+            <button type="button" class="donate-all-btn" onclick="setDonateAllAmount()">Donate all AzoraCoins</button>
+        </div>
+        <p class="settings-hint" style="margin:8px 0 0;">Minimum donation: <strong>0.05</strong> AzoraCoins. Recipient sees it in Pending for 1 minute, then it is added to their balance.</p>
+        <p id="donateFormError" class="account-error" style="display:none;margin-top:8px;"></p>
+        <div class="donate-actions">
+            <button type="button" class="donate-continue-btn" onclick="confirmDonatePrompt()">Continue</button>
+            <button type="button" class="donate-cancel-btn" onclick="closeDonateOverlay()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="donateConfirmOverlay" class="overlay" style="display:none;">
+    <div class="popup donate-popup" style="max-width:min(320px,calc(100vw - 24px));">
+        <h2 style="text-align:center;margin:0 0 10px;">Are you sure?</h2>
+        <p id="donateConfirmText" style="text-align:center;margin:0 0 14px;line-height:1.4;"></p>
+        <div class="donate-actions">
+            <button type="button" class="donate-yes-btn" onclick="startDonateTransaction()">Yes</button>
+            <button type="button" class="donate-no-btn" onclick="cancelDonateConfirm()">No</button>
+        </div>
+    </div>
+</div>
+
+<div id="donateProcessOverlay" class="overlay" style="display:none;">
+    <div class="popup donate-popup donate-process-popup">
+        <div id="donateProcessSpinner" class="donate-spinner"></div>
+        <p id="donateProcessTitle" style="text-align:center;font-weight:800;margin:12px 0 6px;">Processing…</p>
+        <p id="donateProcessMsg" style="text-align:center;margin:0;opacity:0.9;line-height:1.4;"></p>
+        <button type="button" id="donateProcessCloseBtn" class="donate-cancel-btn" style="display:none;margin-top:14px;width:100%;" onclick="closeDonateProcess()">Close</button>
+    </div>
+</div>
 
 <!-- Create T-Shirt (free upload) -->
 <div id="createTShirtOverlay" class="overlay" style="display:none;">
