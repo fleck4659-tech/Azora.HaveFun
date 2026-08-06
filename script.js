@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v63.4 profile 3D avatar fixed","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v63.5 profile avatar per-user not mine","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -1704,6 +1704,11 @@ function setLoggedInAccount(account) {
             setTimeout(function () { checkPendingAdminNameNotice(); }, 900);
         }
     } catch (eAN) {}
+    try {
+        if (account && account.username && account.avatar && typeof publishPublicAvatar === "function") {
+            publishPublicAvatar(account.username, account.avatar);
+        }
+    } catch (ePub2) {}
 }
 
 function finishCreateAccount(username, password, userId, email) {
@@ -4279,6 +4284,12 @@ function saveAvatar() {
 
     try {
         localStorage.setItem("azoraAccount", JSON.stringify(account));
+    try {
+        if (typeof publishPublicAvatar === "function" && account.username && account.avatar) {
+            publishPublicAvatar(account.username, account.avatar);
+        }
+    } catch (ePubAv) {}
+
         // Permanent backup so colors survive even if account object is rewritten
         localStorage.setItem("azoraAvatar", JSON.stringify(account.avatar));
     } catch (e) {
@@ -7899,12 +7910,18 @@ function openUserProfile(username) {
     document.getElementById("profileOverlay").style.display = "flex";
     try {
         if (typeof showProfile3DAvatar === "function") {
-            // Wait for layout so canvas has real width/height
             setTimeout(function () { showProfile3DAvatar(username); }, 120);
-            setTimeout(function () {
-                // Second pass if first ran before layout
-                if (window._profile3d && !_profile3d.group) showProfile3DAvatar(username);
-            }, 400);
+        }
+        // Always try cloud for THIS username's avatar (not the viewer's)
+        if (typeof fetchPublicAvatarFromCloud === "function") {
+            fetchPublicAvatarFromCloud(username, function (av) {
+                try {
+                    var ov = document.getElementById("profileOverlay");
+                    if (!ov || ov.style.display !== "flex") return;
+                    if (openUserProfile._activeUsername !== username) return;
+                    if (typeof showProfile3DAvatar === "function") showProfile3DAvatar(username);
+                } catch (eRef) {}
+            });
         }
     } catch (e3dMain) {}
 
@@ -18652,58 +18669,160 @@ var _profile3d = {
 };
 
 function getAvatarDataForUsername(username) {
-    username = String(username || "");
-    var def = (typeof defaultAvatarForGender === "function")
-        ? defaultAvatarForGender("boy")
-        : { gender: "boy", head: "#ffcc00", torso: "#1e60ff", leftArm: "#ffcc00", rightArm: "#ffcc00", leftLeg: "#00ebd4", rightLeg: "#00ebd4", hair: "#3b2f2f" };
+    username = String(username || "").trim();
+    var me = "";
+    try { me = typeof getMyUsername === "function" ? String(getMyUsername() || "") : ""; } catch (eM) {}
+    var viewingSelf = !!(me && username && me.toLowerCase() === username.toLowerCase());
 
-    // 1) Local saved accounts
+    function cloneAvatar(src, genderHint) {
+        src = src || {};
+        var g = (src.gender === "girl" || src.gender === "female" || genderHint === "girl" || genderHint === "female") ? "girl" : "boy";
+        var base = (typeof defaultAvatarForGender === "function") ? defaultAvatarForGender(g) : {
+            gender: g, head: "#ffcc00", torso: "#1e60ff", leftArm: "#ffcc00", rightArm: "#ffcc00",
+            leftLeg: "#00ebd4", rightLeg: "#00ebd4", hair: "#3b2f2f", face: "default"
+        };
+        // Explicit field copy — never keep a live reference to someone else's (or my) account object
+        return {
+            gender: g,
+            head: src.head || base.head,
+            torso: src.torso || base.torso,
+            leftArm: src.leftArm || base.leftArm,
+            rightArm: src.rightArm || base.rightArm,
+            leftLeg: src.leftLeg || base.leftLeg,
+            rightLeg: src.rightLeg || base.rightLeg,
+            hair: src.hair || base.hair,
+            hairStyle: src.hairStyle || (g === "girl" ? "hair_girl_default" : "hair_boy_none"),
+            face: src.face || base.face || "default",
+            scales: src.scales ? {
+                head: src.scales.head || 1,
+                torso: src.scales.torso || 1,
+                arms: src.scales.arms || 1,
+                legs: src.scales.legs || 1
+            } : { head: 1, torso: 1, arms: 1, legs: 1 }
+        };
+    }
+
+    // A) Viewing yourself — only then may we use the live session account
+    if (viewingSelf) {
+        try {
+            var cur = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+            if (cur && !cur.isGuest && cur.avatar) {
+                return cloneAvatar(cur.avatar, cur.gender);
+            }
+        } catch (eSelf) {}
+    }
+
+    // B) Public avatar cache (written when anyone saves, or pulled from cloud)
+    try {
+        var pub = JSON.parse(localStorage.getItem("azoraPublicAvatars") || "{}");
+        var hit = pub[username] || pub[username.toLowerCase()];
+        if (hit && typeof hit === "object") {
+            return cloneAvatar(hit, hit.gender);
+        }
+    } catch (ePub) {}
+
+    // C) Local account map — ONLY if this exact username owns that entry
     try {
         var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
-        if (map[username] && map[username].avatar) {
-            return Object.assign({}, def, map[username].avatar, {
-                gender: map[username].gender || (map[username].avatar && map[username].avatar.gender) || def.gender
-            });
-        }
-        // case-insensitive
-        var keys = Object.keys(map);
+        var keys = Object.keys(map || {});
         for (var i = 0; i < keys.length; i++) {
-            if (String(keys[i]).toLowerCase() === username.toLowerCase() && map[keys[i]].avatar) {
-                var a = map[keys[i]];
-                return Object.assign({}, def, a.avatar, { gender: a.gender || a.avatar.gender || def.gender });
-            }
+            var a = map[keys[i]];
+            if (!a || a.isGuest || !a.avatar) continue;
+            var un = String(a.username || keys[i] || "");
+            if (un.toLowerCase() !== username.toLowerCase()) continue;
+            // Do not use MY account data when viewing someone else
+            if (!viewingSelf && me && un.toLowerCase() === me.toLowerCase()) continue;
+            return cloneAvatar(a.avatar, a.gender);
         }
     } catch (e1) {}
 
-    // 2) Current session if viewing self
-    try {
-        var me = typeof getMyUsername === "function" ? getMyUsername() : "";
-        if (me && me === username) {
-            var cur = JSON.parse(localStorage.getItem("azoraAccount") || "null");
-            if (cur && cur.avatar) {
-                return Object.assign({}, def, cur.avatar, { gender: cur.gender || cur.avatar.gender || def.gender });
-            }
-        }
-    } catch (e2) {}
-
-    // 3) Cloud social blob may carry avatar
+    // D) Social blob avatar (if synced)
     try {
         var social = typeof getSocialData === "function" ? getSocialData() : {};
-        if (social[username] && social[username].avatar) {
-            return Object.assign({}, def, social[username].avatar);
+        var skey = Object.keys(social || {}).find(function (k) { return String(k).toLowerCase() === username.toLowerCase(); });
+        if (skey && social[skey] && social[skey].avatar) {
+            return cloneAvatar(social[skey].avatar, social[skey].avatar.gender);
         }
     } catch (e3) {}
 
-    // 4) Owner default look
+    // E) Neutral default for that user — NEVER fall back to the viewer's avatar
     if (typeof isOwnerUsername === "function" && isOwnerUsername(username)) {
-        return Object.assign({}, def, {
-            head: "#ffcc00", torso: "#1e60ff", leftArm: "#ffcc00", rightArm: "#ffcc00",
-            leftLeg: "#00ebd4", rightLeg: "#00ebd4", gender: "boy"
-        });
+        return cloneAvatar({
+            gender: "boy", head: "#ffcc00", torso: "#1e60ff", leftArm: "#ffcc00", rightArm: "#ffcc00",
+            leftLeg: "#00ebd4", rightLeg: "#00ebd4", hair: "#3b2f2f", hairStyle: "hair_boy_none"
+        }, "boy");
     }
-
-    return def;
+    return cloneAvatar(null, "boy");
 }
+
+/** Persist a user's avatar so other profiles on this device (and cloud) can show it. */
+function publishPublicAvatar(username, avatar) {
+    username = String(username || "").trim();
+    if (!username || !avatar) return;
+    try {
+        var pub = JSON.parse(localStorage.getItem("azoraPublicAvatars") || "{}");
+        var copy = {
+            gender: avatar.gender || "boy",
+            head: avatar.head, torso: avatar.torso,
+            leftArm: avatar.leftArm, rightArm: avatar.rightArm,
+            leftLeg: avatar.leftLeg, rightLeg: avatar.rightLeg,
+            hair: avatar.hair, hairStyle: avatar.hairStyle, face: avatar.face,
+            scales: avatar.scales || null,
+            updatedAt: Date.now()
+        };
+        pub[username] = copy;
+        pub[username.toLowerCase()] = copy;
+        localStorage.setItem("azoraPublicAvatars", JSON.stringify(pub));
+    } catch (e) {}
+    // Cloud path for cross-device profile previews
+    try {
+        if (typeof isCloudSocialReady === "function" && isCloudSocialReady() && typeof cloudBase === "function" && typeof cloudPutJson === "function") {
+            var safe = encodeURIComponent(username.toLowerCase().replace(/[.#$\/\[\]]/g, "_"));
+            var url = cloudBase() + "/azoraAvatars/" + safe + ".json";
+            cloudPutJson(url, {
+                username: username,
+                avatar: {
+                    gender: avatar.gender || "boy",
+                    head: avatar.head, torso: avatar.torso,
+                    leftArm: avatar.leftArm, rightArm: avatar.rightArm,
+                    leftLeg: avatar.leftLeg, rightLeg: avatar.rightLeg,
+                    hair: avatar.hair, hairStyle: avatar.hairStyle, face: avatar.face,
+                    scales: avatar.scales || null
+                },
+                updatedAt: Date.now()
+            }).catch(function () {});
+        }
+    } catch (eC) {}
+}
+window.publishPublicAvatar = publishPublicAvatar;
+
+/** Fetch another player's public avatar from cloud, then refresh profile 3D. */
+function fetchPublicAvatarFromCloud(username, callback) {
+    callback = callback || function () {};
+    username = String(username || "").trim();
+    if (!username) { callback(null); return; }
+    try {
+        if (!(typeof isCloudSocialReady === "function" && isCloudSocialReady())) { callback(null); return; }
+        var safe = encodeURIComponent(username.toLowerCase().replace(/[.#$\/\[\]]/g, "_"));
+        var url = cloudBase() + "/azoraAvatars/" + safe + ".json";
+        cloudFetchJson(url).then(function (data) {
+            if (data && data.avatar && typeof data.avatar === "object") {
+                // Local cache only — do not re-upload
+                try {
+                    var pub = JSON.parse(localStorage.getItem("azoraPublicAvatars") || "{}");
+                    pub[username] = data.avatar;
+                    pub[username.toLowerCase()] = data.avatar;
+                    localStorage.setItem("azoraPublicAvatars", JSON.stringify(pub));
+                } catch (eL) {}
+                callback(data.avatar);
+            } else {
+                callback(null);
+            }
+        }).catch(function () { callback(null); });
+    } catch (e) { callback(null); }
+}
+window.fetchPublicAvatarFromCloud = fetchPublicAvatarFromCloud;
+window.getAvatarDataForUsername = getAvatarDataForUsername;
 
 function _profile3dMat(color) {
     try {
