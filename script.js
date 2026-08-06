@@ -12304,18 +12304,18 @@ window.syncCustomizerGenderUI = syncCustomizerGenderUI;
    ========================================================= */
 
 var AZORA_HAIR_CATALOG = [
-    // Girl hair — low prices for small coin economy
+    // Girl hair — cheaper prices (earnings unchanged)
     { id: "hair_girl_default", name: "Classic Short", gender: "girl", price: 0, desc: "Default short hair for girls" },
-    { id: "hair_girl_bangs", name: "Heavy Bangs", gender: "girl", price: 0.05, desc: "Cute bangs across the forehead" },
-    { id: "hair_girl_bob", name: "Bob Cut", gender: "girl", price: 0.08, desc: "Clean shoulder-length bob" },
-    { id: "hair_girl_ponytail", name: "Ponytail", gender: "girl", price: 0.1, desc: "Tied-back ponytail" },
-    { id: "hair_girl_pigtails", name: "Pigtails", gender: "girl", price: 0.12, desc: "Twin pigtails" },
+    { id: "hair_girl_bangs", name: "Heavy Bangs", gender: "girl", price: 0.02, desc: "Cute bangs across the forehead" },
+    { id: "hair_girl_bob", name: "Bob Cut", gender: "girl", price: 0.03, desc: "Clean shoulder-length bob" },
+    { id: "hair_girl_ponytail", name: "Ponytail", gender: "girl", price: 0.04, desc: "Tied-back ponytail" },
+    { id: "hair_girl_pigtails", name: "Pigtails", gender: "girl", price: 0.05, desc: "Twin pigtails" },
     // Boy hair
     { id: "hair_boy_none", name: "No Hair", gender: "boy", price: 0, desc: "Default — no hair" },
-    { id: "hair_boy_short", name: "Short Crop", gender: "boy", price: 0.05, desc: "Simple short hair" },
-    { id: "hair_boy_spiky", name: "Spiky", gender: "boy", price: 0.08, desc: "Spiky top hair" },
-    { id: "hair_boy_side", name: "Side Sweep", gender: "boy", price: 0.1, desc: "Swept to one side" },
-    { id: "hair_boy_cap", name: "Flat Cap", gender: "boy", price: 0.15, desc: "Flat cap style hair" }
+    { id: "hair_boy_short", name: "Short Crop", gender: "boy", price: 0.02, desc: "Simple short hair" },
+    { id: "hair_boy_spiky", name: "Spiky", gender: "boy", price: 0.03, desc: "Spiky top hair" },
+    { id: "hair_boy_side", name: "Side Sweep", gender: "boy", price: 0.04, desc: "Swept to one side" },
+    { id: "hair_boy_cap", name: "Flat Cap", gender: "boy", price: 0.05, desc: "Flat cap style hair" }
 ];
 
 /** Face catalog — display name = filename without .png, "_" → space
@@ -12323,16 +12323,16 @@ var AZORA_HAIR_CATALOG = [
 var AZORA_FACE_CATALOG = [
     { id: "face_smile", name: "Smile", file: "Smile.png", gender: "any", price: 0, desc: "Default smile face", isDefault: true },
     { id: "face_female_smile", name: "Female Smile", file: "female_smile.png", gender: "any", price: 0, desc: "Default girl smile face", isDefault: true },
-    { id: "face_simple_smile", name: "Simple Smile", file: "simple_smile.png", gender: "any", price: 0.05, desc: "Clean simple smile" },
-    { id: "face_cartoonish_smile", name: "Cartoonish Smile", file: "cartoonish_smile.png", gender: "any", price: 0.08, desc: "Fun cartoon smile" },
-    { id: "face_wide_mouth", name: "Wide Mouth", file: "wide_mouth.png", gender: "any", price: 0.08, desc: "Big open smile" },
-    { id: "face_greedy_smile", name: "Greedy Smile", file: "greedy_smile.png", gender: "any", price: 0.1, desc: "Playful greedy grin" },
-    { id: "face_crying", name: "Crying", file: "crying.png", gender: "any", price: 0.1, desc: "Sad tears face" },
-    { id: "face_sad_tears", name: "Sad Tears", file: "sad_tears.png", gender: "any", price: 0.1, desc: "Emotional tears" },
-    { id: "face_tears_of_joy", name: "Tears Of Joy", file: "tears_of_joy.png", gender: "any", price: 0.12, desc: "Happy tears of joy" },
-    { id: "face_mysterious", name: "Mysterious", file: "mysterious.png", gender: "any", price: 0.12, desc: "Mysterious expression" },
-    { id: "face_red_mysterious", name: "Red Mysterious", file: "red_mysterious.png", gender: "any", price: 0.12, desc: "Bold red mysterious smile" },
-    { id: "face_robotic", name: "Robotic", file: "robotic.png", gender: "any", price: 0.15, desc: "Robotic face look" }
+    { id: "face_simple_smile", name: "Simple Smile", file: "simple_smile.png", gender: "any", price: 0.02, desc: "Clean simple smile" },
+    { id: "face_cartoonish_smile", name: "Cartoonish Smile", file: "cartoonish_smile.png", gender: "any", price: 0.03, desc: "Fun cartoon smile" },
+    { id: "face_wide_mouth", name: "Wide Mouth", file: "wide_mouth.png", gender: "any", price: 0.03, desc: "Big open smile" },
+    { id: "face_greedy_smile", name: "Greedy Smile", file: "greedy_smile.png", gender: "any", price: 0.04, desc: "Playful greedy grin" },
+    { id: "face_crying", name: "Crying", file: "crying.png", gender: "any", price: 0.04, desc: "Sad tears face" },
+    { id: "face_sad_tears", name: "Sad Tears", file: "sad_tears.png", gender: "any", price: 0.04, desc: "Emotional tears" },
+    { id: "face_tears_of_joy", name: "Tears Of Joy", file: "tears_of_joy.png", gender: "any", price: 0.05, desc: "Happy tears of joy" },
+    { id: "face_mysterious", name: "Mysterious", file: "mysterious.png", gender: "any", price: 0.05, desc: "Mysterious expression" },
+    { id: "face_red_mysterious", name: "Red Mysterious", file: "red_mysterious.png", gender: "any", price: 0.05, desc: "Bold red mysterious smile" },
+    { id: "face_robotic", name: "Robotic", file: "robotic.png", gender: "any", price: 0.06, desc: "Robotic face look" }
 ];
 
 function faceCatalogById(id) {
@@ -12359,18 +12359,18 @@ function isShirtItemId(id) {
 
 /** Official T-Shirts by Azora — applied to the front of the torso */
 var AZORA_TSHIRT_CATALOG = [
-    { id: "shirt_rainbow", name: "Rainbow!", file: "rainbow!.png", price: 0.08, desc: "Bright rainbow stripes across the torso", by: "Azora", official: true },
-    { id: "shirt_smiley", name: "Smiley", file: "smiley.png", price: 0.07, desc: "Happy smiley face design", by: "Azora", official: true },
-    { id: "shirt_a", name: "A", file: "a.png", price: 0.05, desc: "Letter A — bold red mark", by: "Azora", official: true },
-    { id: "shirt_b", name: "B", file: "b.png", price: 0.05, desc: "Letter B — orange outline", by: "Azora", official: true },
-    { id: "shirt_c", name: "C", file: "c.png", price: 0.05, desc: "Letter C — yellow curve", by: "Azora", official: true },
-    { id: "shirt_g", name: "G", file: "g.png", price: 0.05, desc: "Letter G — cyan style", by: "Azora", official: true },
-    { id: "shirt_h", name: "H", file: "h.png", price: 0.05, desc: "Letter H — mint green", by: "Azora", official: true },
-    { id: "shirt_k", name: "K", file: "k.png", price: 0.05, desc: "Letter K — magenta mark", by: "Azora", official: true },
-    { id: "shirt_l", name: "L", file: "l.png", price: 0.05, desc: "Letter L — lime green", by: "Azora", official: true },
-    { id: "shirt_p", name: "P", file: "p.png", price: 0.05, desc: "Letter P — purple style", by: "Azora", official: true },
-    { id: "shirt_r", name: "R", file: "r.png", price: 0.05, desc: "Letter R — blue outline", by: "Azora", official: true },
-    { id: "shirt_z", name: "Z", file: "z.png", price: 0.05, desc: "Letter Z — blue zig-zag", by: "Azora", official: true }
+    { id: "shirt_rainbow", name: "Rainbow!", file: "rainbow!.png", price: 0.04, desc: "Bright rainbow stripes across the torso", by: "Azora", official: true },
+    { id: "shirt_smiley", name: "Smiley", file: "smiley.png", price: 0.03, desc: "Happy smiley face design", by: "Azora", official: true },
+    { id: "shirt_a", name: "A", file: "a.png", price: 0.02, desc: "Letter A — bold red mark", by: "Azora", official: true },
+    { id: "shirt_b", name: "B", file: "b.png", price: 0.02, desc: "Letter B — orange outline", by: "Azora", official: true },
+    { id: "shirt_c", name: "C", file: "c.png", price: 0.02, desc: "Letter C — yellow curve", by: "Azora", official: true },
+    { id: "shirt_g", name: "G", file: "g.png", price: 0.02, desc: "Letter G — cyan style", by: "Azora", official: true },
+    { id: "shirt_h", name: "H", file: "h.png", price: 0.02, desc: "Letter H — mint green", by: "Azora", official: true },
+    { id: "shirt_k", name: "K", file: "k.png", price: 0.02, desc: "Letter K — magenta mark", by: "Azora", official: true },
+    { id: "shirt_l", name: "L", file: "l.png", price: 0.02, desc: "Letter L — lime green", by: "Azora", official: true },
+    { id: "shirt_p", name: "P", file: "p.png", price: 0.02, desc: "Letter P — purple style", by: "Azora", official: true },
+    { id: "shirt_r", name: "R", file: "r.png", price: 0.02, desc: "Letter R — blue outline", by: "Azora", official: true },
+    { id: "shirt_z", name: "Z", file: "z.png", price: 0.02, desc: "Letter Z — blue zig-zag", by: "Azora", official: true }
 ];
 
 function officialTShirtCatalogById(id) {
@@ -13414,7 +13414,7 @@ function openCreateTShirt() {
     var prev = document.getElementById("tshirtPreviewImg");
     var fileEl = document.getElementById("tshirtFileInput");
     if (nameEl) nameEl.value = "";
-    if (priceEl) priceEl.value = "0.05";
+    if (priceEl) priceEl.value = "0.02";
     if (fileEl) fileEl.value = "";
     if (prev) { prev.removeAttribute("src"); prev.style.display = "none"; }
     window._azoraTShirtDataUrl = null;
