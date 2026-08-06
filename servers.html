@@ -114,6 +114,32 @@
         #userMsgModal .row-btns button { flex: 1; }
         #userMsgStatus { font-size: 12px; margin-top: 8px; color: #94a3b8; min-height: 18px; }
 
+        #userMsgModal .donate-box {
+            margin-top: 16px; padding-top: 14px; border-top: 1px solid #30363d;
+        }
+        #userMsgModal .donate-box h4 {
+            margin: 0 0 8px; font-size: 0.95rem; color: #86efac;
+        }
+        #userMsgModal .donate-meta {
+            font-size: 12px; color: #94a3b8; margin: 0 0 10px; line-height: 1.4;
+        }
+        #userMsgModal .donate-row {
+            display: flex; gap: 8px; align-items: stretch; margin-bottom: 8px;
+        }
+        #userMsgModal .donate-row input {
+            margin: 0; flex: 1;
+        }
+        #userMsgModal .donate-err {
+            color: #ff7b72; font-size: 13px; font-weight: bold; min-height: 18px; margin: 4px 0 8px;
+        }
+        #userMsgModal .donate-ok {
+            color: #6ee7b7; font-size: 13px; margin: 4px 0 8px;
+        }
+        #userMsgModal .btn-donate {
+            background: linear-gradient(90deg, #22c55e, #15803d) !important;
+            width: 100%;
+        }
+
         th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #21262d; }
         th { color: #8b949e; background: #0d1117; }
         .uid { font-family: Consolas, monospace; color: #58a6ff; font-weight: bold; }
@@ -232,7 +258,7 @@
     <!-- USERS -->
     <div class="tab-panel panel-card" id="panel-users">
         <h2>User Registry</h2>
-        <p class="muted">Global list when Firebase is connected. Guests never appear here.</p>
+        <p class="muted">Global list when Firebase is connected. Guests never appear here. Click a user to message them or donate from the official Azora balance (daily limit · pending 1 min).</p>
         <div class="row">
             <input type="text" id="userSearch" placeholder="Filter by username or ID…" oninput="renderUsers()">
             <button class="btn-ghost" style="flex:0.35" onclick="refreshUsers()">Reload users</button>
@@ -931,6 +957,15 @@ function openUserMessageModal(username, userId) {
     if (line) line.textContent = "To: " + username + (userId ? " (" + userId + ")" : "");
     if (ta) ta.value = "";
     if (st) st.textContent = "";
+    try {
+        var err = document.getElementById("staffDonateErr");
+        var ok = document.getElementById("staffDonateOk");
+        if (err) err.textContent = "";
+        if (ok) { ok.style.display = "none"; ok.textContent = ""; }
+        var inp = document.getElementById("staffDonateAmount");
+        if (inp) inp.value = "0.05";
+        refreshStaffDonateMeta();
+    } catch (e) {}
     if (m) m.classList.add("open");
     if (ta) setTimeout(function () { ta.focus(); }, 50);
 }
@@ -991,6 +1026,255 @@ function sendUserBroadcast() {
         if (st) st.textContent = "Cloud failed — saved locally. " + e;
     });
 }
+
+/* ===== Staff donate from official Azora balance (servers only) ===== */
+var STAFF_DONATE_MIN = 0.01;
+var STAFF_DONATE_DAILY_MAX = 10.00;
+
+function staffDonateTodayKey() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function getStaffDonateDayState() {
+    try {
+        var raw = localStorage.getItem("azoraStaffDonateDay");
+        var o = raw ? JSON.parse(raw) : null;
+        if (!o || typeof o !== "object") o = {};
+        var key = staffDonateTodayKey();
+        if (o.day !== key) return { day: key, total: 0, limitedUntil: 0 };
+        return {
+            day: key,
+            total: Math.max(0, Number(o.total) || 0),
+            limitedUntil: Number(o.limitedUntil) || 0
+        };
+    } catch (e) {
+        return { day: staffDonateTodayKey(), total: 0, limitedUntil: 0 };
+    }
+}
+
+function saveStaffDonateDayState(s) {
+    try { localStorage.setItem("azoraStaffDonateDay", JSON.stringify(s)); } catch (e) {}
+}
+
+function getOfficialAzoraBalance() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc && !acc.isGuest && String(acc.username || "").toLowerCase() === "azora") {
+            if (typeof acc.coins === "number" && !isNaN(acc.coins)) return Math.max(0, acc.coins);
+        }
+    } catch (e) {}
+    try {
+        var map = JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+        if (map && typeof map === "object") {
+            var keys = Object.keys(map);
+            for (var i = 0; i < keys.length; i++) {
+                if (String(keys[i]).toLowerCase() === "azora" && typeof map[keys[i]].coins === "number") {
+                    return Math.max(0, map[keys[i]].coins);
+                }
+            }
+        }
+    } catch (e2) {}
+    try {
+        var c = parseFloat(localStorage.getItem("azoraCoins") || "0");
+        if (!isNaN(c)) return Math.max(0, c);
+    } catch (e3) {}
+    return 0;
+}
+
+function setOfficialAzoraBalance(next) {
+    next = Math.round(Math.max(0, Number(next) || 0) * 1000) / 1000;
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc && !acc.isGuest && String(acc.username || "").toLowerCase() === "azora") {
+            acc.coins = next;
+            localStorage.setItem("azoraAccount", JSON.stringify(acc));
+            localStorage.setItem("azoraCoins", String(next));
+        }
+    } catch (e) {}
+    try {
+        var map = JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+        if (!map || typeof map !== "object") map = {};
+        Object.keys(map).forEach(function (k) {
+            if (String(k).toLowerCase() === "azora") map[k].coins = next;
+        });
+        localStorage.setItem("azoraAccounts", JSON.stringify(map));
+    } catch (e2) {}
+}
+
+function remainingStaffDonateToday() {
+    var st = getStaffDonateDayState();
+    if (st.limitedUntil && Date.now() < st.limitedUntil) return 0;
+    return Math.max(0, Math.round((STAFF_DONATE_DAILY_MAX - st.total) * 1000) / 1000);
+}
+
+function refreshStaffDonateMeta() {
+    var el = document.getElementById("staffDonateMeta");
+    if (!el) return;
+    var bal = getOfficialAzoraBalance();
+    var left = remainingStaffDonateToday();
+    var st = getStaffDonateDayState();
+    var lockNote = "";
+    if (st.limitedUntil && Date.now() < st.limitedUntil) {
+        var mins = Math.ceil((st.limitedUntil - Date.now()) / 60000);
+        lockNote = " · <span style='color:#ff7b72'>24h limit active (~" + mins + " min left)</span>";
+    }
+    el.innerHTML =
+        "From official <strong>Azora</strong> balance: <strong>" + bal.toFixed(2) + "</strong> 🪙 · " +
+        "Remaining today: <strong>" + left.toFixed(2) + "</strong> / " + STAFF_DONATE_DAILY_MAX.toFixed(2) +
+        " · Min <strong>0.01</strong> · Pending <strong>1 minute</strong>" + lockNote;
+}
+
+function setStaffDonateMaxAllowed() {
+    var bal = getOfficialAzoraBalance();
+    var left = remainingStaffDonateToday();
+    var max = Math.max(0, Math.round(Math.min(bal, left) * 1000) / 1000);
+    var inp = document.getElementById("staffDonateAmount");
+    if (inp) inp.value = max > 0 ? String(max) : "0.01";
+    var err = document.getElementById("staffDonateErr");
+    if (err) err.textContent = "";
+}
+
+function getStaffFirebaseBase() {
+    try {
+        if (typeof getFirebaseUrl === "function") {
+            var u = getFirebaseUrl();
+            if (u) return String(u).replace(/\/$/, "");
+        }
+    } catch (e) {}
+    try {
+        return (localStorage.getItem("azoraStaffFirebaseUrl") || "").replace(/\/$/, "");
+    } catch (e2) {}
+    return "";
+}
+
+function submitStaffDonate() {
+    var err = document.getElementById("staffDonateErr");
+    var ok = document.getElementById("staffDonateOk");
+    if (err) err.textContent = "";
+    if (ok) { ok.style.display = "none"; ok.textContent = ""; }
+
+    if (!_userMsgTarget || !_userMsgTarget.username) {
+        if (err) err.textContent = "No user selected.";
+        return;
+    }
+    var target = String(_userMsgTarget.username).trim();
+    if (!target) {
+        if (err) err.textContent = "No user selected.";
+        return;
+    }
+    if (target.toLowerCase() === "azora" || target.toLowerCase() === "system") {
+        if (err) err.textContent = "Cannot donate to Azora or system.";
+        return;
+    }
+
+    var inp = document.getElementById("staffDonateAmount");
+    var amount = parseFloat(inp && inp.value ? inp.value : "0");
+    if (isNaN(amount)) amount = 0;
+    amount = Math.round(amount * 1000) / 1000;
+
+    if (amount < STAFF_DONATE_MIN) {
+        if (err) err.textContent = "Minimum donation is 0.01 AzoraCoins.";
+        return;
+    }
+
+    var dayState = getStaffDonateDayState();
+    if (dayState.limitedUntil && Date.now() < dayState.limitedUntil) {
+        if (err) err.textContent = "Azora hit the daily staff donate limit. Try again after the 24 hour cooldown.";
+        return;
+    }
+
+    var left = remainingStaffDonateToday();
+    if (amount > left + 1e-9) {
+        if (err) err.textContent = "Donated way too much for today. Remaining staff limit: " + left.toFixed(2) + " AzoraCoins (max " + STAFF_DONATE_DAILY_MAX.toFixed(2) + " / day).";
+        return;
+    }
+
+    var bal = getOfficialAzoraBalance();
+    if (amount > bal + 1e-9) {
+        if (err) err.textContent = "Donated way too much. Azora only has " + bal.toFixed(2) + " AzoraCoins.";
+        return;
+    }
+
+    var nextBal = Math.round((bal - amount) * 1000) / 1000;
+    setOfficialAzoraBalance(nextBal);
+
+    dayState.total = Math.round((dayState.total + amount) * 1000) / 1000;
+    if (dayState.total >= STAFF_DONATE_DAILY_MAX - 1e-9) {
+        dayState.limitedUntil = Date.now() + 24 * 60 * 60 * 1000;
+    }
+    saveStaffDonateDayState(dayState);
+
+    var ts = Date.now();
+    var id = "sdon_" + ts + "_" + Math.random().toString(36).slice(2, 8);
+    var row = {
+        id: id,
+        toUser: target,
+        fromUser: "Azora",
+        itemName: "Staff Donation",
+        amount: amount,
+        fee: false,
+        collected: false,
+        type: "donation",
+        staff: true,
+        at: ts,
+        availableAt: ts + 60000
+    };
+
+    try {
+        var key = "azoraPendingDonations_" + String(target).trim().toLowerCase();
+        var list = JSON.parse(localStorage.getItem(key) || "[]");
+        if (!Array.isArray(list)) list = [];
+        list.unshift(row);
+        localStorage.setItem(key, JSON.stringify(list));
+    } catch (eP) {}
+
+    try {
+        var ledger = JSON.parse(localStorage.getItem("azoraSalesLedger") || "[]");
+        if (!Array.isArray(ledger)) ledger = [];
+        ledger.unshift(row);
+        localStorage.setItem("azoraSalesLedger", JSON.stringify(ledger.slice(0, 200)));
+    } catch (eL) {}
+
+    try {
+        var base = getStaffFirebaseBase();
+        if (base) {
+            var path = base + "/azoraDonations/" + encodeURIComponent(String(target).trim().toLowerCase()) + "/" + encodeURIComponent(id) + ".json";
+            fetch(path, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(row)
+            }).catch(function () {});
+        }
+    } catch (eC) {}
+
+    try {
+        var nkey = "azoraNotifications_" + String(target).trim().toLowerCase();
+        var notes = JSON.parse(localStorage.getItem(nkey) || "[]");
+        if (!Array.isArray(notes)) notes = [];
+        notes.unshift({
+            id: "n_" + ts,
+            text: "Azora donated " + amount.toFixed(2) + " AzoraCoins to you! (pending 1 minute)",
+            type: "donation",
+            at: ts,
+            read: false
+        });
+        localStorage.setItem(nkey, JSON.stringify(notes.slice(0, 80)));
+    } catch (eN) {}
+
+    if (ok) {
+        ok.style.display = "block";
+        ok.textContent = "Sent " + amount.toFixed(2) + " to " + target + ". Pending 1 minute. Azora balance now " + nextBal.toFixed(2) + ".";
+    }
+    try { logStaff("Staff donate " + amount.toFixed(2) + " → " + target + " (pending 1m)"); } catch (eLog) {}
+    refreshStaffDonateMeta();
+}
+
+window.refreshStaffDonateMeta = refreshStaffDonateMeta;
+window.setStaffDonateMaxAllowed = setStaffDonateMaxAllowed;
+window.submitStaffDonate = submitStaffDonate;
+
+
 window.openUserMessageModal = openUserMessageModal;
 window.closeUserMessageModal = closeUserMessageModal;
 window.sendUserBroadcast = sendUserBroadcast;
@@ -1017,7 +1301,7 @@ if (sessionStorage.getItem("azoraServerUnlocked") === "true") {
 
 <div id="userMsgModal" onclick="if(event.target===this)closeUserMessageModal()">
   <div class="modal-box" onclick="event.stopPropagation()">
-    <h3>Send broadcast to user</h3>
+    <h3>Message / donate to user</h3>
     <div class="to-line" id="userMsgToLine">To: —</div>
     <textarea id="userMsgText" maxlength="280" placeholder="Write a message that will appear at the top of their Azora screen…"></textarea>
     <div class="row-btns">
@@ -1025,6 +1309,20 @@ if (sessionStorage.getItem("azoraServerUnlocked") === "true") {
       <button type="button" class="btn-ghost" onclick="closeUserMessageModal()">Cancel</button>
     </div>
     <div id="userMsgStatus"></div>
+
+    <div class="donate-box">
+      <h4>Donate AzoraCoins (from Azora)</h4>
+      <p class="donate-meta" id="staffDonateMeta">
+        Taken from the official <strong>Azora</strong> balance only. Recipient sees it in <strong>Pending</strong> for 1 minute, then it is added. Min <strong>0.01</strong>. Daily staff limit applies so the economy does not inflate.
+      </p>
+      <div class="donate-row">
+        <input type="number" id="staffDonateAmount" min="0.01" step="0.01" value="0.05" placeholder="0.01">
+        <button type="button" class="btn-ghost" style="flex:0.45;width:auto;" onclick="setStaffDonateMaxAllowed()">Max allowed</button>
+      </div>
+      <div id="staffDonateErr" class="donate-err"></div>
+      <div id="staffDonateOk" class="donate-ok" style="display:none;"></div>
+      <button type="button" class="btn-donate" onclick="submitStaffDonate()">Donate from Azora</button>
+    </div>
   </div>
 </div>
 
