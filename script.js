@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v62.4 falling text retired","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v62.5 profile pic + identity","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -1223,6 +1223,7 @@ window.stopFallingPhrasesForGame = stopFallingPhrasesForGame;
 
 // --- Settings Logic ---
 function openSettings() {
+    try { if (typeof refreshIdentitySettingsUI === "function") refreshIdentitySettingsUI(); } catch (eId) {}
     try { ensureCurrentAccountInAltSlots(); } catch (eS) {}
 
     document.getElementById("settingsOverlay").style.display = "flex";
@@ -6172,9 +6173,479 @@ function getDisplayName() {
     try {
         var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
         if (acc.isGuest) return "Guest";
+        if (acc.displayName && String(acc.displayName).trim()) return String(acc.displayName).trim();
         return acc.username || "Guest";
     } catch (e) { return "Guest"; }
 }
+
+function getAccountProfilePic(username) {
+    try {
+        if (!username) {
+            var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+            if (acc && acc.profilePic) return acc.profilePic;
+            return "logo.jpg";
+        }
+        var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+        if (map[username] && map[username].profilePic) return map[username].profilePic;
+        var me = typeof getMyUsername === "function" ? getMyUsername() : "";
+        if (me && me === username) {
+            var cur = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+            if (cur && cur.profilePic) return cur.profilePic;
+        }
+    } catch (e) {}
+    return "logo.jpg";
+}
+
+function applyProfileAvatarUI(username, isOwn) {
+    var img = document.getElementById("profileAvatarImg");
+    var editBtn = document.getElementById("profileAvatarEditBtn");
+    var hint = document.getElementById("profileAvatarHint");
+    var wrap = document.getElementById("profileAvatarWrap");
+    var src = getAccountProfilePic(username);
+    if (img) {
+        img.src = src || "logo.jpg";
+        img.onerror = function () { this.onerror = null; this.src = "logo.jpg"; };
+    }
+    if (editBtn) editBtn.style.display = isOwn ? "flex" : "none";
+    if (hint) hint.style.display = isOwn ? "block" : "none";
+    if (wrap) {
+        wrap.classList.toggle("editable", !!isOwn);
+        wrap.onclick = isOwn ? function () { openProfilePicPicker(); } : null;
+    }
+}
+
+function openProfilePicPicker() {
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Create an account or log in to set a profile picture.");
+        return;
+    }
+    var inp = document.getElementById("profilePicFileInput");
+    if (inp) inp.click();
+}
+
+function onProfilePicSelected(ev) {
+    var file = ev && ev.target && ev.target.files && ev.target.files[0];
+    if (!file) return;
+    if (!/^image\//i.test(file.type || "")) {
+        alert("Please choose an image file.");
+        return;
+    }
+    if (file.size > 900000) {
+        alert("Image is too large. Please use a smaller picture (under ~900 KB).");
+        return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+        var dataUrl = String(reader.result || "");
+        // Downscale via canvas if huge dimensions
+        try {
+            var im = new Image();
+            im.onload = function () {
+                var max = 256;
+                var w = im.width, h = im.height;
+                var scale = Math.min(1, max / Math.max(w, h));
+                var cw = Math.max(1, Math.round(w * scale));
+                var ch = Math.max(1, Math.round(h * scale));
+                var canvas = document.createElement("canvas");
+                canvas.width = cw; canvas.height = ch;
+                var ctx = canvas.getContext("2d");
+                ctx.drawImage(im, 0, 0, cw, ch);
+                var out = canvas.toDataURL("image/jpeg", 0.85);
+                saveProfilePicDataUrl(out);
+            };
+            im.onerror = function () { saveProfilePicDataUrl(dataUrl); };
+            im.src = dataUrl;
+        } catch (e) {
+            saveProfilePicDataUrl(dataUrl);
+        }
+    };
+    reader.readAsDataURL(file);
+    try { ev.target.value = ""; } catch (e2) {}
+}
+
+function saveProfilePicDataUrl(dataUrl) {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (!acc || acc.isGuest) {
+            alert("Guests cannot set a profile picture. Create an account first.");
+            return;
+        }
+        acc.profilePic = dataUrl;
+        localStorage.setItem("azoraAccount", JSON.stringify(acc));
+        var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+        if (map[acc.username]) {
+            map[acc.username].profilePic = dataUrl;
+            if (typeof saveSavedAccounts === "function") saveSavedAccounts(map);
+            else localStorage.setItem("azoraAccounts", JSON.stringify(map));
+        }
+        var img = document.getElementById("profileAvatarImg");
+        if (img) img.src = dataUrl;
+        try {
+            if (typeof pushUserRegistryEntry === "function") pushUserRegistryEntry(acc);
+        } catch (e) {}
+        if (typeof playClickSound === "function") playClickSound();
+    } catch (e) {
+        alert("Could not save profile picture.");
+    }
+}
+
+function resetProfilePicToLogo() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (!acc || acc.isGuest) return;
+        delete acc.profilePic;
+        localStorage.setItem("azoraAccount", JSON.stringify(acc));
+        var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+        if (map[acc.username]) {
+            delete map[acc.username].profilePic;
+            if (typeof saveSavedAccounts === "function") saveSavedAccounts(map);
+            else localStorage.setItem("azoraAccounts", JSON.stringify(map));
+        }
+        var img = document.getElementById("profileAvatarImg");
+        if (img) img.src = "logo.jpg";
+    } catch (e) {}
+}
+
+var DISPLAY_NAME_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+
+function refreshIdentitySettingsUI() {
+    var acc = {};
+    try { acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}"); } catch (e) {}
+    var section = document.getElementById("identitySettingsSection");
+    var isFull = localStorage.getItem("loggedIn") === "true" && acc && !acc.isGuest && acc.username;
+    if (section) section.style.display = isFull ? "block" : "none";
+    if (!isFull) return;
+    var dn = document.getElementById("displayNameInput");
+    if (dn) dn.value = acc.displayName || acc.username || "";
+    var cool = document.getElementById("displayNameCooldown");
+    var last = Number(acc.displayNameChangedAt || 0);
+    var left = last ? (last + DISPLAY_NAME_COOLDOWN_MS) - Date.now() : 0;
+    if (cool) {
+        if (left > 0) {
+            var days = Math.ceil(left / (24 * 60 * 60 * 1000));
+            cool.textContent = "You can change your display name again in about " + days + " day" + (days === 1 ? "" : "s") + ".";
+        } else {
+            cool.textContent = "You can change your display name now (once every 3 days).";
+        }
+    }
+    var tog = document.getElementById("showPastUsernamesToggle");
+    if (tog) tog.checked = acc.showPastUsernames !== false;
+}
+
+function saveDisplayNameChange() {
+    var msg = document.getElementById("identitySettingsMsg");
+    function showMsg(t, ok) {
+        if (!msg) return;
+        msg.style.display = "block";
+        msg.style.color = ok ? "#15803d" : "#b91c1c";
+        msg.textContent = t;
+    }
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (!acc || acc.isGuest || !acc.username) {
+            showMsg("Log in with a full account to change display name.");
+            return;
+        }
+        var val = (document.getElementById("displayNameInput") || {}).value || "";
+        val = String(val).trim().slice(0, 24);
+        if (val.length < 2) {
+            showMsg("Display name must be at least 2 characters.");
+            return;
+        }
+        var last = Number(acc.displayNameChangedAt || 0);
+        if (last && Date.now() < last + DISPLAY_NAME_COOLDOWN_MS) {
+            var left = (last + DISPLAY_NAME_COOLDOWN_MS) - Date.now();
+            var days = Math.ceil(left / (24 * 60 * 60 * 1000));
+            showMsg("Please wait about " + days + " more day(s) before changing display name again.");
+            return;
+        }
+        acc.displayName = val;
+        acc.displayNameChangedAt = Date.now();
+        localStorage.setItem("azoraAccount", JSON.stringify(acc));
+        var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+        if (map[acc.username]) {
+            map[acc.username].displayName = val;
+            map[acc.username].displayNameChangedAt = acc.displayNameChangedAt;
+            if (typeof saveSavedAccounts === "function") saveSavedAccounts(map);
+            else localStorage.setItem("azoraAccounts", JSON.stringify(map));
+        }
+        showMsg("Display name saved!", true);
+        refreshIdentitySettingsUI();
+        try {
+            var pb = document.getElementById("profileButton");
+            if (pb) pb.textContent = "👤 " + val;
+        } catch (e2) {}
+        if (typeof playClickSound === "function") playClickSound();
+    } catch (e) {
+        showMsg("Could not save display name.");
+    }
+}
+
+function toggleShowPastUsernames(on) {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (!acc || acc.isGuest) return;
+        acc.showPastUsernames = !!on;
+        localStorage.setItem("azoraAccount", JSON.stringify(acc));
+        var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+        if (map[acc.username]) {
+            map[acc.username].showPastUsernames = !!on;
+            if (typeof saveSavedAccounts === "function") saveSavedAccounts(map);
+            else localStorage.setItem("azoraAccounts", JSON.stringify(map));
+        }
+    } catch (e) {}
+}
+
+var UNAME_QUIZ = [
+    { q: "What is the official owner username on Azora?", a: ["azora"] },
+    { q: "What is the platform currency called? (one word)", a: ["azoracoins", "azoracoin", "coins"] },
+    { q: "Minimum username length is how many characters? (number)", a: ["2"] },
+    { q: "What year was Azora first made? (2026)", a: ["2026"] },
+    { q: "True or false: guests can change usernames.", a: ["false", "no"] },
+    { q: "What badge does the owner Azora have related to development? (main developer / super admin / verified — type one)", a: ["main developer", "super admin", "verified", "developer"] }
+];
+
+function openUsernameChangeFlow() {
+    if (localStorage.getItem("loggedIn") !== "true") {
+        alert("Log in with a full account first.");
+        return;
+    }
+    var acc = {};
+    try { acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}"); } catch (e) {}
+    if (acc.isGuest) {
+        alert("Guests cannot change usernames. Create a real account first.");
+        return;
+    }
+    var box = document.getElementById("unameQuizBox");
+    if (box) {
+        // pick 3 random questions
+        var pool = UNAME_QUIZ.slice();
+        var picks = [];
+        while (picks.length < 3 && pool.length) {
+            var i = Math.floor(Math.random() * pool.length);
+            picks.push(pool.splice(i, 1)[0]);
+        }
+        window._unameQuizPicks = picks;
+        box.innerHTML = "";
+        picks.forEach(function (item, idx) {
+            var lab = document.createElement("label");
+            lab.className = "settings-label";
+            lab.style.fontSize = "12px";
+            lab.style.marginTop = "8px";
+            lab.textContent = (idx + 1) + ". " + item.q;
+            var inp = document.createElement("input");
+            inp.type = "text";
+            inp.className = "settings-input";
+            inp.id = "unameQuizAns" + idx;
+            inp.autocomplete = "off";
+            box.appendChild(lab);
+            box.appendChild(inp);
+        });
+    }
+    var s1 = document.getElementById("unameStep1");
+    var s2 = document.getElementById("unameStep2");
+    if (s1) s1.style.display = "block";
+    if (s2) s2.style.display = "none";
+    var err = document.getElementById("unameChangeError");
+    var ok = document.getElementById("unameChangeOk");
+    if (err) { err.style.display = "none"; err.textContent = ""; }
+    if (ok) { ok.style.display = "none"; ok.textContent = ""; }
+    var pw = document.getElementById("unameCurrentPassword");
+    if (pw) pw.value = "";
+    var ov = document.getElementById("usernameChangeOverlay");
+    if (ov) ov.style.display = "flex";
+}
+
+function closeUsernameChangeFlow() {
+    var ov = document.getElementById("usernameChangeOverlay");
+    if (ov) ov.style.display = "none";
+}
+
+function unameShowErr(t) {
+    var err = document.getElementById("unameChangeError");
+    var ok = document.getElementById("unameChangeOk");
+    if (ok) ok.style.display = "none";
+    if (err) { err.style.display = "block"; err.textContent = t; }
+}
+
+function unameVerifyStep1() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (!acc || !acc.username) { unameShowErr("Not logged in."); return; }
+        var pw = (document.getElementById("unameCurrentPassword") || {}).value || "";
+        if (String(pw) !== String(acc.password || "")) {
+            unameShowErr("Password is incorrect.");
+            return;
+        }
+        var picks = window._unameQuizPicks || [];
+        for (var i = 0; i < picks.length; i++) {
+            var ans = String((document.getElementById("unameQuizAns" + i) || {}).value || "").trim().toLowerCase();
+            var okAns = (picks[i].a || []).some(function (a) { return ans === String(a).toLowerCase(); });
+            if (!okAns) {
+                unameShowErr("One or more answers are incorrect. Try again.");
+                return;
+            }
+        }
+        document.getElementById("unameStep1").style.display = "none";
+        document.getElementById("unameStep2").style.display = "block";
+        var err = document.getElementById("unameChangeError");
+        if (err) err.style.display = "none";
+    } catch (e) {
+        unameShowErr("Something went wrong.");
+    }
+}
+
+function unameCommitChange() {
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (!acc || !acc.username) { unameShowErr("Not logged in."); return; }
+        var oldName = acc.username;
+        var n1 = String((document.getElementById("unameNewValue") || {}).value || "").trim();
+        var n2 = String((document.getElementById("unameNewConfirm") || {}).value || "").trim();
+        if (n1.length < 2) { unameShowErr("Username must be at least 2 characters."); return; }
+        if (n1 !== n2) { unameShowErr("Usernames do not match."); return; }
+        if (/[^a-zA-Z0-9_]/.test(n1)) { unameShowErr("Username can only use letters, numbers, and underscore."); return; }
+        if (n1.toLowerCase() === oldName.toLowerCase()) { unameShowErr("That is already your username."); return; }
+        if (typeof isOwnerUsername === "function" && isOwnerUsername(n1) && !isOwnerUsername(oldName)) {
+            unameShowErr("That username is reserved.");
+            return;
+        }
+        if (typeof isUsernameTakenLocal === "function" && isUsernameTakenLocal(n1)) {
+            var sug = typeof suggestUsernames === "function" ? suggestUsernames(n1) : [];
+            unameShowErr("That username is already taken." + (sug.length ? " Try: " + sug.join(", ") : ""));
+            return;
+        }
+        // Rewrite account map key
+        var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+        var entry = map[oldName] || Object.assign({}, acc);
+        entry.username = n1;
+        entry.displayName = entry.displayName || n1;
+        entry.usernameHistory = Array.isArray(entry.usernameHistory) ? entry.usernameHistory : [];
+        if (entry.usernameHistory.indexOf(oldName) === -1) entry.usernameHistory.push(oldName);
+        entry.usernameChangedAt = Date.now();
+        delete map[oldName];
+        map[n1] = entry;
+        if (typeof saveSavedAccounts === "function") saveSavedAccounts(map);
+        else localStorage.setItem("azoraAccounts", JSON.stringify(map));
+
+        acc.username = n1;
+        acc.usernameHistory = entry.usernameHistory;
+        acc.usernameChangedAt = entry.usernameChangedAt;
+        localStorage.setItem("azoraAccount", JSON.stringify(acc));
+
+        // Social data key migration
+        try {
+            var social = typeof getSocialData === "function" ? getSocialData() : JSON.parse(localStorage.getItem("azoraSocial") || "{}");
+            if (social[oldName]) {
+                social[n1] = social[oldName];
+                social[n1].username = n1;
+                delete social[oldName];
+            }
+            // rewrite follows
+            Object.keys(social).forEach(function (k) {
+                var u = social[k];
+                if (!u) return;
+                ["followers", "following", "friends", "friendRequests", "blocked"].forEach(function (field) {
+                    if (!Array.isArray(u[field])) return;
+                    u[field] = u[field].map(function (x) { return x === oldName ? n1 : x; });
+                });
+            });
+            if (typeof saveSocialData === "function") saveSocialData(social);
+            else localStorage.setItem("azoraSocial", JSON.stringify(social));
+        } catch (eSoc) {}
+
+        // Registry
+        try {
+            var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+            for (var ri = 0; ri < reg.length; ri++) {
+                if (reg[ri].username === oldName) {
+                    reg[ri].username = n1;
+                    reg[ri].usernameHistory = entry.usernameHistory;
+                }
+            }
+            localStorage.setItem("azoraUserRegistry", JSON.stringify(reg));
+        } catch (eReg) {}
+
+        var ok = document.getElementById("unameChangeOk");
+        var err = document.getElementById("unameChangeError");
+        if (err) err.style.display = "none";
+        if (ok) {
+            ok.style.display = "block";
+            ok.textContent = "Username changed to " + n1 + "! It will show everywhere.";
+        }
+        try {
+            var pb = document.getElementById("profileButton");
+            if (pb) pb.textContent = "👤 " + (acc.displayName || n1);
+        } catch (e3) {}
+        setTimeout(function () {
+            closeUsernameChangeFlow();
+            if (typeof openUserProfile === "function") openUserProfile(n1);
+        }, 1200);
+        if (typeof playClickSound === "function") playClickSound();
+    } catch (e) {
+        unameShowErr("Could not change username.");
+    }
+}
+
+function renderPastUsernamesOnProfile(username, isOwn) {
+    var el = document.getElementById("profilePastNames");
+    if (!el) return;
+    el.style.display = "none";
+    el.innerHTML = "";
+    try {
+        var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+        var entry = map[username] || null;
+        if (!entry && isOwn) {
+            entry = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        }
+        if (!entry) return;
+        var show = entry.showPastUsernames !== false;
+        if (!show && !isOwn) return; // hidden from others
+        var hist = Array.isArray(entry.usernameHistory) ? entry.usernameHistory.filter(Boolean) : [];
+        if (!hist.length) return;
+        el.style.display = "block";
+        var title = document.createElement("div");
+        title.style.fontSize = "11px";
+        title.style.color = "#64748b";
+        title.style.marginBottom = "2px";
+        title.textContent = isOwn && !show ? "Past usernames (only you see this — hidden from others)" : "Formerly known as";
+        el.appendChild(title);
+        var line = document.createElement("div");
+        line.style.fontSize = "12px";
+        line.style.color = "#475569";
+        line.textContent = hist.join(" · ");
+        el.appendChild(line);
+    } catch (e) {}
+}
+
+function renderDisplayNameOnProfile(username, isOwn) {
+    var el = document.getElementById("profileDisplayNameLine");
+    if (!el) return;
+    el.style.display = "none";
+    el.textContent = "";
+    try {
+        var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+        var entry = map[username];
+        if (!entry && isOwn) entry = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (!entry) return;
+        var dn = entry.displayName || "";
+        if (dn && String(dn).toLowerCase() !== String(username).toLowerCase()) {
+            el.style.display = "block";
+            el.textContent = dn;
+        }
+    } catch (e) {}
+}
+
+window.openProfilePicPicker = openProfilePicPicker;
+window.onProfilePicSelected = onProfilePicSelected;
+window.saveDisplayNameChange = saveDisplayNameChange;
+window.toggleShowPastUsernames = toggleShowPastUsernames;
+window.openUsernameChangeFlow = openUsernameChangeFlow;
+window.closeUsernameChangeFlow = closeUsernameChangeFlow;
+window.unameVerifyStep1 = unameVerifyStep1;
+window.unameCommitChange = unameCommitChange;
+window.refreshIdentitySettingsUI = refreshIdentitySettingsUI;
+
 
 function isGuestSession() {
     return localStorage.getItem("loggedIn") === "guest";
@@ -6228,6 +6699,15 @@ function openGuestProfile() {
     // Guests have no username — User ID is shown at username size
     document.getElementById("profileUsername").textContent = "";
     document.getElementById("profileUsername").style.display = "none";
+    try {
+        if (typeof applyProfileAvatarUI === "function") applyProfileAvatarUI("", false);
+        var img = document.getElementById("profileAvatarImg");
+        if (img) img.src = "logo.jpg";
+        var dn = document.getElementById("profileDisplayNameLine");
+        if (dn) { dn.style.display = "none"; dn.textContent = ""; }
+        var pn = document.getElementById("profilePastNames");
+        if (pn) { pn.style.display = "none"; pn.innerHTML = ""; }
+    } catch (eAv) {}
     try { var _gdb = document.getElementById("profileDonateBtn"); if (_gdb) { _gdb.style.display = "none"; _gdb.onclick = null; } } catch (e) {}
     var _pb = document.getElementById("profileBadges");
     if (_pb) { _pb.innerHTML = ""; _pb.style.display = "none"; }
@@ -6306,12 +6786,20 @@ function openUserProfile(username) {
     // owner badge applied after render via hook below
 
     if (!username) return;
+    openUserProfile._activeUsername = username;
     var data = getSocialData();
     var u = ensureUserSocial(data, username);
     saveSocialData(data);
 
     document.getElementById("profileUsername").textContent = username;
     document.getElementById("profileUsername").style.display = "block";
+    try {
+        var _mePic = (typeof getMyUsername === "function") ? getMyUsername() : "";
+        var _isOwnPic = !!_mePic && _mePic === username;
+        if (typeof applyProfileAvatarUI === "function") applyProfileAvatarUI(username, _isOwnPic);
+        if (typeof renderDisplayNameOnProfile === "function") renderDisplayNameOnProfile(username, _isOwnPic);
+        if (typeof renderPastUsernamesOnProfile === "function") renderPastUsernamesOnProfile(username, _isOwnPic);
+    } catch (_ePic) {}
     try {
         var _donBtn = document.getElementById("profileDonateBtn");
         if (_donBtn) {
@@ -6477,7 +6965,8 @@ function openUserProfile(username) {
     document.getElementById("profileOverlay").style.display = "flex";
 
     // After first paint, sync cloud social once and refresh buttons (friend requests)
-    if (!openUserProfile._syncing) {
+    // Only once per open session to avoid reopen loops
+    if (!openUserProfile._syncing && openUserProfile._lastSyncedFor !== username) {
         openUserProfile._syncing = true;
         try {
             var pulls = 0;
@@ -6485,7 +6974,14 @@ function openUserProfile(username) {
                 pulls++;
                 if (pulls < 2) return;
                 openUserProfile._syncing = false;
-                try { openUserProfile(username); } catch (e) { openUserProfile._syncing = false; }
+                openUserProfile._lastSyncedFor = username;
+                try {
+                    var ov = document.getElementById("profileOverlay");
+                    // Do not reopen if user closed the profile while cloud sync was running
+                    if (!ov || ov.style.display !== "flex") return;
+                    if (openUserProfile._activeUsername !== username) return;
+                    openUserProfile(username);
+                } catch (e) { openUserProfile._syncing = false; }
             }
             if (typeof pullUserSocialFromCloud === "function") {
                 pullUserSocialFromCloud(username, maybeRefresh);
@@ -6500,7 +6996,14 @@ function openUserProfile(username) {
 }
 
 function closeProfile() {
-    document.getElementById("profileOverlay").style.display = "none";
+    try {
+        window._profileClosedToken = (window._profileClosedToken || 0) + 1;
+        openUserProfile._syncing = false;
+        openUserProfile._activeUsername = null;
+        openUserProfile._lastSyncedFor = null;
+    } catch (e) {}
+    var ov = document.getElementById("profileOverlay");
+    if (ov) ov.style.display = "none";
 }
 
 function toggleFollow(username) {

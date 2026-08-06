@@ -13,7 +13,7 @@
     <link rel="manifest" href="manifest-azora.json">
     <link rel="apple-touch-icon" href="logo.jpg">
     <link rel="icon" href="logo.jpg">
-    <link rel="stylesheet" href="style.css?v=62.4">
+    <link rel="stylesheet" href="style.css?v=62.5">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -193,6 +193,24 @@
 
         <!-- BASIC SETTINGS -->
         <div id="settingsPanelBasic" class="settings-panel">
+            <div class="settings-section" id="identitySettingsSection">
+                <label class="settings-label">Identity</label>
+                <p class="settings-hint" style="margin-top:0;">Display name is what friends see first. Username is your permanent handle everywhere on Azora.</p>
+                <label class="settings-label" style="font-size:12px;margin-top:10px;">Display name</label>
+                <input id="displayNameInput" type="text" class="settings-input" maxlength="24" placeholder="Display name" autocomplete="off">
+                <p id="displayNameCooldown" class="settings-hint" style="margin:4px 0 0;"></p>
+                <button type="button" onclick="saveDisplayNameChange()" style="width:100%;margin-top:8px;">Save Display Name</button>
+                <hr style="margin:14px 0;border:none;border-top:1px solid rgba(30,96,255,0.2);">
+                <label class="settings-label" style="font-size:12px;">Username</label>
+                <p class="settings-hint" style="margin:0 0 6px;">Changing your username is free, but it updates <strong>everywhere</strong>. You must answer a few questions and confirm your password.</p>
+                <button type="button" onclick="openUsernameChangeFlow()" style="width:100%;">Change Username…</button>
+                <label class="settings-label" style="font-size:12px;margin-top:12px;display:flex;align-items:center;gap:8px;">
+                    <input type="checkbox" id="showPastUsernamesToggle" onchange="toggleShowPastUsernames(this.checked)" style="width:auto;margin:0;">
+                    Show past usernames on my profile
+                </label>
+                <p class="settings-hint" style="margin:4px 0 0;">On by default. Turn off if you do not want others to see old usernames.</p>
+                <p id="identitySettingsMsg" class="settings-hint" style="display:none;margin-top:8px;"></p>
+            </div>
             <div class="settings-section">
                 <label class="settings-label">Theme</label>
                 <select id="themeSelect" onchange="changeTheme(this.value)" class="settings-input">
@@ -644,16 +662,50 @@
 
 
 <!-- User Profile -->
+
+<!-- Change Username flow -->
+<div id="usernameChangeOverlay" class="overlay" style="display:none;z-index:100080;">
+    <div class="popup" style="max-width:min(380px,calc(100vw - 20px));text-align:left;">
+        <h2 style="text-align:center;margin-top:0;">Change Username</h2>
+        <p class="settings-hint">This updates your name everywhere on Azora (profiles, chat, friends, search). Past usernames stay in history unless you hide them in Settings.</p>
+        <div id="unameStep1">
+            <label class="settings-label">1. Confirm your password</label>
+            <input id="unameCurrentPassword" type="password" class="settings-input" placeholder="Current password" autocomplete="current-password">
+            <label class="settings-label" style="margin-top:10px;">2. Answer these questions</label>
+            <div id="unameQuizBox"></div>
+            <button type="button" onclick="unameVerifyStep1()" style="width:100%;margin-top:12px;">Continue</button>
+        </div>
+        <div id="unameStep2" style="display:none;">
+            <label class="settings-label">New username</label>
+            <input id="unameNewValue" type="text" class="settings-input" maxlength="24" placeholder="New username" autocomplete="off">
+            <label class="settings-label" style="margin-top:8px;">Type it again</label>
+            <input id="unameNewConfirm" type="text" class="settings-input" maxlength="24" placeholder="Confirm new username" autocomplete="off">
+            <p id="unameSuggestions" class="settings-hint" style="display:none;"></p>
+            <button type="button" onclick="unameCommitChange()" style="width:100%;margin-top:12px;background:linear-gradient(180deg,#3b82f6,#1e60ff);color:#fff;">Change username everywhere</button>
+        </div>
+        <p id="unameChangeError" style="display:none;color:#b91c1c;font-size:13px;margin-top:10px;"></p>
+        <p id="unameChangeOk" style="display:none;color:#15803d;font-size:13px;margin-top:10px;"></p>
+        <button type="button" onclick="closeUsernameChangeFlow()" style="width:100%;margin-top:10px;">Cancel</button>
+    </div>
+</div>
+
 <div id="profileOverlay" class="overlay" style="display:none;">
     <div class="popup profile-popup" style="max-width:min(360px,calc(100vw - 20px));">
-        <img src="logo.jpg" class="popupLogo" alt="Avatar" id="profileAvatarImg">
+        <div class="profile-avatar-wrap" id="profileAvatarWrap">
+            <img src="logo.jpg" class="popupLogo profile-avatar-img" alt="Profile picture" id="profileAvatarImg">
+            <button type="button" id="profileAvatarEditBtn" class="profile-avatar-edit-btn" style="display:none;" title="Change profile picture" onclick="openProfilePicPicker()">📷</button>
+            <input type="file" id="profilePicFileInput" accept="image/*" style="display:none;" onchange="onProfilePicSelected(event)">
+        </div>
+        <p id="profileAvatarHint" class="profile-avatar-hint" style="display:none;">Tap the picture to change it</p>
         <div class="profile-name-row">
             <h2 id="profileUsername">Username</h2>
             <button type="button" id="profileDonateBtn" class="profile-donate-btn" style="display:none;" title="Donate AzoraCoins">Donate</button>
         </div>
+        <p id="profileDisplayNameLine" class="profile-display-name" style="display:none;"></p>
         <div id="profileBadges" class="profile-badges" style="display:none;"></div>
         <div id="profileUserId" class="profile-user-id"></div>
         <div id="profileStatus" class="profile-status"><span class="status-dot offline"></span> Offline</div>
+        <div id="profilePastNames" class="profile-past-names" style="display:none;"></div>
         <p id="profileBio" class="profile-bio"></p>
         <p id="profileStats" style="color:#666;font-size:14px;">0 Followers · 0 Following · 0 Friends</p>
         <div id="profileBioEdit" style="display:none;text-align:left;margin:12px 0;">
@@ -664,7 +716,7 @@
         </div>
         <div id="profileGames" class="profile-games-section" style="display:none;text-align:left;margin-top:14px;"></div>
         <div id="profileActions" style="display:flex;flex-direction:column;gap:10px;margin-top:15px;"></div>
-        <button onclick="closeProfile()" style="margin-top:15px;">Close</button>
+        <button type="button" onclick="closeProfile()" style="margin-top:15px;">Close</button>
     </div>
 </div>
 
@@ -969,7 +1021,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=62.4"></script>
+<script src="script.js?v=62.5"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {

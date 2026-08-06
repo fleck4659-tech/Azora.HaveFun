@@ -1,5 +1,5 @@
-/* Azora main app service worker — v62.4 falling text retired */
-var CACHE = "azora-app-v62-4-nofall";
+/* Azora main app service worker — v62.5 profile pic + identity */
+var CACHE = "azora-app-v62-5-pfp";
 var ASSETS = [
   "./", "./index.html", "./checkout.html", "./style.css",
   "./logo.jpg", "./manifest-azora.json", "./Smile.png", "./female_smile.png", "./cartoonish_smile.png", "./crying.png", "./greedy_smile.png", "./mysterious.png", "./red_mysterious.png", "./robotic.png", "./sad_tears.png", "./simple_smile.png", "./tears_of_joy.png", "./wide_mouth.png", "./female_hair.webp", "./Mossy.mp3",
