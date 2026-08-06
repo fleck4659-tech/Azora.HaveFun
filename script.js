@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v62.2 search + daily fix","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v62.3 search + daily hard fix","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -640,19 +640,44 @@ function fetchGlobalRegistry(callback) {
         callback(new Error("Cloud registry not configured"), []);
         return;
     }
-    var url = cloudBase() + AZORA_CLOUD.registryPath + ".json";
-    fetch(url)
-        .then(function (r) { return r.json(); })
+    var url = cloudBase() + AZORA_CLOUD.registryPath + ".json?ts=" + Date.now();
+    fetch(url, { cache: "no-store" })
+        .then(function (r) {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+        })
         .then(function (data) {
             var list = [];
             if (data && typeof data === "object") {
                 Object.keys(data).forEach(function (k) {
                     var u = data[k];
-                    if (u && u.username && !u.isGuest) list.push(u);
+                    if (u && typeof u === "object" && u.username && !u.isGuest) {
+                        list.push({
+                            username: u.username,
+                            userId: u.userId || "",
+                            email: u.email || "",
+                            isSystemElement: !!u.isSystemElement,
+                            isOwner: !!u.isOwner || String(u.username).toLowerCase() === "azora",
+                            createdAt: u.createdAt || null
+                        });
+                    }
                 });
             }
-            // Sort by createdAt
             list.sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); });
+            // Mirror into local registry so search works offline too
+            try {
+                var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+                if (!Array.isArray(reg)) reg = [];
+                var by = {};
+                reg.forEach(function (x) {
+                    if (x && x.username) by[String(x.username).toLowerCase()] = x;
+                });
+                list.forEach(function (x) {
+                    by[String(x.username).toLowerCase()] = Object.assign({}, by[String(x.username).toLowerCase()] || {}, x);
+                });
+                localStorage.setItem("azoraUserRegistry", JSON.stringify(Object.keys(by).map(function (k) { return by[k]; })));
+            } catch (eM) {}
+            try { window._azoraCloudUsers = list; } catch (eW) {}
             callback(null, list);
         })
         .catch(function (err) {
@@ -664,6 +689,22 @@ function fetchGlobalRegistry(callback) {
 window.AZORA_CLOUD = AZORA_CLOUD;
 window.registerGlobalUser = registerGlobalUser;
 window.fetchGlobalRegistry = fetchGlobalRegistry;
+
+// Prefetch global users so Search works even before first keystroke
+(function prefetchRegistryOnBoot() {
+    function run() {
+        try {
+            if (typeof fetchGlobalRegistry === "function") {
+                fetchGlobalRegistry(function () {});
+            }
+        } catch (e) {}
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { setTimeout(run, 400); });
+    else setTimeout(run, 400);
+    // refresh every 2 minutes while tab is open
+    setInterval(run, 120000);
+})();
+
 
 // ============================================================
 // CLOUD SOCIAL — friends, requests, chats, notifications
@@ -1205,7 +1246,15 @@ function logoutUser() {
 function openSearch() {
     document.getElementById("searchOverlay").style.display = "flex";
     document.getElementById("searchInput").focus();
-    performSearch();
+    // Always refresh cloud users when opening search
+    try {
+        if (typeof fetchGlobalRegistry === "function") {
+            fetchGlobalRegistry(function () {
+                try { performSearch(); } catch (e) {}
+            });
+        }
+    } catch (e2) {}
+    try { performSearch(); } catch (e3) {}
 }
 function closeSearch() {
     document.getElementById("searchOverlay").style.display = "none";
@@ -4749,6 +4798,12 @@ function runAzoraLoadingThen(onDone) {
         hideAzoraLoadingScreen();
         setTimeout(function () {
             try { if (typeof onDone === "function") onDone(); } catch (e) {}
+            try {
+                var li = localStorage.getItem("loggedIn");
+                if ((li === "true" || li === "guest") && typeof checkDailyLoginReward === "function") {
+                    setTimeout(function () { checkDailyLoginReward(); }, 600);
+                }
+            } catch (eDaily2) {}
         }, 220);
     }, ms);
 }
@@ -4864,12 +4919,8 @@ window.addEventListener("DOMContentLoaded", function () {
                     updateAvatarColors();
                 }
             }
-            // Returning sessions must still get the daily claim popup
-            try {
-                if (typeof checkDailyLoginReward === "function") {
-                    setTimeout(function () { checkDailyLoginReward(); }, 1400);
-                }
-            } catch (eDaily) {}
+            // Daily claim runs after loading finishes (see runAzoraLoadingThen / scheduleDailyClaim)
+            try { if (typeof scheduleDailyClaimCheck === "function") scheduleDailyClaimCheck(); } catch (eDaily) {}
         } catch (e) {}
     }
 
@@ -12782,6 +12833,26 @@ function hasClaimedDailyToday() {
     }
 }
 
+
+function scheduleDailyClaimCheck() {
+    // Wait until loading screen is gone, then show claim popup
+    function tryShow() {
+        try {
+            var loading = document.getElementById("azoraLoadingScreen");
+            if (loading && loading.style.display !== "none" && loading.classList.contains("show")) {
+                setTimeout(tryShow, 400);
+                return;
+            }
+            if (typeof checkDailyLoginReward === "function") checkDailyLoginReward();
+        } catch (e) {
+            try { if (typeof checkDailyLoginReward === "function") checkDailyLoginReward(); } catch (e2) {}
+        }
+    }
+    setTimeout(tryShow, 3200);
+}
+window.scheduleDailyClaimCheck = scheduleDailyClaimCheck;
+window.hasClaimedDailyToday = hasClaimedDailyToday;
+
 /** Called on login / app load — does NOT auto-grant coins anymore; UI button claims. */
 function checkDailyLoginReward() {
     try {
@@ -12818,7 +12889,10 @@ function getDailyRewardAmount(streak) {
 function openDailyClaimPopup(opts) {
     opts = opts || {};
     var ov = document.getElementById("dailyClaimOverlay");
-    if (!ov) return;
+    if (!ov) {
+        console.warn("[Azora] dailyClaimOverlay missing from HTML");
+        return;
+    }
     if (hasClaimedDailyToday()) return;
     // Auto-popup respects "dismissed today"; manual claim (topbar) always opens
     if (!opts.force) {
@@ -12826,7 +12900,12 @@ function openDailyClaimPopup(opts) {
             var dk = (typeof getTodayKey === "function") ? getTodayKey() : "";
             if (localStorage.getItem("azoraDailyClaimDismissed") === dk) return;
         } catch (eD) {}
+    } else {
+        try { localStorage.removeItem("azoraDailyClaimDismissed"); } catch (eClr) {}
     }
+    try {
+        ov.style.zIndex = "2147483000";
+    } catch (eZ) {}
     var streak = getLoginStreak();
     var last = localStorage.getItem("azoraLastDailyClaim") || "";
     var yesterday = getYesterdayKey();
@@ -14851,6 +14930,11 @@ function getPublicUserId_systemPatch(username) {
         if (_cloudUserCache && Array.isArray(_cloudUserCache)) {
             _cloudUserCache.forEach(addU);
         }
+        try {
+            if (window._azoraCloudUsers && Array.isArray(window._azoraCloudUsers)) {
+                window._azoraCloudUsers.forEach(addU);
+            }
+        } catch (eCloud) {}
         return Object.keys(map).map(function (k) { return map[k]; });
     }
 
@@ -14906,8 +14990,8 @@ function getPublicUserId_systemPatch(username) {
             done([]);
             return;
         }
-        // Cache 30s to avoid hammering Firebase while typing
-        if (_cloudUserCache && (Date.now() - _cloudUserCacheAt) < 30000) {
+        // Cache 15s while typing; openSearch forces refresh via fetchGlobalRegistry
+        if (_cloudUserCache && (Date.now() - _cloudUserCacheAt) < 15000) {
             done(_cloudUserCache);
             return;
         }
