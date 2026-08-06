@@ -161,14 +161,15 @@
     <h1>Azora Staff Console</h1>
     <p>Restricted access · Have Fun Servers</p>
 
-    <!-- Step 1: access key -->
+    <!-- Access key only (email verification code disabled) -->
     <div id="lockStepKey">
         <input type="password" id="serverPassword" placeholder="Server access key" onkeydown="if(event.key==='Enter')unlockServers()">
-        <button onclick="unlockServers()" style="width:100%">Continue</button>
+        <button onclick="unlockServers()" style="width:100%">Unlock</button>
         <div class="error" id="lockError">Incorrect access key.</div>
+        <p class="muted" style="margin-top:12px;text-align:center;font-size:12px;">Enter the server access key to open the Staff Console. No email code is required.</p>
     </div>
 
-    <!-- Step 2: email code -->
+    <!-- Legacy email code step (kept hidden; not used on entry) -->
     <div id="lockStepCode" style="display:none;text-align:left;">
         <p id="emailSentMsg" class="muted" style="text-align:center;color:#93c5fd;font-size:13px;line-height:1.45;margin:0 0 14px;"></p>
         <label style="font-size:12px;color:#8b949e;">Verification code</label>
@@ -560,10 +561,24 @@ function trySendStaffCodeEmail(codeStr) {
     }
 }
 
+function enterStaffDashboard() {
+    sessionStorage.setItem("azoraServerUnlocked", "true");
+    sessionStorage.removeItem("azoraStaffPendingCode");
+    sessionStorage.removeItem("azoraStaffPendingAt");
+    _pendingStaffCode = null;
+    document.getElementById("lockScreen").style.display = "none";
+    document.getElementById("dashboard").style.display = "block";
+    try { document.getElementById("firebaseUrlInput").value = getFirebaseUrl(); } catch (e) {}
+    try { renderCodesList(); } catch (e2) {}
+    try { refreshAll(); } catch (e3) {}
+}
+
 function unlockServers() {
     document.getElementById("lockError").style.display = "none";
     if (document.getElementById("serverPassword").value === SERVER_ACCESS_KEY) {
-        issueStaffEmailCode(false);
+        // Access key only — no email verification code step
+        enterStaffDashboard();
+        logStaff("Console unlocked with access key (no email code)");
     } else {
         document.getElementById("lockError").style.display = "block";
     }
@@ -606,16 +621,8 @@ function verifyStaffCode() {
         return;
     }
 
-    // Success
-    sessionStorage.setItem("azoraServerUnlocked", "true");
-    sessionStorage.removeItem("azoraStaffPendingCode");
-    sessionStorage.removeItem("azoraStaffPendingAt");
-    _pendingStaffCode = null;
-    document.getElementById("lockScreen").style.display = "none";
-    document.getElementById("dashboard").style.display = "block";
-    document.getElementById("firebaseUrlInput").value = getFirebaseUrl();
-    renderCodesList();
-    refreshAll();
+    // Success (legacy path — email code no longer required on entry)
+    enterStaffDashboard();
     logStaff("Console unlocked after email code verify");
 }
 
