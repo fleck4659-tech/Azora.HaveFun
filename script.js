@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v59.2 House + topbar","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v62.2 search + daily fix","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -4864,6 +4864,12 @@ window.addEventListener("DOMContentLoaded", function () {
                     updateAvatarColors();
                 }
             }
+            // Returning sessions must still get the daily claim popup
+            try {
+                if (typeof checkDailyLoginReward === "function") {
+                    setTimeout(function () { checkDailyLoginReward(); }, 1400);
+                }
+            } catch (eDaily) {}
         } catch (e) {}
     }
 
@@ -12767,6 +12773,15 @@ function isDailyGiftClaimedToday() {
     } catch (e) { return false; }
 }
 
+function hasClaimedDailyToday() {
+    try {
+        if (typeof isDailyGiftClaimedToday === "function") return isDailyGiftClaimedToday();
+        return (localStorage.getItem("azoraLastDailyClaim") || "") === (typeof getTodayKey === "function" ? getTodayKey() : "");
+    } catch (e) {
+        return false;
+    }
+}
+
 /** Called on login / app load — does NOT auto-grant coins anymore; UI button claims. */
 function checkDailyLoginReward() {
     try {
@@ -12800,14 +12815,18 @@ function getDailyRewardAmount(streak) {
     return Math.round(reward * 1000) / 1000;
 }
 
-function openDailyClaimPopup() {
+function openDailyClaimPopup(opts) {
+    opts = opts || {};
     var ov = document.getElementById("dailyClaimOverlay");
     if (!ov) return;
     if (hasClaimedDailyToday()) return;
-    try {
-        var dk = (typeof getTodayKey === "function") ? getTodayKey() : "";
-        if (localStorage.getItem("azoraDailyClaimDismissed") === dk) return;
-    } catch (eD) {}
+    // Auto-popup respects "dismissed today"; manual claim (topbar) always opens
+    if (!opts.force) {
+        try {
+            var dk = (typeof getTodayKey === "function") ? getTodayKey() : "";
+            if (localStorage.getItem("azoraDailyClaimDismissed") === dk) return;
+        } catch (eD) {}
+    }
     var streak = getLoginStreak();
     var last = localStorage.getItem("azoraLastDailyClaim") || "";
     var yesterday = getYesterdayKey();
@@ -12909,14 +12928,14 @@ function claimDailyGiftAnimated() {
 }
 
 function claimDailyGift() {
-    // Topbar chip still works — opens the same claim flow
+    // Topbar chip still works — opens the same claim flow (even if auto-popup was dismissed)
     try {
         if (hasClaimedDailyToday()) {
             showAzoraToast("You already claimed today's gift. Come back tomorrow!");
             refreshFunTopbar();
             return;
         }
-        openDailyClaimPopup();
+        openDailyClaimPopup({ force: true });
     } catch (e) {
         console.warn("[Azora] claim daily", e);
     }
@@ -14750,76 +14769,232 @@ function getPublicUserId_systemPatch(username) {
     };
 })();
 
-// Enrich search results with system + registry
+// Enrich search — local + cloud registry (finds users on other devices)
 (function patchPerformSearch() {
     if (typeof performSearch !== "function") return;
-    var _orig = performSearch;
-    window.performSearch = function () {
-        ensureSystemElement();
+
+    var _cloudUserCache = null;
+    var _cloudUserCacheAt = 0;
+
+    function mergeLocalRegistry(list) {
         try {
-            // Prefer rebuilt search that includes registry
-            var query = (document.getElementById("searchInput").value || "").trim().toLowerCase();
-            var resultsContainer = document.getElementById("searchResultsContainer");
-            if (!resultsContainer) return _orig();
-            resultsContainer.innerHTML = "";
+            var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+            if (!Array.isArray(reg)) reg = [];
+            var byName = {};
+            reg.forEach(function (u) {
+                if (u && u.username) byName[String(u.username).toLowerCase()] = u;
+            });
+            (list || []).forEach(function (u) {
+                if (!u || !u.username) return;
+                byName[String(u.username).toLowerCase()] = Object.assign({}, byName[String(u.username).toLowerCase()] || {}, u);
+            });
+            var out = Object.keys(byName).map(function (k) { return byName[k]; });
+            localStorage.setItem("azoraUserRegistry", JSON.stringify(out));
+            return out;
+        } catch (e) {
+            return list || [];
+        }
+    }
 
-            if (currentSearchTab === "users") {
-                var map = {};
-                function addU(u) {
-                    if (!u || !u.username) return;
-                    map[String(u.username).toLowerCase()] = u;
-                }
-                if (typeof database !== "undefined" && database.users) database.users.forEach(addU);
-                try {
-                    var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
-                    reg.forEach(addU);
-                } catch (e) {}
-                try {
-                    var accounts = JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
-                    Object.keys(accounts).forEach(function (k) {
-                        addU({ username: accounts[k].username || k, userId: accounts[k].userId });
-                    });
-                } catch (e2) {}
-                try {
-                    var social = typeof getSocialData === "function" ? getSocialData() : {};
-                    Object.keys(social || {}).forEach(function (k) {
-                        addU({ username: k });
-                    });
-                } catch (e3) {}
-                addU({ username: "system", userId: "Aza: 2", isSystemElement: true });
-                addU({ username: "Azora", userId: "Aza: 0" });
-
-                var list = Object.keys(map).map(function (k) { return map[k]; });
-                var results = list.filter(function (u) {
-                    return String(u.username || "").toLowerCase().indexOf(query) !== -1;
+    function gatherLocalUsers() {
+        var map = {};
+        function addU(u) {
+            if (!u) return;
+            var name = u.username || u.name || "";
+            if (!name) return;
+            var key = String(name).toLowerCase();
+            var prev = map[key] || {};
+            map[key] = {
+                username: name,
+                userId: u.userId || prev.userId || "",
+                email: u.email || prev.email || "",
+                isSystemElement: !!(u.isSystemElement || prev.isSystemElement),
+                isOwner: !!(u.isOwner || prev.isOwner),
+                createdAt: u.createdAt || prev.createdAt || null
+            };
+        }
+        try {
+            if (typeof database !== "undefined" && database.users) database.users.forEach(addU);
+        } catch (e0) {}
+        try {
+            var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+            if (Array.isArray(reg)) reg.forEach(addU);
+        } catch (e1) {}
+        try {
+            var accounts = (typeof getSavedAccounts === "function")
+                ? getSavedAccounts()
+                : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+            Object.keys(accounts || {}).forEach(function (k) {
+                var a = accounts[k];
+                if (!a || a.isGuest) return;
+                addU({
+                    username: a.username || k,
+                    userId: a.userId,
+                    email: a.email || "",
+                    isOwner: !!(a.isOwner || String(a.username || k).toLowerCase() === "azora"),
+                    createdAt: a.createdAt
                 });
-                if (!results.length) {
-                    resultsContainer.innerHTML = "<div class='no-results'>No results found.</div>";
-                    return;
-                }
-                results.forEach(function (item) {
-                    var row = document.createElement("div");
-                    row.className = "search-result-item";
-                    var extra = item.isSystemElement || isSystemUsername(item.username)
-                        ? " <span class='sys-tag'>System Element</span>"
-                        : (isOwnerUsername(item.username) ? " <span class='sys-tag'>Owner</span>" : "");
-                    row.innerHTML = "👤 <strong>" + String(item.username).replace(/</g, "&lt;") + "</strong>" + extra + " ";
-                    var viewBtn = document.createElement("a");
-                    viewBtn.href = "#";
-                    viewBtn.className = "search-action-btn";
-                    viewBtn.textContent = "View";
-                    viewBtn.onclick = function (e) {
-                        e.preventDefault();
-                        try { closeSearch(); } catch (err) {}
-                        openUserProfile(item.username);
-                    };
-                    row.appendChild(viewBtn);
-                    resultsContainer.appendChild(row);
-                });
-                return;
+            });
+        } catch (e2) {}
+        try {
+            var social = typeof getSocialData === "function" ? getSocialData() : {};
+            Object.keys(social || {}).forEach(function (k) { addU({ username: k }); });
+        } catch (e3) {}
+        try {
+            var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+            if (acc && !acc.isGuest && acc.username) {
+                addU({ username: acc.username, userId: acc.userId, email: acc.email || "" });
             }
-        } catch (eFail) {}
-        return _orig();
+        } catch (e4) {}
+        addU({ username: "system", userId: "Aza: 2", isSystemElement: true });
+        addU({ username: "Azora", userId: "Aza: 0", isOwner: true });
+        if (_cloudUserCache && Array.isArray(_cloudUserCache)) {
+            _cloudUserCache.forEach(addU);
+        }
+        return Object.keys(map).map(function (k) { return map[k]; });
+    }
+
+    function userMatchesQuery(u, query) {
+        if (!query) return true;
+        var un = String(u.username || "").toLowerCase();
+        var id = String(u.userId || "").toLowerCase();
+        var em = String(u.email || "").toLowerCase();
+        if (un.indexOf(query) !== -1) return true;
+        if (id.indexOf(query) !== -1) return true;
+        if (em && em.indexOf(query) !== -1) return true;
+        // "aza: 1" / "aza 1" / "1"
+        var q2 = query.replace(/\s+/g, " ");
+        if (id.replace(/\s+/g, " ").indexOf(q2) !== -1) return true;
+        return false;
+    }
+
+    function renderUserResults(results, resultsContainer) {
+        if (!results.length) {
+            resultsContainer.innerHTML = "<div class='no-results'>No results found.</div>";
+            return;
+        }
+        results.forEach(function (item) {
+            var row = document.createElement("div");
+            row.className = "search-result-item";
+            var extra = "";
+            try {
+                if (item.isSystemElement || (typeof isSystemUsername === "function" && isSystemUsername(item.username))) {
+                    extra = " <span class='sys-tag'>System Element</span>";
+                } else if (item.isOwner || (typeof isOwnerUsername === "function" && isOwnerUsername(item.username))) {
+                    extra = " <span class='sys-tag'>Owner</span>";
+                }
+            } catch (eX) {}
+            var idBit = item.userId ? (' <span style="opacity:0.7;font-size:12px;">' + String(item.userId).replace(/</g, "&lt;") + "</span>") : "";
+            row.innerHTML = "👤 <strong>" + String(item.username).replace(/</g, "&lt;") + "</strong>" + idBit + extra + " ";
+            var viewBtn = document.createElement("a");
+            viewBtn.href = "#";
+            viewBtn.className = "search-action-btn";
+            viewBtn.textContent = "View";
+            viewBtn.onclick = function (e) {
+                e.preventDefault();
+                try { closeSearch(); } catch (err) {}
+                if (typeof openUserProfile === "function") openUserProfile(item.username);
+            };
+            row.appendChild(viewBtn);
+            resultsContainer.appendChild(row);
+        });
+    }
+
+    function refreshCloudUsers(done) {
+        done = done || function () {};
+        if (typeof fetchGlobalRegistry !== "function") {
+            done([]);
+            return;
+        }
+        // Cache 30s to avoid hammering Firebase while typing
+        if (_cloudUserCache && (Date.now() - _cloudUserCacheAt) < 30000) {
+            done(_cloudUserCache);
+            return;
+        }
+        fetchGlobalRegistry(function (err, list) {
+            list = Array.isArray(list) ? list : [];
+            _cloudUserCache = list;
+            _cloudUserCacheAt = Date.now();
+            try { mergeLocalRegistry(list); } catch (e) {}
+            done(list);
+        });
+    }
+
+    window.performSearch = function () {
+        try {
+            if (typeof ensureSystemElement === "function") ensureSystemElement();
+        } catch (eS) {}
+        var input = document.getElementById("searchInput");
+        var resultsContainer = document.getElementById("searchResultsContainer");
+        if (!resultsContainer) return;
+        var query = (input && input.value ? input.value : "").trim().toLowerCase();
+        resultsContainer.innerHTML = "";
+
+        if (currentSearchTab === "users") {
+            // Local-first immediate results
+            var localList = gatherLocalUsers();
+            var localHits = localList.filter(function (u) { return userMatchesQuery(u, query); });
+            if (localHits.length) {
+                renderUserResults(localHits, resultsContainer);
+            } else {
+                resultsContainer.innerHTML = "<div class='no-results'>Searching…</div>";
+            }
+            // Then refresh from cloud and re-render
+            refreshCloudUsers(function () {
+                var all = gatherLocalUsers();
+                var hits = all.filter(function (u) { return userMatchesQuery(u, query); });
+                resultsContainer.innerHTML = "";
+                renderUserResults(hits, resultsContainer);
+            });
+            return;
+        }
+
+        // Games tab
+        var games = (typeof database !== "undefined" && database.games) ? database.games.slice() : [];
+        try {
+            if (typeof azaFnGames !== "undefined" && Array.isArray(azaFnGames)) {
+                azaFnGames.forEach(function (g) {
+                    if (!g || g.deleted) return;
+                    if (g.published === false) return;
+                    games.push({
+                        title: g.title || "Untitled",
+                        author: g.creator || "Player",
+                        link: "#",
+                        type: "feed",
+                        id: g.id
+                    });
+                });
+            }
+        } catch (eG) {}
+        var gHits = games.filter(function (g) {
+            if (!query) return true;
+            return String(g.title || "").toLowerCase().indexOf(query) !== -1 ||
+                String(g.author || "").toLowerCase().indexOf(query) !== -1;
+        });
+        if (!gHits.length) {
+            resultsContainer.innerHTML = "<div class='no-results'>No results found.</div>";
+            return;
+        }
+        gHits.forEach(function (item) {
+            var row = document.createElement("div");
+            row.className = "search-result-item";
+            row.innerHTML = "🎮 <strong>" + String(item.title).replace(/</g, "&lt;") +
+                "</strong> <span class=\"creator-by\">by " + String(item.author).replace(/</g, "&lt;") + "</span> ";
+            var play = document.createElement("a");
+            play.href = "#";
+            play.className = "search-action-btn";
+            play.textContent = "Play";
+            play.onclick = function (e) {
+                e.preventDefault();
+                try { closeSearch(); } catch (err) {}
+                try {
+                    if (item.id && typeof openGamePreview === "function") openGamePreview(item.id);
+                    else if (typeof openNormGames === "function") openNormGames();
+                } catch (e2) {}
+            };
+            row.appendChild(play);
+            resultsContainer.appendChild(row);
+        });
     };
 })();
 
