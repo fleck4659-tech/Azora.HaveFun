@@ -907,7 +907,8 @@ function renderUsers() {
     var list = cachedUsers.filter(function (u) {
         if (!q) return true;
         return String(u.username || "").toLowerCase().indexOf(q) !== -1 ||
-            String(u.userId || "").toLowerCase().indexOf(q) !== -1;
+            String(u.userId || "").toLowerCase().indexOf(q) !== -1 ||
+            String(u.email || "").toLowerCase().indexOf(q) !== -1;
     });
     var tbody = document.getElementById("userTableBody");
     if (!list.length) {
@@ -920,8 +921,16 @@ function renderUsers() {
         var click = canMsg
             ? ' class="user-row-clickable" onclick="openUserMessageModal(\'' + uname.replace(/\\/g, "").replace(/'/g, "") + '\', \'' + escapeHtml(u.userId || "") + '\')" title="Click to message this user"'
             : "";
+        var showName = uname;
+        var emailNote = "";
+        if (uname.indexOf("@") !== -1) {
+            // Staff can still see it was an email-username, but mask the full address in the table label
+            var local = uname.split("@")[0] || "player";
+            showName = "Player_" + local.slice(-4);
+            emailNote = ' <span style="color:#f59e0b;font-size:11px;">(email-as-username — rename recommended)</span>';
+        }
         return '<tr' + click + '><td class="uid">' + escapeHtml(u.userId || "—") + '</td><td>' +
-            escapeHtml(uname || "—") + (canMsg ? ' <span class="msg-hint">✉</span>' : '') + '</td><td>' +
+            escapeHtml(showName || "—") + emailNote + (canMsg ? ' <span class="msg-hint">✉</span>' : '') + '</td><td>' +
             (u.isSystemElement ? "System Element" : (u.createdAt ? new Date(u.createdAt).toLocaleString() : (u.createdAt === 0 ? "Platform" : "—"))) + '</td></tr>';
     }).join("");
 }

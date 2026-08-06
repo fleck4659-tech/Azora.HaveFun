@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v63.0 name safety + reset + admin rename","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v63.1 email privacy + cloud admin rename","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -556,6 +556,7 @@ function buildPublicRegistryEntry(username, userId, createdAt) {
         userId: userId,
         isGuest: false,
         createdAt: ca
+        // NEVER store email on the public registry entry
     };
 }
 
@@ -652,13 +653,21 @@ function fetchGlobalRegistry(callback) {
                 Object.keys(data).forEach(function (k) {
                     var u = data[k];
                     if (u && typeof u === "object" && u.username && !u.isGuest) {
+                        var uname = String(u.username || "");
+                        var em = String(u.email || "").trim().toLowerCase();
+                        // If someone registered with an email as their username, treat it as email (private)
+                        if (!em && uname.indexOf("@") !== -1) {
+                            em = uname.toLowerCase();
+                        }
                         list.push({
-                            username: u.username,
+                            username: uname,
                             userId: u.userId || "",
-                            email: u.email || "",
+                            // email kept only for staff tools — never render publicly
+                            email: em,
                             isSystemElement: !!u.isSystemElement,
-                            isOwner: !!u.isOwner || String(u.username).toLowerCase() === "azora",
-                            createdAt: u.createdAt || null
+                            isOwner: !!u.isOwner || uname.toLowerCase() === "azora",
+                            createdAt: u.createdAt || null,
+                            looksLikeEmail: uname.indexOf("@") !== -1
                         });
                     }
                 });
@@ -673,7 +682,22 @@ function fetchGlobalRegistry(callback) {
                     if (x && x.username) by[String(x.username).toLowerCase()] = x;
                 });
                 list.forEach(function (x) {
-                    by[String(x.username).toLowerCase()] = Object.assign({}, by[String(x.username).toLowerCase()] || {}, x);
+                    var prev = by[String(x.username).toLowerCase()] || {};
+                    var merged = Object.assign({}, prev, x);
+                    // Staff-only email map (separate from public registry)
+                    try {
+                        if (x.email) {
+                            var emap = {};
+                            try { emap = JSON.parse(localStorage.getItem("azoraPrivateEmails") || "{}"); } catch (eE) {}
+                            emap[String(x.username).toLowerCase()] = String(x.email).toLowerCase();
+                            // Also index by email → username for admin lookup
+                            emap["email:" + String(x.email).toLowerCase()] = String(x.username);
+                            localStorage.setItem("azoraPrivateEmails", JSON.stringify(emap));
+                        }
+                    } catch (ePriv) {}
+                    // Strip email from public registry mirror
+                    delete merged.email;
+                    by[String(x.username).toLowerCase()] = merged;
                 });
                 localStorage.setItem("azoraUserRegistry", JSON.stringify(Object.keys(by).map(function (k) { return by[k]; })));
             } catch (eM) {}
@@ -2216,6 +2240,22 @@ function validateAzoraName(raw, kind) {
     return { ok: true, value: original };
 }
 window.validateAzoraName = validateAzoraName;
+
+/** Public-safe label: never show an email address as a username. */
+function publicUsernameLabel(username) {
+    var u = String(username || "").trim();
+    if (!u) return "Player";
+    if (u.indexOf("@") !== -1) {
+        // Hide email — show generic + last 4 of local-part if possible
+        var local = u.split("@")[0] || "player";
+        var tail = local.slice(-3);
+        return "Player_" + tail;
+    }
+    return u;
+}
+window.publicUsernameLabel = publicUsernameLabel;
+
+
 window.normalizeNameForSafety = normalizeNameForSafety;
 
 /** Cryptographically-ish random digits (fallback Math.random). */
@@ -2373,15 +2413,107 @@ function adminForceRenameUser(oldUsername, newUsername, opts) {
     var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
     var entry = null;
     var oldKey = null;
+    var foundVia = null;
+    var recoveredEmail = "";
+
+    // A) Local saved accounts by username
     Object.keys(map).forEach(function (k) {
         if (String(k).toLowerCase() === oldUsername.toLowerCase()) {
             entry = map[k];
             oldKey = k;
+            foundVia = "local-account";
         }
     });
-    if (!entry) return { ok: false, error: "User \"" + oldUsername + "\" was not found on this device registry." };
 
-    var oldName = entry.username || oldKey;
+    // B) Local accounts by email field
+    if (!entry) {
+        Object.keys(map).forEach(function (k) {
+            var a = map[k];
+            if (a && String(a.email || "").toLowerCase() === oldUsername.toLowerCase()) {
+                entry = a;
+                oldKey = k;
+                foundVia = "local-email";
+                recoveredEmail = String(a.email || "").toLowerCase();
+            }
+        });
+    }
+
+    // C) Private email map / cloud registry (user may only exist on cloud)
+    if (!entry) {
+        try {
+            var emap = JSON.parse(localStorage.getItem("azoraPrivateEmails") || "{}");
+            var mappedUser = emap["email:" + oldUsername.toLowerCase()];
+            if (mappedUser && map[mappedUser]) {
+                entry = map[mappedUser];
+                oldKey = mappedUser;
+                foundVia = "private-email-map";
+                recoveredEmail = oldUsername.toLowerCase();
+            }
+        } catch (eM) {}
+    }
+
+    // D) Registry / cloud list — username might BE an email string
+    var regHit = null;
+    try {
+        var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+        for (var ri = 0; ri < reg.length; ri++) {
+            if (reg[ri] && String(reg[ri].username || "").toLowerCase() === oldUsername.toLowerCase()) {
+                regHit = reg[ri];
+                break;
+            }
+        }
+    } catch (eR) {}
+    if (!regHit && window._azoraCloudUsers) {
+        for (var ci = 0; ci < window._azoraCloudUsers.length; ci++) {
+            var cu = window._azoraCloudUsers[ci];
+            if (!cu) continue;
+            if (String(cu.username || "").toLowerCase() === oldUsername.toLowerCase() ||
+                String(cu.email || "").toLowerCase() === oldUsername.toLowerCase()) {
+                regHit = cu;
+                break;
+            }
+        }
+    }
+
+    // If username looks like email, capture it as private email
+    if (oldUsername.indexOf("@") !== -1) {
+        recoveredEmail = recoveredEmail || oldUsername.toLowerCase();
+    }
+    if (regHit && regHit.email) recoveredEmail = recoveredEmail || String(regHit.email).toLowerCase();
+
+    // Cloud-only user: synthesize a minimal entry so rename can proceed
+    if (!entry && regHit) {
+        entry = {
+            username: regHit.username || oldUsername,
+            password: "",
+            userId: regHit.userId || "",
+            email: recoveredEmail || "",
+            isGuest: false,
+            createdAt: regHit.createdAt || Date.now(),
+            coins: 0,
+            inventory: { items: [], equipped: { hair: null, face: null, shirt: null } },
+            cloudOnly: true
+        };
+        oldKey = entry.username;
+        foundVia = "cloud-registry";
+    }
+
+    if (!entry) {
+        return {
+            ok: false,
+            error: "User \"" + oldUsername + "\" was not found in local accounts or the cloud registry. Open Search once (to refresh users), then try again."
+        };
+    }
+
+    var oldName = entry.username || oldKey || oldUsername;
+    // Separate email from public username
+    if (recoveredEmail) {
+        entry.email = recoveredEmail;
+    } else if (String(oldName).indexOf("@") !== -1) {
+        entry.email = String(oldName).toLowerCase();
+        recoveredEmail = entry.email;
+    }
+
     entry.username = newUsername;
     entry.usernameHistory = Array.isArray(entry.usernameHistory) ? entry.usernameHistory : [];
     if (entry.usernameHistory.indexOf(oldName) === -1) entry.usernameHistory.push(oldName);
@@ -2394,35 +2526,130 @@ function adminForceRenameUser(oldUsername, newUsername, opts) {
         seen: false
     };
 
-    delete map[oldKey];
+    // Rewrite local account map key if present
+    if (foundVia !== "cloud-registry" || map[oldKey]) {
+        try { if (oldKey && map[oldKey]) delete map[oldKey]; } catch (eDel) {}
+    }
     map[newUsername] = entry;
     if (typeof saveSavedAccounts === "function") saveSavedAccounts(map);
     else localStorage.setItem("azoraAccounts", JSON.stringify(map));
 
-    // Registry
+    // Public registry: remove old username, add new — NEVER write email publicly
     try {
-        var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
-        for (var ri = 0; ri < reg.length; ri++) {
-            if (reg[ri] && String(reg[ri].username || "").toLowerCase() === oldName.toLowerCase()) {
-                reg[ri].username = newUsername;
-                reg[ri].usernameHistory = entry.usernameHistory;
-            }
-        }
-        localStorage.setItem("azoraUserRegistry", JSON.stringify(reg));
-    } catch (eR) {}
+        var reg2 = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+        if (!Array.isArray(reg2)) reg2 = [];
+        reg2 = reg2.filter(function (r) {
+            return r && String(r.username || "").toLowerCase() !== String(oldName).toLowerCase();
+        });
+        reg2.push({
+            username: newUsername,
+            userId: entry.userId || (regHit && regHit.userId) || "",
+            isGuest: false,
+            createdAt: entry.createdAt || (regHit && regHit.createdAt) || Date.now(),
+            usernameHistory: entry.usernameHistory
+        });
+        localStorage.setItem("azoraUserRegistry", JSON.stringify(reg2));
+    } catch (eReg) {}
 
-    // If that user is currently logged in on this device, update session
+    // Private email index
+    try {
+        var emap2 = {};
+        try { emap2 = JSON.parse(localStorage.getItem("azoraPrivateEmails") || "{}"); } catch (e2) {}
+        if (recoveredEmail) {
+            emap2[String(newUsername).toLowerCase()] = recoveredEmail;
+            emap2["email:" + recoveredEmail] = newUsername;
+            delete emap2[String(oldName).toLowerCase()];
+        }
+        localStorage.setItem("azoraPrivateEmails", JSON.stringify(emap2));
+    } catch (e3) {}
+
+    // Session if that user is logged in here
     try {
         var cur = JSON.parse(localStorage.getItem("azoraAccount") || "null");
-        if (cur && String(cur.username || "").toLowerCase() === oldName.toLowerCase()) {
+        if (cur && String(cur.username || "").toLowerCase() === String(oldName).toLowerCase()) {
             cur.username = newUsername;
+            if (recoveredEmail) cur.email = recoveredEmail;
             cur.usernameHistory = entry.usernameHistory;
             cur.pendingAdminNameNotice = entry.pendingAdminNameNotice;
             localStorage.setItem("azoraAccount", JSON.stringify(cur));
         }
     } catch (eC) {}
 
-    // In-app notification
+    // Cloud registry update (best-effort): delete old key, put new public entry (no email)
+    try {
+        if (typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()) {
+            var safeOld = encodeURIComponent(String(oldName).toLowerCase().replace(/[.#$\/\[\]]/g, "_"));
+            var safeNew = encodeURIComponent(String(newUsername).toLowerCase().replace(/[.#$\/\[\]]/g, "_"));
+            var base = (typeof cloudBase === "function" ? cloudBase() : "") + AZORA_CLOUD.registryPath;
+            var publicEntry = {
+                username: newUsername,
+                userId: entry.userId || "",
+                isGuest: false,
+                createdAt: entry.createdAt || Date.now(),
+                usernameHistory: entry.usernameHistory,
+                adminRenamedFrom: oldName,
+                adminRenamedAt: Date.now()
+            };
+            // Private pending notice + email under separate staff path
+            var privatePayload = {
+                username: newUsername,
+                email: recoveredEmail || entry.email || "",
+                pendingAdminNameNotice: entry.pendingAdminNameNotice,
+                updatedAt: Date.now()
+            };
+            fetch(base + "/" + safeNew + ".json", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(publicEntry)
+            }).catch(function () {});
+            // Remove old public key (especially if it was an email-looking username)
+            fetch(base + "/" + safeOld + ".json", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: "null"
+            }).catch(function () {});
+            // Staff-only private blob (not shown in search)
+            try {
+                var privUrl = (typeof cloudBase === "function" ? cloudBase() : "") + "/azoraPrivate/" + safeNew + ".json";
+                fetch(privUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(privatePayload)
+                }).catch(function () {});
+                // Also store under old email key so their device can pick up rename on login
+                if (recoveredEmail) {
+                    var safeEm = encodeURIComponent(recoveredEmail.replace(/[.#$\/\[\]]/g, "_"));
+                    fetch((typeof cloudBase === "function" ? cloudBase() : "") + "/azoraPrivate/byEmail/" + safeEm + ".json", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            oldUsername: oldName,
+                            newUsername: newUsername,
+                            email: recoveredEmail,
+                            pendingAdminNameNotice: entry.pendingAdminNameNotice,
+                            at: Date.now()
+                        })
+                    }).catch(function () {});
+                }
+            } catch (eP) {}
+            // Refresh cloud cache
+            try {
+                if (window._azoraCloudUsers) {
+                    window._azoraCloudUsers = window._azoraCloudUsers.filter(function (u) {
+                        return u && String(u.username || "").toLowerCase() !== String(oldName).toLowerCase();
+                    });
+                    window._azoraCloudUsers.push({
+                        username: newUsername,
+                        userId: entry.userId || "",
+                        email: recoveredEmail || "",
+                        createdAt: entry.createdAt || Date.now()
+                    });
+                }
+            } catch (eW) {}
+        }
+    } catch (eCloud) {}
+
+    // In-app notification under NEW username
     try {
         if (typeof pushNotification === "function") {
             pushNotification(
@@ -2434,8 +2661,9 @@ function adminForceRenameUser(oldUsername, newUsername, opts) {
         }
     } catch (eN) {}
 
-    // Queue Gmail template if email linked
-    if (entry.email) {
+    // Queue Gmail template if we have an email
+    var mailTo = recoveredEmail || entry.email || "";
+    if (mailTo) {
         var mailBody =
             "Hello from Azora!\n\n" +
             "We are writing to inform you that an administrator has updated your Azora username.\n\n" +
@@ -2455,8 +2683,8 @@ function adminForceRenameUser(oldUsername, newUsername, opts) {
             q.unshift({
                 id: "mail_" + Date.now(),
                 payload: {
-                    from: AZORA_RESET_FROM_EMAIL,
-                    to: entry.email,
+                    from: typeof AZORA_RESET_FROM_EMAIL !== "undefined" ? AZORA_RESET_FROM_EMAIL : "azorahavefun@gmail.com",
+                    to: mailTo,
                     subject: "Security Update: Your Azora username has been changed",
                     body: mailBody
                 },
@@ -2464,15 +2692,21 @@ function adminForceRenameUser(oldUsername, newUsername, opts) {
                 at: Date.now()
             });
             localStorage.setItem("azoraOutboundMail", JSON.stringify(q.slice(0, 30)));
-            console.info("[Azora] Queued username-change email to " + maskEmail(entry.email));
+            console.info("[Azora] Queued username-change email to " + (typeof maskEmail === "function" ? maskEmail(mailTo) : mailTo));
         } catch (e5) {}
     }
 
-    return { ok: true, oldUsername: oldName, newUsername: newUsername, emailQueued: !!entry.email };
+    return {
+        ok: true,
+        oldUsername: oldName,
+        newUsername: newUsername,
+        emailRecovered: recoveredEmail || "",
+        emailQueued: !!mailTo,
+        foundVia: foundVia
+    };
 }
 window.adminForceRenameUser = adminForceRenameUser;
 
-/** Full-screen notice shown once after admin renamed the user. */
 function showAdminNameChangePopup(oldUsername, newUsername) {
     var existing = document.getElementById("adminNameChangeOverlay");
     if (existing) existing.remove();
@@ -2546,18 +2780,34 @@ function applyOwnerRenameFromConsole() {
     }
     var oldU = oldEl ? oldEl.value.trim() : "";
     var newU = newEl ? newEl.value.trim() : "";
-    var res = adminForceRenameUser(oldU, newU);
-    if (!res.ok) {
-        setSt(res.error || "Rename failed.");
+    if (!oldU || !newU) {
+        setSt("Enter current username (or email) and a new safe username.");
         return;
     }
-    setSt("Renamed " + res.oldUsername + " → " + res.newUsername +
-        (res.emailQueued ? " (email notification queued)" : " (no email on account — in-game notice only)") + ".");
-    if (oldEl) oldEl.value = "";
-    if (newEl) newEl.value = "";
-    if (typeof playClickSound === "function") playClickSound();
+    setSt("Looking up user in cloud registry…", true);
+    function doRename() {
+        var res = adminForceRenameUser(oldU, newU);
+        if (!res.ok) {
+            setSt(res.error || "Rename failed.");
+            return;
+        }
+        var extra = "";
+        if (res.emailRecovered) extra += " Email kept private: " + (typeof maskEmail === "function" ? maskEmail(res.emailRecovered) : "(hidden)") + ".";
+        if (res.emailQueued) extra += " Security email queued.";
+        else if (!res.emailRecovered) extra += " No email on file — in-game notice only.";
+        setSt("Renamed " + res.oldUsername + " → " + res.newUsername + "." + extra, true);
+        if (oldEl) oldEl.value = "";
+        if (newEl) newEl.value = "";
+        if (typeof playClickSound === "function") playClickSound();
+    }
+    if (typeof fetchGlobalRegistry === "function") {
+        fetchGlobalRegistry(function () { doRename(); });
+    } else {
+        doRename();
+    }
 }
 window.applyOwnerRenameFromConsole = applyOwnerRenameFromConsole;
+
 
 
 function isAzoraOwner() {
@@ -15935,11 +16185,25 @@ function getPublicUserId_systemPatch(username) {
         if (!query) return true;
         var un = String(u.username || "").toLowerCase();
         var id = String(u.userId || "").toLowerCase();
-        var em = String(u.email || "").toLowerCase();
-        if (un.indexOf(query) !== -1) return true;
+        // Public search never matches against private email fields
+        // If username itself looks like an email, only owner search can find the local-part
+        var isOwner = false;
+        try { isOwner = typeof isAzoraOwner === "function" && isAzoraOwner(); } catch (eO) {}
+        if (un.indexOf("@") !== -1) {
+            // Email-as-username: hide from normal search; owner can still find by full string or local-part
+            if (!isOwner) return false;
+            if (un.indexOf(query) !== -1) return true;
+            var localPart = un.split("@")[0] || "";
+            if (localPart && localPart.indexOf(query) !== -1) return true;
+        } else {
+            if (un.indexOf(query) !== -1) return true;
+        }
         if (id.indexOf(query) !== -1) return true;
-        if (em && em.indexOf(query) !== -1) return true;
-        // "aza: 1" / "aza 1" / "1"
+        // Owner-only: match private email index
+        if (isOwner) {
+            var em = String(u.email || "").toLowerCase();
+            if (em && em.indexOf(query) !== -1) return true;
+        }
         var q2 = query.replace(/\s+/g, " ");
         if (id.replace(/\s+/g, " ").indexOf(q2) !== -1) return true;
         return false;
@@ -15962,7 +16226,14 @@ function getPublicUserId_systemPatch(username) {
                 }
             } catch (eX) {}
             var idBit = item.userId ? (' <span style="opacity:0.7;font-size:12px;">' + String(item.userId).replace(/</g, "&lt;") + "</span>") : "";
-            row.innerHTML = "👤 <strong>" + String(item.username).replace(/</g, "&lt;") + "</strong>" + idBit + extra + " ";
+            var displayName = (typeof publicUsernameLabel === "function") ? publicUsernameLabel(item.username) : item.username;
+            var isOwner = false;
+            try { isOwner = typeof isAzoraOwner === "function" && isAzoraOwner(); } catch (eO2) {}
+            // Owner sees a privacy note if the stored username was an email
+            if (isOwner && String(item.username || "").indexOf("@") !== -1) {
+                extra += ' <span class="sys-tag">email-as-username (private)</span>';
+            }
+            row.innerHTML = "👤 <strong>" + String(displayName).replace(/</g, "&lt;") + "</strong>" + idBit + extra + " ";
             var viewBtn = document.createElement("a");
             viewBtn.href = "#";
             viewBtn.className = "search-action-btn";
@@ -15970,6 +16241,7 @@ function getPublicUserId_systemPatch(username) {
             viewBtn.onclick = function (e) {
                 e.preventDefault();
                 try { closeSearch(); } catch (err) {}
+                // Profile lookup still uses the real stored key
                 if (typeof openUserProfile === "function") openUserProfile(item.username);
             };
             row.appendChild(viewBtn);

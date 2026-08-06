@@ -13,7 +13,7 @@
     <link rel="manifest" href="manifest-azora.json">
     <link rel="apple-touch-icon" href="logo.jpg">
     <link rel="icon" href="logo.jpg">
-    <link rel="stylesheet" href="style.css?v=63.0">
+    <link rel="stylesheet" href="style.css?v=63.1">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -1023,7 +1023,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=63.0"></script>
+<script src="script.js?v=63.1"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {
@@ -1311,9 +1311,9 @@ if ("serviceWorker" in navigator) {
         <div id="ownerAppealsInbox" class="owner-appeals-inbox"></div>
 
         <h3 style="margin:18px 0 8px;color:#93c5fd;">Admin username override</h3>
-        <p style="font-size:0.8rem;color:#94a3b8;margin:0 0 8px;">Force-change a username that contains personal info, email text, or @. User gets an in-game notice on next login; if they have email, a Gmail template is queued from azorahavefun@gmail.com.</p>
+        <p style="font-size:0.8rem;color:#94a3b8;margin:0 0 8px;">Force-change a username that contains personal info, email text, or @. You can type their email OR their current username. If the username was an email, it becomes their private email and the new name is public. They get an in-game notice on next login.</p>
         <label for="omRenameOld" style="font-size:12px;color:#cbd5e1;">Current username</label>
-        <input id="omRenameOld" type="text" placeholder="Current username" style="width:100%;box-sizing:border-box;padding:10px;margin:4px 0 8px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#f1f5f9;">
+        <input id="omRenameOld" type="text" placeholder="Current username OR email" style="width:100%;box-sizing:border-box;padding:10px;margin:4px 0 8px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#f1f5f9;">
         <label for="omRenameNew" style="font-size:12px;color:#cbd5e1;">New safe username</label>
         <input id="omRenameNew" type="text" placeholder="New username (letters, numbers, _)" style="width:100%;box-sizing:border-box;padding:10px;margin:4px 0 8px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#f1f5f9;">
         <p id="omRenameStatus" style="display:none;font-size:12px;margin:0 0 8px;"></p>
