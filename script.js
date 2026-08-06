@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v63.1 email privacy + cloud admin rename","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v63.3 profile 3D spinning avatar","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -659,15 +659,31 @@ function fetchGlobalRegistry(callback) {
                         if (!em && uname.indexOf("@") !== -1) {
                             em = uname.toLowerCase();
                         }
+                        // Prefer mapped safe username when cloud still has email-key ghost
+                        var publicName = uname;
+                        if (uname.indexOf("@") !== -1) {
+                            try {
+                                var emapG = JSON.parse(localStorage.getItem("azoraPrivateEmails") || "{}");
+                                if (emapG["email:" + uname.toLowerCase()]) {
+                                    publicName = emapG["email:" + uname.toLowerCase()];
+                                } else {
+                                    // Do not expose email usernames in the public cloud list
+                                    // Still keep private email index
+                                    em = em || uname.toLowerCase();
+                                    return; // skip this entry in public list
+                                }
+                            } catch (eSkip) {
+                                return;
+                            }
+                        }
                         list.push({
-                            username: uname,
+                            username: publicName,
                             userId: u.userId || "",
-                            // email kept only for staff tools — never render publicly
                             email: em,
                             isSystemElement: !!u.isSystemElement,
-                            isOwner: !!u.isOwner || uname.toLowerCase() === "azora",
+                            isOwner: !!u.isOwner || publicName.toLowerCase() === "azora",
                             createdAt: u.createdAt || null,
-                            looksLikeEmail: uname.indexOf("@") !== -1
+                            looksLikeEmail: false
                         });
                     }
                 });
@@ -702,6 +718,7 @@ function fetchGlobalRegistry(callback) {
                 localStorage.setItem("azoraUserRegistry", JSON.stringify(Object.keys(by).map(function (k) { return by[k]; })));
             } catch (eM) {}
             try { window._azoraCloudUsers = list; } catch (eW) {}
+            try { if (typeof scrubEmailArtifactsEverywhere === "function") scrubEmailArtifactsEverywhere(); } catch (eScr) {}
             callback(null, list);
         })
         .catch(function (err) {
@@ -2241,19 +2258,158 @@ function validateAzoraName(raw, kind) {
 }
 window.validateAzoraName = validateAzoraName;
 
+/** True if a string looks like an email (must never be public). */
+function isEmailLikeString(s) {
+    s = String(s || "").trim();
+    if (!s) return false;
+    if (s.indexOf("@") !== -1) return true;
+    var n = s.toLowerCase().replace(/\s+/g, "");
+    if (/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(s)) return true;
+    return false;
+}
+window.isEmailLikeString = isEmailLikeString;
+
 /** Public-safe label: never show an email address as a username. */
 function publicUsernameLabel(username) {
     var u = String(username || "").trim();
     if (!u) return "Player";
-    if (u.indexOf("@") !== -1) {
-        // Hide email — show generic + last 4 of local-part if possible
+    if (isEmailLikeString(u)) {
         var local = u.split("@")[0] || "player";
-        var tail = local.slice(-3);
+        var tail = local.replace(/[^a-zA-Z0-9]/g, "").slice(-3) || "xxx";
         return "Player_" + tail;
     }
     return u;
 }
 window.publicUsernameLabel = publicUsernameLabel;
+
+/**
+ * Strip email-like strings from usernameHistory everywhere.
+ * Also remove ghost registry rows whose username is an email if a renamed account exists.
+ */
+function scrubEmailArtifactsEverywhere() {
+    var privateMap = {};
+    try { privateMap = JSON.parse(localStorage.getItem("azoraPrivateEmails") || "{}"); } catch (e) {}
+
+    // 1) Saved accounts
+    try {
+        var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+        var changed = false;
+        var keys = Object.keys(map);
+        keys.forEach(function (k) {
+            var a = map[k];
+            if (!a) return;
+            // If account KEY is email-like and we already have a safe rename target, drop the ghost key
+            if (isEmailLikeString(k)) {
+                var target = privateMap["email:" + String(k).toLowerCase()];
+                if (target && map[target]) {
+                    // Merge any useful fields then delete ghost
+                    if (!map[target].email) map[target].email = String(k).toLowerCase();
+                    delete map[k];
+                    changed = true;
+                    return;
+                }
+                // Convert ghost account: move email to field, keep until admin renames — but hide history
+            }
+            if (Array.isArray(a.usernameHistory)) {
+                var clean = a.usernameHistory.filter(function (h) { return h && !isEmailLikeString(h); });
+                if (clean.length !== a.usernameHistory.length) {
+                    a.usernameHistory = clean;
+                    changed = true;
+                }
+            }
+            // If username itself is email-like, ensure email field holds it
+            if (a.username && isEmailLikeString(a.username)) {
+                a.email = a.email || String(a.username).toLowerCase();
+            }
+        });
+        if (changed) {
+            if (typeof saveSavedAccounts === "function") saveSavedAccounts(map);
+            else localStorage.setItem("azoraAccounts", JSON.stringify(map));
+        }
+    } catch (e1) {}
+
+    // 2) Public registry — remove email-username rows when a rename mapping exists
+    try {
+        var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+        if (!Array.isArray(reg)) reg = [];
+        var safeNames = {};
+        reg.forEach(function (r) {
+            if (r && r.username && !isEmailLikeString(r.username)) {
+                safeNames[String(r.username).toLowerCase()] = true;
+            }
+        });
+        var next = [];
+        reg.forEach(function (r) {
+            if (!r || !r.username) return;
+            if (isEmailLikeString(r.username)) {
+                // Keep private email index only
+                try {
+                    privateMap[String(r.username).toLowerCase()] = String(r.username).toLowerCase();
+                    privateMap["email:" + String(r.username).toLowerCase()] =
+                        privateMap["email:" + String(r.username).toLowerCase()] || "";
+                } catch (eP) {}
+                // Do NOT keep email usernames in public registry
+                return;
+            }
+            if (Array.isArray(r.usernameHistory)) {
+                r.usernameHistory = r.usernameHistory.filter(function (h) { return h && !isEmailLikeString(h); });
+            }
+            next.push(r);
+        });
+        localStorage.setItem("azoraUserRegistry", JSON.stringify(next));
+        localStorage.setItem("azoraPrivateEmails", JSON.stringify(privateMap));
+    } catch (e2) {}
+
+    // 3) Session account history
+    try {
+        var cur = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (cur && Array.isArray(cur.usernameHistory)) {
+            cur.usernameHistory = cur.usernameHistory.filter(function (h) { return h && !isEmailLikeString(h); });
+            localStorage.setItem("azoraAccount", JSON.stringify(cur));
+        }
+    } catch (e3) {}
+
+    // 4) Cloud cache
+    try {
+        if (window._azoraCloudUsers && Array.isArray(window._azoraCloudUsers)) {
+            window._azoraCloudUsers = window._azoraCloudUsers.filter(function (u) {
+                return u && u.username && !isEmailLikeString(u.username);
+            }).map(function (u) {
+                if (Array.isArray(u.usernameHistory)) {
+                    u.usernameHistory = u.usernameHistory.filter(function (h) { return h && !isEmailLikeString(h); });
+                }
+                return u;
+            });
+        }
+    } catch (e4) {}
+}
+window.scrubEmailArtifactsEverywhere = scrubEmailArtifactsEverywhere;
+
+/** Resolve email-username → safe public username via private map / history. */
+function resolvePublicUsername(raw) {
+    raw = String(raw || "").trim();
+    if (!raw) return raw;
+    if (!isEmailLikeString(raw)) return raw;
+    try {
+        var emap = JSON.parse(localStorage.getItem("azoraPrivateEmails") || "{}");
+        var mapped = emap["email:" + raw.toLowerCase()];
+        if (mapped) return mapped;
+    } catch (e) {}
+    try {
+        var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : {};
+        var keys = Object.keys(map);
+        for (var i = 0; i < keys.length; i++) {
+            var a = map[keys[i]];
+            if (!a) continue;
+            if (String(a.email || "").toLowerCase() === raw.toLowerCase() && a.username && !isEmailLikeString(a.username)) {
+                return a.username;
+            }
+        }
+    } catch (e2) {}
+    return raw;
+}
+window.resolvePublicUsername = resolvePublicUsername;
+
 
 
 window.normalizeNameForSafety = normalizeNameForSafety;
@@ -2516,7 +2672,11 @@ function adminForceRenameUser(oldUsername, newUsername, opts) {
 
     entry.username = newUsername;
     entry.usernameHistory = Array.isArray(entry.usernameHistory) ? entry.usernameHistory : [];
-    if (entry.usernameHistory.indexOf(oldName) === -1) entry.usernameHistory.push(oldName);
+    // NEVER store email addresses in public username history
+    if (oldName && !isEmailLikeString(oldName) && entry.usernameHistory.indexOf(oldName) === -1) {
+        entry.usernameHistory.push(oldName);
+    }
+    entry.usernameHistory = entry.usernameHistory.filter(function (h) { return h && !isEmailLikeString(h); });
     entry.adminRenamedAt = Date.now();
     entry.adminRenamedFrom = oldName;
     entry.pendingAdminNameNotice = {
@@ -7325,10 +7485,37 @@ function renderPastUsernamesOnProfile(username, isOwn) {
         if (!entry && isOwn) {
             entry = JSON.parse(localStorage.getItem("azoraAccount") || "null");
         }
+        // Also check registry for history
+        if (!entry) {
+            try {
+                var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+                for (var i = 0; i < reg.length; i++) {
+                    if (reg[i] && String(reg[i].username || "").toLowerCase() === String(username).toLowerCase()) {
+                        entry = reg[i];
+                        break;
+                    }
+                }
+            } catch (eR) {}
+        }
         if (!entry) return;
         var show = entry.showPastUsernames !== false;
-        if (!show && !isOwn) return; // hidden from others
+        if (!show && !isOwn) return;
         var hist = Array.isArray(entry.usernameHistory) ? entry.usernameHistory.filter(Boolean) : [];
+        // ALWAYS strip emails — never show on profile for anyone
+        hist = hist.filter(function (h) {
+            return h && !(typeof isEmailLikeString === "function" ? isEmailLikeString(h) : String(h).indexOf("@") !== -1);
+        });
+        // Persist scrub if we cleaned something
+        if (Array.isArray(entry.usernameHistory) && entry.usernameHistory.length !== hist.length) {
+            entry.usernameHistory = hist;
+            try {
+                if (map[username]) {
+                    map[username].usernameHistory = hist;
+                    if (typeof saveSavedAccounts === "function") saveSavedAccounts(map);
+                    else localStorage.setItem("azoraAccounts", JSON.stringify(map));
+                }
+            } catch (eS) {}
+        }
         if (!hist.length) return;
         el.style.display = "block";
         var title = document.createElement("div");
@@ -7459,6 +7646,11 @@ function openGuestProfile() {
         '<p style="color:#666;font-size:14px;">Guests don\'t have usernames, followers, or friends. Their public User ID is shown above.</p>' +
         '<button onclick="closeProfile(); openCreateAccount();" style="background:linear-gradient(180deg,#3b82f6,#1e60ff);color:#fff;">Create a real account</button>';
     document.getElementById("profileOverlay").style.display = "flex";
+    try {
+        if (typeof showProfile3DAvatar === "function") {
+            setTimeout(function () { showProfile3DAvatar(username); }, 40);
+        }
+    } catch (e3dShow) {}
 }
 
 
@@ -7497,6 +7689,21 @@ function renderProfileGames(username, isOwn) {
 }
 
 function openUserProfile(username) {
+    // Never open a raw email as a public profile — resolve to safe username if renamed
+    try {
+        if (typeof isEmailLikeString === "function" && isEmailLikeString(username)) {
+            var resolved = typeof resolvePublicUsername === "function" ? resolvePublicUsername(username) : username;
+            if (resolved && resolved !== username && !(typeof isEmailLikeString === "function" && isEmailLikeString(resolved))) {
+                username = resolved;
+            } else {
+                // Ghost email profile with no rename mapping: show privacy-safe placeholder, still allow owner mod
+                try {
+                    if (typeof scrubEmailArtifactsEverywhere === "function") scrubEmailArtifactsEverywhere();
+                } catch (eSc) {}
+            }
+        }
+    } catch (eRes) {}
+
     // Pull this user's social + my inbox from cloud (friend requests / friends)
     try {
         if (typeof pullUserSocialFromCloud === "function") {
@@ -7729,6 +7936,7 @@ function closeProfile() {
         openUserProfile._activeUsername = null;
         openUserProfile._lastSyncedFor = null;
     } catch (e) {}
+    try { if (typeof disposeProfile3DAvatar === "function") disposeProfile3DAvatar(); } catch (e3d) {}
     var ov = document.getElementById("profileOverlay");
     if (ov) ov.style.display = "none";
 }
@@ -16063,6 +16271,18 @@ function appendOwnerModPanel(actionsEl, targetUsername) {
         actionsEl.appendChild(note);
         return;
     }
+    if (!actionsEl.querySelector(".owner-security-msg-btn")) {
+        var msgBtn = document.createElement("button");
+        msgBtn.type = "button";
+        msgBtn.className = "owner-security-msg-btn";
+        msgBtn.textContent = "📨 Security message (notification)";
+        msgBtn.style.cssText = "width:100%;margin-top:10px;background:linear-gradient(180deg,#1e3a5f,#0f172a);color:#7dd3fc;border:1px solid #38bdf8;font-weight:700;";
+        msgBtn.onclick = function (e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            openOwnerSecurityMessage(targetUsername);
+        };
+        actionsEl.appendChild(msgBtn);
+    }
     if (actionsEl.querySelector(".owner-mod-open-btn")) return;
     var btn = document.createElement("button");
     btn.type = "button";
@@ -16075,6 +16295,81 @@ function appendOwnerModPanel(actionsEl, targetUsername) {
     };
     actionsEl.appendChild(btn);
 }
+
+/** Owner-only: send a security notification to any player (no friendship required). */
+function openOwnerSecurityMessage(targetUsername) {
+    if (typeof isAzoraOwner === "function" && !isAzoraOwner()) {
+        alert("Only the Azora owner can send security messages.");
+        return;
+    }
+    targetUsername = String(targetUsername || "").trim();
+    if (!targetUsername) return;
+    // Prefer resolved safe name
+    try {
+        if (typeof resolvePublicUsername === "function") {
+            var r = resolvePublicUsername(targetUsername);
+            if (r && !(typeof isEmailLikeString === "function" && isEmailLikeString(r))) targetUsername = r;
+        }
+    } catch (e) {}
+
+    var existing = document.getElementById("ownerSecurityMsgOverlay");
+    if (existing) existing.remove();
+    var ov = document.createElement("div");
+    ov.id = "ownerSecurityMsgOverlay";
+    ov.className = "overlay";
+    ov.style.cssText = "display:flex;z-index:12050;background:rgba(15,23,42,0.85);";
+    ov.innerHTML =
+        '<div class="popup" style="max-width:min(400px,calc(100vw - 24px));text-align:left;background:#0f172a;border:1px solid #38bdf8;color:#e2e8f0;">' +
+        '<h2 style="margin:0 0 8px;color:#7dd3fc !important;">📨 Security message</h2>' +
+        '<p style="margin:0 0 10px;font-size:13px;color:#94a3b8 !important;">To: <strong style="color:#fff;">' +
+        String(targetUsername).replace(/</g, "&lt;") +
+        '</strong><br>Appears in their <strong>Notifications</strong>. Friendship not required. For security / account notices only.</p>' +
+        '<textarea id="ownerSecurityMsgText" maxlength="400" placeholder="Write your security message…" style="width:100%;min-height:110px;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#f1f5f9;resize:vertical;"></textarea>' +
+        '<p id="ownerSecurityMsgStatus" style="display:none;font-size:12px;margin:8px 0 0;"></p>' +
+        '<button type="button" id="ownerSecurityMsgSend" style="width:100%;margin-top:12px;background:linear-gradient(180deg,#38bdf8,#0284c7);color:#fff;border:none;padding:12px;border-radius:10px;font-weight:700;">Send notification</button>' +
+        '<button type="button" id="ownerSecurityMsgCancel" class="secondary" style="width:100%;margin-top:8px;">Cancel</button>' +
+        '</div>';
+    document.body.appendChild(ov);
+    document.getElementById("ownerSecurityMsgCancel").onclick = function () { ov.remove(); };
+    document.getElementById("ownerSecurityMsgSend").onclick = function () {
+        var ta = document.getElementById("ownerSecurityMsgText");
+        var st = document.getElementById("ownerSecurityMsgStatus");
+        var msg = ta ? String(ta.value || "").trim() : "";
+        if (!msg) {
+            if (st) { st.style.display = "block"; st.style.color = "#f87171"; st.textContent = "Write a message first."; }
+            return;
+        }
+        if (msg.length > 400) msg = msg.slice(0, 400);
+        var full = "🛡️ Security notice from Azora: " + msg;
+        try {
+            if (typeof pushNotification === "function") {
+                pushNotification(targetUsername, full, "security", {
+                    from: "Azora",
+                    ownerSecurity: true,
+                    at: Date.now()
+                });
+            }
+        } catch (eN) {}
+        // Cloud mirror so other devices see it
+        try {
+            if (typeof pushNotifToCloud === "function") {
+                pushNotifToCloud(targetUsername, {
+                    id: "sec_" + Date.now(),
+                    message: full,
+                    type: "security",
+                    meta: { from: "Azora", ownerSecurity: true },
+                    read: false,
+                    at: Date.now()
+                });
+            }
+        } catch (eC) {}
+        if (st) { st.style.display = "block"; st.style.color = "#34d399"; st.textContent = "Sent to " + targetUsername + "’s notifications."; }
+        if (typeof playClickSound === "function") playClickSound();
+        setTimeout(function () { ov.remove(); }, 900);
+    };
+}
+window.openOwnerSecurityMessage = openOwnerSecurityMessage;
+
 
 function getPublicUserId_systemPatch(username) {
     if (isSystemUsername(username)) return "Aza: 2";
@@ -16124,6 +16419,15 @@ function getPublicUserId_systemPatch(username) {
             if (!u) return;
             var name = u.username || u.name || "";
             if (!name) return;
+            // Drop email-as-username ghosts from public search list (owner tools still use private map)
+            if (typeof isEmailLikeString === "function" && isEmailLikeString(name)) {
+                try {
+                    var emap = JSON.parse(localStorage.getItem("azoraPrivateEmails") || "{}");
+                    var mapped = emap["email:" + String(name).toLowerCase()];
+                    if (mapped) name = mapped;
+                    else return; // no public row for unresolved email usernames
+                } catch (eE) { return; }
+            }
             var key = String(name).toLowerCase();
             var prev = map[key] || {};
             map[key] = {
@@ -18313,3 +18617,279 @@ window.recordParentalPurchaseSpend = recordParentalPurchaseSpend;
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { setTimeout(run, 1200); });
     else setTimeout(run, 1200);
 })();
+
+// Scrub email usernames / history from public surfaces on boot
+(function () {
+    function run() {
+        try { if (typeof scrubEmailArtifactsEverywhere === "function") scrubEmailArtifactsEverywhere(); } catch (e) {}
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { setTimeout(run, 400); });
+    else setTimeout(run, 400);
+})();
+
+
+// ============================================================
+// Profile 3D spinning avatar (separate from customizer scene)
+// ============================================================
+var _profile3d = {
+    renderer: null,
+    scene: null,
+    camera: null,
+    group: null,
+    raf: 0,
+    spinning: true,
+    username: null
+};
+
+function getAvatarDataForUsername(username) {
+    username = String(username || "");
+    var def = (typeof defaultAvatarForGender === "function")
+        ? defaultAvatarForGender("boy")
+        : { gender: "boy", head: "#ffcc00", torso: "#1e60ff", leftArm: "#ffcc00", rightArm: "#ffcc00", leftLeg: "#00ebd4", rightLeg: "#00ebd4", hair: "#3b2f2f" };
+
+    // 1) Local saved accounts
+    try {
+        var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+        if (map[username] && map[username].avatar) {
+            return Object.assign({}, def, map[username].avatar, {
+                gender: map[username].gender || (map[username].avatar && map[username].avatar.gender) || def.gender
+            });
+        }
+        // case-insensitive
+        var keys = Object.keys(map);
+        for (var i = 0; i < keys.length; i++) {
+            if (String(keys[i]).toLowerCase() === username.toLowerCase() && map[keys[i]].avatar) {
+                var a = map[keys[i]];
+                return Object.assign({}, def, a.avatar, { gender: a.gender || a.avatar.gender || def.gender });
+            }
+        }
+    } catch (e1) {}
+
+    // 2) Current session if viewing self
+    try {
+        var me = typeof getMyUsername === "function" ? getMyUsername() : "";
+        if (me && me === username) {
+            var cur = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+            if (cur && cur.avatar) {
+                return Object.assign({}, def, cur.avatar, { gender: cur.gender || cur.avatar.gender || def.gender });
+            }
+        }
+    } catch (e2) {}
+
+    // 3) Cloud social blob may carry avatar
+    try {
+        var social = typeof getSocialData === "function" ? getSocialData() : {};
+        if (social[username] && social[username].avatar) {
+            return Object.assign({}, def, social[username].avatar);
+        }
+    } catch (e3) {}
+
+    // 4) Owner default look
+    if (typeof isOwnerUsername === "function" && isOwnerUsername(username)) {
+        return Object.assign({}, def, {
+            head: "#ffcc00", torso: "#1e60ff", leftArm: "#ffcc00", rightArm: "#ffcc00",
+            leftLeg: "#00ebd4", rightLeg: "#00ebd4", gender: "boy"
+        });
+    }
+
+    return def;
+}
+
+function _profile3dMat(color) {
+    try {
+        if (typeof azoraGlossMaterial === "function") return azoraGlossMaterial(color);
+    } catch (e) {}
+    try {
+        return new THREE.MeshPhongMaterial({ color: color, shininess: 80, specular: 0xaaaaaa });
+    } catch (e2) {
+        return new THREE.MeshLambertMaterial({ color: color });
+    }
+}
+
+function _profile3dBox(w, h, d, color) {
+    return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), _profile3dMat(color));
+}
+
+function buildProfile3DCharacter(avatar) {
+    avatar = avatar || {};
+    var gender = (avatar.gender === "girl" || avatar.gender === "female") ? "girl" : "boy";
+    var headC = avatar.head || (gender === "girl" ? "#ffcc99" : "#ffcc00");
+    var torsoC = avatar.torso || (gender === "girl" ? "#ff6eb4" : "#1e60ff");
+    var la = avatar.leftArm || headC;
+    var ra = avatar.rightArm || headC;
+    var ll = avatar.leftLeg || (gender === "girl" ? "#c084fc" : "#00ebd4");
+    var rl = avatar.rightLeg || ll;
+    var hairC = avatar.hair || (gender === "girl" ? "#4a3728" : "#3b2f2f");
+
+    var group = new THREE.Group();
+
+    var head = _profile3dBox(0.65, 0.65, 0.65, headC);
+    head.position.y = 1.12;
+    group.add(head);
+
+    // Face decal
+    try {
+        var faceUrl = (typeof faceTextureUrlForGender === "function")
+            ? faceTextureUrlForGender(gender)
+            : (gender === "girl" ? "female_smile.png" : "Smile.png");
+        var loader = new THREE.TextureLoader();
+        loader.load(faceUrl, function (tex) {
+            try {
+                tex.minFilter = THREE.LinearFilter;
+                tex.magFilter = THREE.LinearFilter;
+                tex.generateMipmaps = false;
+                var mat = new THREE.MeshBasicMaterial({
+                    map: tex, transparent: true, depthWrite: false, alphaTest: 0.15, side: THREE.FrontSide
+                });
+                var plane = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 0.54), mat);
+                plane.position.set(0, 1.12, 0.34);
+                group.add(plane);
+            } catch (eF) {}
+        }, undefined, function () {});
+    } catch (eFace) {}
+
+    var torso = _profile3dBox(
+        gender === "girl" ? 0.78 : 0.85,
+        gender === "girl" ? 1.05 : 1.0,
+        0.45,
+        torsoC
+    );
+    torso.position.y = 0.3;
+    group.add(torso);
+
+    var leftArm = _profile3dBox(0.35, 1.0, 0.35, la);
+    leftArm.position.set(-0.62, 0.3, 0);
+    group.add(leftArm);
+    var rightArm = _profile3dBox(0.35, 1.0, 0.35, ra);
+    rightArm.position.set(0.62, 0.3, 0);
+    group.add(rightArm);
+
+    var leftLeg = _profile3dBox(0.35, 1.0, 0.35, ll);
+    leftLeg.position.set(-0.22, -0.7, 0);
+    group.add(leftLeg);
+    var rightLeg = _profile3dBox(0.35, 1.0, 0.35, rl);
+    rightLeg.position.set(0.22, -0.7, 0);
+    group.add(rightLeg);
+
+    // Simple hair for girls (longer blocky) / short for boys if style present
+    try {
+        var styleId = avatar.hairStyle || (gender === "girl" ? "hair_girl_default" : "hair_boy_none");
+        if (typeof makeAvatarHair === "function" && styleId && styleId !== "hair_boy_none") {
+            var hair = makeAvatarHair(hairC, 1.12, 0.65, styleId);
+            if (hair) group.add(hair);
+        } else if (gender === "girl") {
+            // Fallback long hair blocks
+            var top = _profile3dBox(0.72, 0.28, 0.72, hairC);
+            top.position.y = 1.42;
+            group.add(top);
+            var back = _profile3dBox(0.7, 0.85, 0.22, hairC);
+            back.position.set(0, 0.95, -0.28);
+            group.add(back);
+            var sideL = _profile3dBox(0.18, 0.7, 0.35, hairC);
+            sideL.position.set(-0.4, 1.0, 0.05);
+            group.add(sideL);
+            var sideR = _profile3dBox(0.18, 0.7, 0.35, hairC);
+            sideR.position.set(0.4, 1.0, 0.05);
+            group.add(sideR);
+        }
+    } catch (eH) {}
+
+    return group;
+}
+
+function disposeProfile3DAvatar() {
+    try {
+        if (_profile3d.raf) {
+            cancelAnimationFrame(_profile3d.raf);
+            _profile3d.raf = 0;
+        }
+    } catch (e) {}
+    try {
+        if (_profile3d.renderer) {
+            _profile3d.renderer.dispose();
+            var canvas = document.getElementById("profile3dCanvas");
+            if (canvas && _profile3d.renderer.domElement && _profile3d.renderer.domElement.parentNode === canvas.parentNode) {
+                // we render onto the existing canvas via { canvas: ... }
+            }
+        }
+    } catch (e2) {}
+    try {
+        if (_profile3d.scene) {
+            _profile3d.scene.traverse(function (obj) {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) obj.material.forEach(function (m) { try { m.dispose(); } catch (e) {} });
+                    else try { obj.material.dispose(); } catch (e) {}
+                }
+            });
+        }
+    } catch (e3) {}
+    _profile3d.renderer = null;
+    _profile3d.scene = null;
+    _profile3d.camera = null;
+    _profile3d.group = null;
+    _profile3d.username = null;
+}
+window.disposeProfile3DAvatar = disposeProfile3DAvatar;
+
+function showProfile3DAvatar(username) {
+    if (typeof THREE === "undefined") return;
+    var canvas = document.getElementById("profile3dCanvas");
+    var wrap = document.getElementById("profile3dWrap");
+    if (!canvas || !wrap) return;
+
+    disposeProfile3DAvatar();
+    _profile3d.username = username;
+    _profile3d.spinning = true;
+
+    var w = canvas.clientWidth || 200;
+    var h = canvas.clientHeight || 240;
+    canvas.width = w * (window.devicePixelRatio > 1 ? 2 : 1);
+    canvas.height = h * (window.devicePixelRatio > 1 ? 2 : 1);
+
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(32, w / h, 0.1, 50);
+    camera.position.set(0, 0.55, 4.2);
+    camera.lookAt(0, 0.35, 0);
+
+    var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+    renderer.setSize(w, h, false);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setClearColor(0x000000, 0);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+    var dir = new THREE.DirectionalLight(0xffffff, 0.7);
+    dir.position.set(3, 6, 4);
+    scene.add(dir);
+    var fill = new THREE.DirectionalLight(0x93c5fd, 0.35);
+    fill.position.set(-3, 2, -2);
+    scene.add(fill);
+
+    var avatarData = getAvatarDataForUsername(username);
+    var group = buildProfile3DCharacter(avatarData);
+    group.position.y = -0.15;
+    scene.add(group);
+
+    _profile3d.scene = scene;
+    _profile3d.camera = camera;
+    _profile3d.renderer = renderer;
+    _profile3d.group = group;
+
+    function tick() {
+        if (!_profile3d.renderer || _profile3d.username !== username) return;
+        _profile3d.raf = requestAnimationFrame(tick);
+        if (_profile3d.spinning && _profile3d.group) {
+            _profile3d.group.rotation.y += 0.012;
+        }
+        try { _profile3d.renderer.render(_profile3d.scene, _profile3d.camera); } catch (eR) {}
+    }
+    tick();
+
+    // Tap to pause/resume spin (does not stop forever — profiles always spin by default when reopened)
+    canvas.style.cursor = "pointer";
+    canvas.onclick = function () {
+        _profile3d.spinning = !_profile3d.spinning;
+    };
+}
+window.showProfile3DAvatar = showProfile3DAvatar;
+window.getAvatarDataForUsername = getAvatarDataForUsername;

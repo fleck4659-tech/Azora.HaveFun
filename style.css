@@ -4763,3 +4763,29 @@ footer {
     max-height: min(90vh, 640px);
     overflow-y: auto;
 }
+
+
+/* Profile 3D spinning avatar */
+.profile-3d-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 6px auto 10px;
+    width: 100%;
+    max-width: 240px;
+}
+#profile3dCanvas {
+    width: 200px;
+    height: 240px;
+    border-radius: 16px;
+    background: radial-gradient(ellipse at center, rgba(30,96,255,0.25) 0%, rgba(15,23,42,0.9) 70%);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25), inset 0 0 0 1px rgba(255,255,255,0.12);
+    display: block;
+}
+.profile-3d-hint {
+    margin: 6px 0 0;
+    font-size: 11px;
+    color: rgba(255,255,255,0.65);
+    letter-spacing: 0.02em;
+}

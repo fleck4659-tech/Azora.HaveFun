@@ -13,7 +13,7 @@
     <link rel="manifest" href="manifest-azora.json">
     <link rel="apple-touch-icon" href="logo.jpg">
     <link rel="icon" href="logo.jpg">
-    <link rel="stylesheet" href="style.css?v=63.1">
+    <link rel="stylesheet" href="style.css?v=63.3">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -699,6 +699,10 @@
             <input type="file" id="profilePicFileInput" accept="image/*" style="display:none;" onchange="onProfilePicSelected(event)">
         </div>
         <p id="profileAvatarHint" class="profile-avatar-hint" style="display:none;">Tap the picture to change it</p>
+        <div id="profile3dWrap" class="profile-3d-wrap">
+            <canvas id="profile3dCanvas" width="220" height="260" aria-label="3D avatar"></canvas>
+            <p class="profile-3d-hint">3D Avatar · spinning</p>
+        </div>
         <div class="profile-name-row">
             <h2 id="profileUsername">Username</h2>
             <button type="button" id="profileDonateBtn" class="profile-donate-btn" style="display:none;" title="Donate AzoraCoins">Donate</button>
@@ -1023,7 +1027,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=63.1"></script>
+<script src="script.js?v=63.3"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {
