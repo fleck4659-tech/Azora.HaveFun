@@ -13,7 +13,7 @@
     <link rel="manifest" href="manifest-azora.json">
     <link rel="apple-touch-icon" href="logo.jpg">
     <link rel="icon" href="logo.jpg">
-    <link rel="stylesheet" href="style.css?v=62.3">
+    <link rel="stylesheet" href="style.css?v=62.4">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -230,7 +230,7 @@
             <div class="settings-section">
                 <label class="settings-label">Visual Effects</label>
                 <label class="checkbox" style="color:#333 !important;margin-top:6px;">
-                    <input type="checkbox" id="fallingTextToggle" checked onchange="toggleFallingText()"> Enable Falling Phrases
+                    <input type="checkbox" id="fallingTextToggle" onchange="toggleFallingText()"> Enable Falling Phrases <small style="opacity:0.7">(off by default — can lag games)</small>
                 </label>
             </div>
 
@@ -969,7 +969,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=62.3"></script>
+<script src="script.js?v=62.4"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {

@@ -353,6 +353,7 @@ footer {
 
 /* Falling Text Engine Containers */
 #falling-text-container {
+    display: none; /* retired — lag in games */
     position: fixed;
     top: 0;
     left: 0;

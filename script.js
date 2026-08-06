@@ -9,14 +9,14 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v62.3 search + daily hard fix","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v62.4 falling text retired","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
 const rotationSpeed = 0.5; // Higher number = faster rotation
 const phrases = ["wow!", "this is cool!", "awesome!", "amazing!", "leemoon!"];
 
-let fallingTextActive = true;
+let fallingTextActive = false; // permanently disabled — caused lag in games
 let spawnInterval;
 
 // Mock database for search demonstration
@@ -1204,10 +1204,22 @@ function spawnWord() {
 
 // Spawn a new word every 10.0 seconds
 function startFallingPhrases() {
-    if (spawnInterval) clearInterval(spawnInterval);
-    spawnInterval = setInterval(spawnWord, 10000);
+    // Feature retired: falling phrases increased lag in 3D games
+    fallingTextActive = false;
+    if (spawnInterval) { clearInterval(spawnInterval); spawnInterval = null; }
+    var c = document.getElementById("falling-text-container");
+    if (c) c.innerHTML = "";
 }
-startFallingPhrases();
+function stopFallingPhrasesForGame() {
+    fallingTextActive = false;
+    if (spawnInterval) { clearInterval(spawnInterval); spawnInterval = null; }
+    var c = document.getElementById("falling-text-container");
+    if (c) { c.innerHTML = ""; c.style.display = "none"; }
+}
+window.stopFallingPhrasesForGame = stopFallingPhrasesForGame;
+
+// Falling text retired — no auto-start (lag in games)
+// startFallingPhrases();
 
 // --- Settings Logic ---
 function openSettings() {
@@ -9401,6 +9413,7 @@ function setupNormJoysticks() {
 window.setupNormJoysticks = setupNormJoysticks;
 
 function joinNormGame(gameId) {
+    try { if (typeof stopFallingPhrasesForGame === "function") stopFallingPhrasesForGame(); } catch (eFall) {}
     var def = NORM_GAMES[gameId];
     if (!def) {
         alert("That Norm Game is not available yet.");
