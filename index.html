@@ -13,7 +13,7 @@
     <link rel="manifest" href="manifest-azora.json">
     <link rel="apple-touch-icon" href="logo.jpg">
     <link rel="icon" href="logo.jpg">
-    <link rel="stylesheet" href="style.css?v=62.5">
+    <link rel="stylesheet" href="style.css?v=63.0">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -131,13 +131,15 @@
         <h2 style="text-align:center;color:#1e60ff !important;">Forgot password</h2>
         <p id="forgotStatus" class="account-error" style="display:block;min-height:1.2em;"></p>
         <div id="forgotStepEmail">
-            <p style="color:#333 !important;font-size:13px;">Enter the email on your account. A private code will be sent in about 5 seconds. Do not share it.</p>
-            <input id="forgotEmailInput" type="email" placeholder="Email">
-            <button type="button" onclick="startForgotPasswordSend()" style="width:100%;margin-top:10px;">Send code</button>
+            <p style="color:#333 !important;font-size:13px;margin:0 0 8px;">Accounts <strong>with email</strong>: enter your email. A 6-digit code is sent from <strong>azorahavefun@gmail.com</strong> and expires in <strong>15 minutes</strong>.</p>
+            <input id="forgotEmailInput" type="email" placeholder="Email (optional if you have a Backup Key)">
+            <p style="color:#333 !important;font-size:12px;margin:12px 0 6px;">Accounts <strong>without email</strong>: paste your Backup Recovery Key instead.</p>
+            <input id="forgotBackupKeyInput" type="text" placeholder="Backup Recovery Key (XXXX-XXXX-...)">
+            <button type="button" onclick="startForgotPasswordSend()" style="width:100%;margin-top:10px;">Send / verify recovery</button>
         </div>
         <div id="forgotStepCode" style="display:none;">
-            <label style="font-size:12px;font-weight:bold;color:#1e60ff;">Code (Aza-____)</label>
-            <input id="forgotCodeInput" type="text" placeholder="Aza-0" maxlength="12">
+            <label style="font-size:12px;font-weight:bold;color:#1e60ff;">6-digit verification code</label>
+            <input id="forgotCodeInput" type="text" placeholder="123456" maxlength="6" inputmode="numeric">
             <button type="button" onclick="verifyForgotCode()" style="width:100%;margin-top:10px;">Verify code</button>
         </div>
         <div id="forgotStepNewPass" style="display:none;">
@@ -1021,7 +1023,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=62.5"></script>
+<script src="script.js?v=63.0"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {
@@ -1307,6 +1309,15 @@ if ("serviceWorker" in navigator) {
         <h3 style="margin:16px 0 8px;color:#93c5fd;">Appeals inbox</h3>
         <p style="font-size:0.8rem;color:#94a3b8;margin:0 0 8px;">Appeals arrive here about 1 minute after a user submits one. You decide accept or reject. Restores progress on accept.</p>
         <div id="ownerAppealsInbox" class="owner-appeals-inbox"></div>
+
+        <h3 style="margin:18px 0 8px;color:#93c5fd;">Admin username override</h3>
+        <p style="font-size:0.8rem;color:#94a3b8;margin:0 0 8px;">Force-change a username that contains personal info, email text, or @. User gets an in-game notice on next login; if they have email, a Gmail template is queued from azorahavefun@gmail.com.</p>
+        <label for="omRenameOld" style="font-size:12px;color:#cbd5e1;">Current username</label>
+        <input id="omRenameOld" type="text" placeholder="Current username" style="width:100%;box-sizing:border-box;padding:10px;margin:4px 0 8px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#f1f5f9;">
+        <label for="omRenameNew" style="font-size:12px;color:#cbd5e1;">New safe username</label>
+        <input id="omRenameNew" type="text" placeholder="New username (letters, numbers, _)" style="width:100%;box-sizing:border-box;padding:10px;margin:4px 0 8px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#f1f5f9;">
+        <p id="omRenameStatus" style="display:none;font-size:12px;margin:0 0 8px;"></p>
+        <button type="button" onclick="applyOwnerRenameFromConsole()" style="width:100%;margin:0 0 12px;background:linear-gradient(180deg,#38bdf8,#0284c7);color:#fff;border:none;padding:10px;border-radius:8px;font-weight:700;">Apply admin name change</button>
 
         <button type="button" id="omApplyBtn" class="btn-ban" onclick="applyOwnerModeration()" style="width:100%;margin:0 0 8px;">Apply ban</button>
         <button type="button" class="btn-unban" onclick="clearOwnerModerationFromConsole()" style="width:100%;margin:0 0 8px;">Clear ban / termination for this username</button>

@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v62.5 profile pic + identity","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v63.0 name safety + reset + admin rename","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -1658,6 +1658,11 @@ function setLoggedInAccount(account) {
         if (typeof startCloudSocialPolling === "function") startCloudSocialPolling();
         if (typeof startCloudChatPolling === "function") startCloudChatPolling();
     } catch (e) {}
+    try {
+        if (typeof checkPendingAdminNameNotice === "function") {
+            setTimeout(function () { checkPendingAdminNameNotice(); }, 900);
+        }
+    } catch (eAN) {}
 }
 
 function finishCreateAccount(username, password, userId, email) {
@@ -1674,11 +1679,17 @@ function finishCreateAccount(username, password, userId, email) {
             face: "default",
             gender: "boy"
         };
+    var emailNorm = email ? String(email).trim().toLowerCase() : "";
+    var backupKey = "";
+    if (!emailNorm && typeof generateBackupRecoveryKey === "function") {
+        backupKey = generateBackupRecoveryKey();
+    }
     var account = {
         username: username,
         password: password,
         userId: userId,
-        email: email ? String(email).trim().toLowerCase() : "",
+        email: emailNorm,
+        backupRecoveryKey: backupKey || undefined,
         isGuest: false,
         gender: gender,
         avatar: avatar,
@@ -1696,8 +1707,8 @@ function finishCreateAccount(username, password, userId, email) {
 
     setLoggedInAccount(account);
     var extra = account.email
-        ? "\nEmail saved for password recovery."
-        : "\n(No email saved — Forgot password will not work for this account.)";
+        ? "\nEmail saved for password recovery (15-minute codes from azorahavefun@gmail.com)."
+        : ("\nNo email saved.\nYour Backup Recovery Key (save this somewhere safe — shown only once):\n" + backupKey);
     alert("Welcome to Azora, " + username + "!\nYour User ID is " + userId + "\nYour account has been saved." + extra);
     location.reload();
 }
@@ -1739,7 +1750,7 @@ function openForgotPassword() {
     if (step1) step1.style.display = "block";
     if (step2) step2.style.display = "none";
     if (step3) step3.style.display = "none";
-    ["forgotEmailInput", "forgotCodeInput", "forgotNewPass", "forgotNewPass2"].forEach(function (id) {
+    ["forgotEmailInput", "forgotBackupKeyInput", "forgotCodeInput", "forgotNewPass", "forgotNewPass2"].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.value = "";
     });
@@ -1757,8 +1768,35 @@ function closeForgotPassword() {
 function startForgotPasswordSend() {
     var st = document.getElementById("forgotStatus");
     var email = String((document.getElementById("forgotEmailInput") || {}).value || "").trim().toLowerCase();
+    var backup = String((document.getElementById("forgotBackupKeyInput") || {}).value || "").trim();
+
+    // Path B: no email — use Backup Recovery Key
+    if (backup) {
+        var accB = typeof findAccountByBackupKey === "function" ? findAccountByBackupKey(backup) : null;
+        if (!accB) {
+            if (st) st.textContent = "Invalid Backup Recovery Key. Check it and try again.";
+            return;
+        }
+        if (st) st.textContent = "Backup key accepted. Preparing reset…";
+        var pendingB = createPasswordResetSession(accB, "backup");
+        // For backup path, code is shown once in UI (not emailed)
+        setTimeout(function () {
+            var step1 = document.getElementById("forgotStepEmail");
+            var step2 = document.getElementById("forgotStepCode");
+            if (step1) step1.style.display = "none";
+            if (step2) step2.style.display = "block";
+            if (st) st.textContent = "Enter this one-time 6-digit code (expires in 15 minutes): " + pendingB.code;
+            var cd = document.getElementById("forgotCodeInput");
+            if (cd) { cd.placeholder = "6-digit code"; cd.maxLength = 6; cd.focus(); }
+            var lab = document.querySelector("#forgotStepCode label");
+            if (lab) lab.textContent = "6-digit code";
+        }, 400);
+        return;
+    }
+
+    // Path A: email account
     if (!email || email.indexOf("@") < 1) {
-        if (st) st.textContent = "Enter the email on your account.";
+        if (st) st.textContent = "Enter the email on your account, or your Backup Recovery Key.";
         return;
     }
     var acc = findAccountByEmail(email);
@@ -1766,45 +1804,45 @@ function startForgotPasswordSend() {
         if (st) st.textContent = "No account found with that email.";
         return;
     }
-    if (st) st.textContent = "Sending a code to " + maskEmail(email) + "… (about 5 seconds)";
-    var num = String(Math.floor(Math.random() * 9000));
-    _azoraResetPending = { email: email, username: acc.username, code: "Aza-" + num, at: Date.now() };
-    try {
-        sessionStorage.setItem("azoraPwReset", JSON.stringify(_azoraResetPending));
-        console.info("[Azora] Password reset code (do not share): " + _azoraResetPending.code);
-    } catch (e) {}
+    if (st) st.textContent = "Sending a code from azorahavefun@gmail.com to " + maskEmail(email) + "… (about 5 seconds)";
+    createPasswordResetSession(acc, "email");
     setTimeout(function () {
         if (!_azoraResetPending || _azoraResetPending.email !== email) return;
         var step1 = document.getElementById("forgotStepEmail");
         var step2 = document.getElementById("forgotStepCode");
         if (step1) step1.style.display = "none";
         if (step2) step2.style.display = "block";
-        if (st) st.textContent = "A code was sent to " + maskEmail(email) + ". Enter it below (Aza-____). Do not share this code with anybody.";
+        if (st) st.textContent = "A 6-digit code was sent to " + maskEmail(email) + " from azorahavefun@gmail.com. It expires in 15 minutes. Do not share it.";
         var cd = document.getElementById("forgotCodeInput");
-        if (cd) cd.focus();
+        if (cd) { cd.placeholder = "6-digit code"; cd.maxLength = 6; cd.focus(); }
+        var lab = document.querySelector("#forgotStepCode label");
+        if (lab) lab.textContent = "6-digit verification code";
     }, 5000);
 }
 
 function verifyForgotCode() {
     var st = document.getElementById("forgotStatus");
-    var raw = String((document.getElementById("forgotCodeInput") || {}).value || "").trim();
+    var raw = String((document.getElementById("forgotCodeInput") || {}).value || "").trim().replace(/\s+/g, "");
     var pending = _azoraResetPending;
     try { if (!pending) pending = JSON.parse(sessionStorage.getItem("azoraPwReset") || "null"); } catch (e) {}
     if (!pending || !pending.code) {
         if (st) st.textContent = "No reset in progress. Start again.";
         return;
     }
-    if (Date.now() - (pending.at || 0) > 15 * 60 * 1000) {
-        if (st) st.textContent = "Code expired. Request a new one.";
+    if (typeof isResetSessionValid === "function" ? !isResetSessionValid(pending) : (Date.now() - (pending.at || 0) > 15 * 60 * 1000)) {
+        if (st) st.textContent = "Code expired (15 minutes). Request a new one.";
+        try { sessionStorage.removeItem("azoraPwReset"); } catch (e2) {}
+        _azoraResetPending = null;
         return;
     }
+    // Accept plain 6-digit OR legacy Aza- codes
     function norm(s) {
-        s = String(s || "").trim().toLowerCase();
-        if (s.indexOf("aza-") !== 0) s = "aza-" + s.replace(/^aza-/, "");
+        s = String(s || "").trim().toLowerCase().replace(/\s+/g, "");
+        if (s.indexOf("aza-") === 0) s = s.slice(4);
         return s;
     }
     if (norm(raw) !== norm(pending.code)) {
-        if (st) st.textContent = "Incorrect code. Check the email and try again.";
+        if (st) st.textContent = "Incorrect code. Check your email or recovery screen and try again.";
         return;
     }
     _azoraResetPending = pending;
@@ -2103,6 +2141,425 @@ function isOwnerUsername(name) {
     return String(name || "").trim().toLowerCase() === "azora";
 }
 
+// ============================================================
+// REGISTRATION / USERNAME SAFETY + PASSWORD RESET + ADMIN RENAME
+// ============================================================
+
+/** Forbidden domain fragments (checked on lowercased, whitespace-stripped text). */
+var AZORA_FORBIDDEN_DOMAIN_TOKENS = [
+    "gmail.com", "gmail", "yahoo.com", "yahoo", "hotmail.com", "hotmail",
+    "outlook.com", "outlook", "icloud.com", "icloud", "protonmail", "proton.me",
+    ".com", ".net", ".org", ".edu", ".gov", ".io", ".co", ".uk", ".us"
+];
+
+/**
+ * Normalize a name for safety checks:
+ * - lowercase
+ * - strip spaces so "GmA i L . cOm" still matches gmail.com
+ */
+function normalizeNameForSafety(raw) {
+    return String(raw || "")
+        .toLowerCase()
+        .replace(/\s+/g, "")
+        .trim();
+}
+
+/**
+ * Validate username OR display name.
+ * kind: "username" | "displayName"
+ * Returns { ok: true } or { ok: false, error: "..." }
+ */
+function validateAzoraName(raw, kind) {
+    kind = kind || "username";
+    var original = String(raw || "").trim();
+    if (!original) {
+        return { ok: false, error: (kind === "displayName" ? "Display name" : "Username") + " cannot be empty." };
+    }
+    if (original.length < 2) {
+        return { ok: false, error: (kind === "displayName" ? "Display name" : "Username") + " must be at least 2 characters." };
+    }
+    if (original.length > 24) {
+        return { ok: false, error: (kind === "displayName" ? "Display name" : "Username") + " must be 24 characters or fewer." };
+    }
+    // Usernames: letters, numbers, underscore only (display names allow spaces/basic punctuation except @)
+    if (kind === "username") {
+        if (/[^a-zA-Z0-9_]/.test(original)) {
+            return { ok: false, error: "Username can only use letters, numbers, and underscore." };
+        }
+    } else {
+        if (/@/.test(original)) {
+            return { ok: false, error: "Display names cannot contain the @ symbol." };
+        }
+    }
+    var norm = normalizeNameForSafety(original);
+    if (norm.indexOf("@") !== -1) {
+        return { ok: false, error: (kind === "displayName" ? "Display names" : "Usernames") + " cannot contain the @ symbol." };
+    }
+    for (var i = 0; i < AZORA_FORBIDDEN_DOMAIN_TOKENS.length; i++) {
+        var tok = AZORA_FORBIDDEN_DOMAIN_TOKENS[i];
+        if (norm.indexOf(tok) !== -1) {
+            return {
+                ok: false,
+                error: (kind === "displayName" ? "Display names" : "Usernames") +
+                    " cannot contain email or website text like \"" + tok + "\"."
+            };
+        }
+    }
+    // Extra: looks like email even without @ (user.com)
+    if (/\.[a-z]{2,}$/i.test(norm) || /[a-z0-9]\.(com|net|org|edu|gov|io|co)\b/i.test(norm)) {
+        return {
+            ok: false,
+            error: (kind === "displayName" ? "Display names" : "Usernames") +
+                " cannot look like an email or website domain."
+        };
+    }
+    return { ok: true, value: original };
+}
+window.validateAzoraName = validateAzoraName;
+window.normalizeNameForSafety = normalizeNameForSafety;
+
+/** Cryptographically-ish random digits (fallback Math.random). */
+function azoraRandomDigits(n) {
+    n = n || 6;
+    var out = "";
+    try {
+        if (window.crypto && crypto.getRandomValues) {
+            var buf = new Uint32Array(n);
+            crypto.getRandomValues(buf);
+            for (var i = 0; i < n; i++) out += String(buf[i] % 10);
+            return out;
+        }
+    } catch (e) {}
+    for (var j = 0; j < n; j++) out += String(Math.floor(Math.random() * 10));
+    return out;
+}
+
+/** Long backup recovery key for accounts WITHOUT email. */
+function generateBackupRecoveryKey() {
+    var alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    var parts = [];
+    try {
+        if (window.crypto && crypto.getRandomValues) {
+            var buf = new Uint8Array(24);
+            crypto.getRandomValues(buf);
+            for (var i = 0; i < 24; i++) {
+                parts.push(alphabet[buf[i] % alphabet.length]);
+            }
+        } else {
+            for (var j = 0; j < 24; j++) {
+                parts.push(alphabet[Math.floor(Math.random() * alphabet.length)]);
+            }
+        }
+    } catch (e) {
+        for (var k = 0; k < 24; k++) {
+            parts.push(alphabet[Math.floor(Math.random() * alphabet.length)]);
+        }
+    }
+    // Format: XXXX-XXXX-XXXX-XXXX-XXXX-XXXX
+    var s = parts.join("");
+    return s.slice(0, 4) + "-" + s.slice(4, 8) + "-" + s.slice(8, 12) + "-" +
+           s.slice(12, 16) + "-" + s.slice(16, 20) + "-" + s.slice(20, 24);
+}
+window.generateBackupRecoveryKey = generateBackupRecoveryKey;
+
+var AZORA_RESET_TTL_MS = 15 * 60 * 1000; // exactly 15 minutes
+var AZORA_RESET_FROM_EMAIL = "azorahavefun@gmail.com";
+
+/**
+ * Create a 15-minute password-reset session.
+ * mode: "email" | "backup"
+ * Returns pending object.
+ *
+ * NOTE: Real Gmail delivery requires a server (Firebase Functions / EmailJS / SMTP).
+ * Client stores the code + logs it for staff testing. Template is prepared for outbound email.
+ */
+function createPasswordResetSession(account, mode) {
+    mode = mode || (account && account.email ? "email" : "backup");
+    var code = azoraRandomDigits(6);
+    var pending = {
+        mode: mode,
+        username: account.username,
+        email: account.email || "",
+        code: code,
+        at: Date.now(),
+        expiresAt: Date.now() + AZORA_RESET_TTL_MS,
+        from: AZORA_RESET_FROM_EMAIL
+    };
+    try {
+        sessionStorage.setItem("azoraPwReset", JSON.stringify(pending));
+        localStorage.setItem("azoraPwResetLast", JSON.stringify({
+            username: pending.username,
+            email: pending.email,
+            at: pending.at,
+            expiresAt: pending.expiresAt,
+            mode: pending.mode
+            // never persist the code in long-term storage
+        }));
+    } catch (e) {}
+    _azoraResetPending = pending;
+
+    // Outbound email template (for future backend / EmailJS)
+    if (mode === "email" && account.email) {
+        pending.emailPayload = {
+            from: AZORA_RESET_FROM_EMAIL,
+            to: account.email,
+            subject: "Your Azora password reset code",
+            body:
+                "Hello from Azora!\n\n" +
+                "Your password reset code is: " + code + "\n\n" +
+                "This code expires in exactly 15 minutes.\n" +
+                "Do not share this code with anyone.\n\n" +
+                "If you did not request a reset, you can ignore this email.\n\n" +
+                "— The Azora Team"
+        };
+        try {
+            // Queue for staff / future mailer
+            var q = [];
+            try { q = JSON.parse(localStorage.getItem("azoraOutboundMail") || "[]"); } catch (e2) {}
+            q.unshift({ id: "mail_" + Date.now(), payload: pending.emailPayload, status: "queued", at: Date.now() });
+            localStorage.setItem("azoraOutboundMail", JSON.stringify(q.slice(0, 30)));
+        } catch (e3) {}
+        console.info("[Azora] Password reset code for " + maskEmail(account.email) + " (from " + AZORA_RESET_FROM_EMAIL + "): " + code + " — expires in 15 min. Do not share.");
+    }
+    return pending;
+}
+window.createPasswordResetSession = createPasswordResetSession;
+
+function isResetSessionValid(pending) {
+    if (!pending || !pending.code || !pending.at) return false;
+    var exp = pending.expiresAt || (pending.at + AZORA_RESET_TTL_MS);
+    return Date.now() <= exp;
+}
+
+function findAccountByBackupKey(key) {
+    key = String(key || "").trim().toUpperCase().replace(/\s+/g, "");
+    if (!key) return null;
+    var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : {};
+    var keys = Object.keys(map);
+    for (var i = 0; i < keys.length; i++) {
+        var a = map[keys[i]];
+        if (!a || !a.backupRecoveryKey) continue;
+        var stored = String(a.backupRecoveryKey).toUpperCase().replace(/\s+/g, "");
+        if (stored === key) return a;
+    }
+    return null;
+}
+window.findAccountByBackupKey = findAccountByBackupKey;
+
+/**
+ * Admin (Azora owner) forces a username change for safety.
+ * Triggers in-game popup on next login + queued Gmail template if email linked.
+ */
+function adminForceRenameUser(oldUsername, newUsername, opts) {
+    opts = opts || {};
+    if (typeof isAzoraOwner === "function" && !isAzoraOwner()) {
+        return { ok: false, error: "Only the Azora owner can rename users." };
+    }
+    oldUsername = String(oldUsername || "").trim();
+    newUsername = String(newUsername || "").trim();
+    if (!oldUsername || !newUsername) return { ok: false, error: "Old and new usernames are required." };
+    if (oldUsername.toLowerCase() === newUsername.toLowerCase()) {
+        return { ok: false, error: "New username is the same as the old one." };
+    }
+    var v = validateAzoraName(newUsername, "username");
+    if (!v.ok) return { ok: false, error: v.error };
+    if (typeof isOwnerUsername === "function" && isOwnerUsername(newUsername)) {
+        return { ok: false, error: "That username is reserved." };
+    }
+    if (typeof isUsernameTakenLocal === "function" && isUsernameTakenLocal(newUsername)) {
+        return { ok: false, error: "That username is already taken." };
+    }
+
+    var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : JSON.parse(localStorage.getItem("azoraAccounts") || "{}");
+    var entry = null;
+    var oldKey = null;
+    Object.keys(map).forEach(function (k) {
+        if (String(k).toLowerCase() === oldUsername.toLowerCase()) {
+            entry = map[k];
+            oldKey = k;
+        }
+    });
+    if (!entry) return { ok: false, error: "User \"" + oldUsername + "\" was not found on this device registry." };
+
+    var oldName = entry.username || oldKey;
+    entry.username = newUsername;
+    entry.usernameHistory = Array.isArray(entry.usernameHistory) ? entry.usernameHistory : [];
+    if (entry.usernameHistory.indexOf(oldName) === -1) entry.usernameHistory.push(oldName);
+    entry.adminRenamedAt = Date.now();
+    entry.adminRenamedFrom = oldName;
+    entry.pendingAdminNameNotice = {
+        oldUsername: oldName,
+        newUsername: newUsername,
+        at: Date.now(),
+        seen: false
+    };
+
+    delete map[oldKey];
+    map[newUsername] = entry;
+    if (typeof saveSavedAccounts === "function") saveSavedAccounts(map);
+    else localStorage.setItem("azoraAccounts", JSON.stringify(map));
+
+    // Registry
+    try {
+        var reg = JSON.parse(localStorage.getItem("azoraUserRegistry") || "[]");
+        for (var ri = 0; ri < reg.length; ri++) {
+            if (reg[ri] && String(reg[ri].username || "").toLowerCase() === oldName.toLowerCase()) {
+                reg[ri].username = newUsername;
+                reg[ri].usernameHistory = entry.usernameHistory;
+            }
+        }
+        localStorage.setItem("azoraUserRegistry", JSON.stringify(reg));
+    } catch (eR) {}
+
+    // If that user is currently logged in on this device, update session
+    try {
+        var cur = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (cur && String(cur.username || "").toLowerCase() === oldName.toLowerCase()) {
+            cur.username = newUsername;
+            cur.usernameHistory = entry.usernameHistory;
+            cur.pendingAdminNameNotice = entry.pendingAdminNameNotice;
+            localStorage.setItem("azoraAccount", JSON.stringify(cur));
+        }
+    } catch (eC) {}
+
+    // In-app notification
+    try {
+        if (typeof pushNotification === "function") {
+            pushNotification(
+                newUsername,
+                "Your username was updated by Azora Administration: " + oldName + " → " + newUsername,
+                "admin_rename",
+                { oldUsername: oldName, newUsername: newUsername }
+            );
+        }
+    } catch (eN) {}
+
+    // Queue Gmail template if email linked
+    if (entry.email) {
+        var mailBody =
+            "Hello from Azora!\n\n" +
+            "We are writing to inform you that an administrator has updated your Azora username.\n\n" +
+            "- Previous Username: " + oldName + "\n" +
+            "- Current Username: " + newUsername + "\n\n" +
+            "Reason for change: Our system detected that your previous username contained personal information (like a real name) or email-formatted text. To protect your privacy and security on our servers, we have updated it to a generic name.\n\n" +
+            "What do I need to do?\n" +
+            "1. Use your New Username (" + newUsername + ") the next time you log into the game.\n" +
+            "2. Your password has not changed.\n" +
+            "3. If you do not like the new username, you can log in and change it to something else via your Account Settings, as long as it follows our new safety rules.\n\n" +
+            "If you have any questions, feel free to reply to this email.\n\n" +
+            "Have fun playing,\n" +
+            "The Azora Administration Team";
+        try {
+            var q = [];
+            try { q = JSON.parse(localStorage.getItem("azoraOutboundMail") || "[]"); } catch (e4) {}
+            q.unshift({
+                id: "mail_" + Date.now(),
+                payload: {
+                    from: AZORA_RESET_FROM_EMAIL,
+                    to: entry.email,
+                    subject: "Security Update: Your Azora username has been changed",
+                    body: mailBody
+                },
+                status: "queued",
+                at: Date.now()
+            });
+            localStorage.setItem("azoraOutboundMail", JSON.stringify(q.slice(0, 30)));
+            console.info("[Azora] Queued username-change email to " + maskEmail(entry.email));
+        } catch (e5) {}
+    }
+
+    return { ok: true, oldUsername: oldName, newUsername: newUsername, emailQueued: !!entry.email };
+}
+window.adminForceRenameUser = adminForceRenameUser;
+
+/** Full-screen notice shown once after admin renamed the user. */
+function showAdminNameChangePopup(oldUsername, newUsername) {
+    var existing = document.getElementById("adminNameChangeOverlay");
+    if (existing) existing.remove();
+    var ov = document.createElement("div");
+    ov.id = "adminNameChangeOverlay";
+    ov.className = "overlay";
+    ov.style.cssText = "display:flex;z-index:12000;background:rgba(15,23,42,0.82);";
+    ov.innerHTML =
+        '<div class="popup" style="max-width:min(420px,calc(100vw - 24px));text-align:left;background:#0f172a;border:2px solid #38bdf8;box-shadow:0 0 24px rgba(56,189,248,0.35);color:#e2e8f0;">' +
+        '<h2 style="margin:0 0 10px;color:#7dd3fc !important;">🛠️ Azora Account Update</h2>' +
+        '<p style="margin:0 0 10px;line-height:1.45;color:#e2e8f0 !important;">Hi Player,</p>' +
+        '<p style="margin:0 0 10px;line-height:1.45;color:#e2e8f0 !important;">Your username has been updated by the Azora Administration team to keep your account safe and follow our community guidelines.</p>' +
+        '<ul style="margin:0 0 12px;padding-left:18px;color:#cbd5e1 !important;">' +
+        '<li>Old Username: <strong style="color:#fff;">' + String(oldUsername).replace(/</g, "&lt;") + '</strong></li>' +
+        '<li>New Username: <strong style="color:#7dd3fc;">' + String(newUsername).replace(/</g, "&lt;") + '</strong></li>' +
+        '</ul>' +
+        '<p style="margin:0 0 10px;line-height:1.45;color:#cbd5e1 !important;"><strong>Why did this happen?</strong><br>To protect your privacy, Azora usernames cannot contain real-world names, email addresses, or specific symbols (like @).</p>' +
+        '<p style="margin:0 0 14px;line-height:1.45;color:#cbd5e1 !important;">If you would like to customize your new name, you can now head over to your Account Settings to change your username or display name.</p>' +
+        '<p style="margin:0 0 14px;line-height:1.45;color:#94a3b8 !important;">Thank you for helping us keep Azora safe!<br>— The Azora Team</p>' +
+        '<button type="button" id="adminNameChangeOkBtn" style="width:100%;background:linear-gradient(180deg,#38bdf8,#0284c7);color:#fff;border:none;padding:12px;border-radius:10px;font-weight:700;">Got it</button>' +
+        '</div>';
+    document.body.appendChild(ov);
+    var btn = document.getElementById("adminNameChangeOkBtn");
+    if (btn) btn.onclick = function () {
+        try {
+            var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+            if (acc && acc.pendingAdminNameNotice) {
+                acc.pendingAdminNameNotice.seen = true;
+                delete acc.pendingAdminNameNotice;
+                localStorage.setItem("azoraAccount", JSON.stringify(acc));
+                var map = typeof getSavedAccounts === "function" ? getSavedAccounts() : {};
+                if (map[acc.username]) {
+                    delete map[acc.username].pendingAdminNameNotice;
+                    if (typeof saveSavedAccounts === "function") saveSavedAccounts(map);
+                    else localStorage.setItem("azoraAccounts", JSON.stringify(map));
+                }
+            }
+        } catch (e) {}
+        ov.remove();
+    };
+}
+window.showAdminNameChangePopup = showAdminNameChangePopup;
+
+function checkPendingAdminNameNotice() {
+    try {
+        if (localStorage.getItem("loggedIn") !== "true") return;
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (!acc || !acc.pendingAdminNameNotice || acc.pendingAdminNameNotice.seen) return;
+        var n = acc.pendingAdminNameNotice;
+        setTimeout(function () {
+            showAdminNameChangePopup(n.oldUsername || "?", n.newUsername || acc.username);
+        }, 800);
+    } catch (e) {}
+}
+window.checkPendingAdminNameNotice = checkPendingAdminNameNotice;
+
+/** Owner console helper — reads fields and renames. */
+function applyOwnerRenameFromConsole() {
+    var oldEl = document.getElementById("omRenameOld");
+    var newEl = document.getElementById("omRenameNew");
+    var st = document.getElementById("omRenameStatus");
+    function setSt(t, ok) {
+        if (!st) return;
+        st.style.display = "block";
+        st.style.color = ok ? "#34d399" : "#f87171";
+        st.textContent = t;
+    }
+    if (typeof isAzoraOwner === "function" && !isAzoraOwner()) {
+        setSt("Owner only.");
+        return;
+    }
+    var oldU = oldEl ? oldEl.value.trim() : "";
+    var newU = newEl ? newEl.value.trim() : "";
+    var res = adminForceRenameUser(oldU, newU);
+    if (!res.ok) {
+        setSt(res.error || "Rename failed.");
+        return;
+    }
+    setSt("Renamed " + res.oldUsername + " → " + res.newUsername +
+        (res.emailQueued ? " (email notification queued)" : " (no email on account — in-game notice only)") + ".");
+    if (oldEl) oldEl.value = "";
+    if (newEl) newEl.value = "";
+    if (typeof playClickSound === "function") playClickSound();
+}
+window.applyOwnerRenameFromConsole = applyOwnerRenameFromConsole;
+
+
 function isAzoraOwner() {
     try {
         if (localStorage.getItem("loggedIn") !== "true") return false;
@@ -2247,6 +2704,13 @@ function createAccount() {
     if (username.length < 2) {
         showAccountError("Username must be at least 2 characters.");
         return;
+    }
+    if (typeof validateAzoraName === "function") {
+        var nameCheck = validateAzoraName(username, "username");
+        if (!nameCheck.ok) {
+            showAccountError(nameCheck.error);
+            return;
+        }
     }
     if (isOwnerUsername(username) || isUsernameTakenLocal(username)) {
         showUsernameTakenError(username);
@@ -6352,6 +6816,13 @@ function saveDisplayNameChange() {
             showMsg("Display name must be at least 2 characters.");
             return;
         }
+        if (typeof validateAzoraName === "function") {
+            var dnCheck = validateAzoraName(val, "displayName");
+            if (!dnCheck.ok) {
+                showMsg(dnCheck.error);
+                return;
+            }
+        }
         var last = Number(acc.displayNameChangedAt || 0);
         if (last && Date.now() < last + DISPLAY_NAME_COOLDOWN_MS) {
             var left = (last + DISPLAY_NAME_COOLDOWN_MS) - Date.now();
@@ -6504,7 +6975,13 @@ function unameCommitChange() {
         var n2 = String((document.getElementById("unameNewConfirm") || {}).value || "").trim();
         if (n1.length < 2) { unameShowErr("Username must be at least 2 characters."); return; }
         if (n1 !== n2) { unameShowErr("Usernames do not match."); return; }
-        if (/[^a-zA-Z0-9_]/.test(n1)) { unameShowErr("Username can only use letters, numbers, and underscore."); return; }
+        if (typeof validateAzoraName === "function") {
+            var ucCheck = validateAzoraName(n1, "username");
+            if (!ucCheck.ok) { unameShowErr(ucCheck.error); return; }
+        } else if (/[^a-zA-Z0-9_]/.test(n1)) {
+            unameShowErr("Username can only use letters, numbers, and underscore.");
+            return;
+        }
         if (n1.toLowerCase() === oldName.toLowerCase()) { unameShowErr("That is already your username."); return; }
         if (typeof isOwnerUsername === "function" && isOwnerUsername(n1) && !isOwnerUsername(oldName)) {
             unameShowErr("That username is reserved.");
@@ -17555,3 +18032,12 @@ window.refreshParentalControlsUI = refreshParentalControlsUI;
 window.checkParentalDailyPurchaseLimit = checkParentalDailyPurchaseLimit;
 window.recordParentalPurchaseSpend = recordParentalPurchaseSpend;
 
+
+// Show admin rename notice if pending (page refresh / already logged in)
+(function () {
+    function run() {
+        try { if (typeof checkPendingAdminNameNotice === "function") checkPendingAdminNameNotice(); } catch (e) {}
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { setTimeout(run, 1200); });
+    else setTimeout(run, 1200);
+})();
