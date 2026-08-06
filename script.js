@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v63.3 profile 3D spinning avatar","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v63.4 profile 3D avatar fixed","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -7897,6 +7897,16 @@ function openUserProfile(username) {
     try { if (typeof appendOwnerModPanel === "function") appendOwnerModPanel(document.getElementById("profileActions"), username); } catch (eOther) {}
     renderProfileGames(username, meName === username);
     document.getElementById("profileOverlay").style.display = "flex";
+    try {
+        if (typeof showProfile3DAvatar === "function") {
+            // Wait for layout so canvas has real width/height
+            setTimeout(function () { showProfile3DAvatar(username); }, 120);
+            setTimeout(function () {
+                // Second pass if first ran before layout
+                if (window._profile3d && !_profile3d.group) showProfile3DAvatar(username);
+            }, 400);
+        }
+    } catch (e3dMain) {}
 
     // After first paint, sync cloud social once and refresh buttons (friend requests)
     // Only once per open session to avoid reopen loops
@@ -18833,63 +18843,108 @@ function disposeProfile3DAvatar() {
 window.disposeProfile3DAvatar = disposeProfile3DAvatar;
 
 function showProfile3DAvatar(username) {
-    if (typeof THREE === "undefined") return;
-    var canvas = document.getElementById("profile3dCanvas");
-    var wrap = document.getElementById("profile3dWrap");
-    if (!canvas || !wrap) return;
-
-    disposeProfile3DAvatar();
-    _profile3d.username = username;
-    _profile3d.spinning = true;
-
-    var w = canvas.clientWidth || 200;
-    var h = canvas.clientHeight || 240;
-    canvas.width = w * (window.devicePixelRatio > 1 ? 2 : 1);
-    canvas.height = h * (window.devicePixelRatio > 1 ? 2 : 1);
-
-    var scene = new THREE.Scene();
-    var camera = new THREE.PerspectiveCamera(32, w / h, 0.1, 50);
-    camera.position.set(0, 0.55, 4.2);
-    camera.lookAt(0, 0.35, 0);
-
-    var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
-    renderer.setSize(w, h, false);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setClearColor(0x000000, 0);
-
-    scene.add(new THREE.AmbientLight(0xffffff, 0.85));
-    var dir = new THREE.DirectionalLight(0xffffff, 0.7);
-    dir.position.set(3, 6, 4);
-    scene.add(dir);
-    var fill = new THREE.DirectionalLight(0x93c5fd, 0.35);
-    fill.position.set(-3, 2, -2);
-    scene.add(fill);
-
-    var avatarData = getAvatarDataForUsername(username);
-    var group = buildProfile3DCharacter(avatarData);
-    group.position.y = -0.15;
-    scene.add(group);
-
-    _profile3d.scene = scene;
-    _profile3d.camera = camera;
-    _profile3d.renderer = renderer;
-    _profile3d.group = group;
-
-    function tick() {
-        if (!_profile3d.renderer || _profile3d.username !== username) return;
-        _profile3d.raf = requestAnimationFrame(tick);
-        if (_profile3d.spinning && _profile3d.group) {
-            _profile3d.group.rotation.y += 0.012;
+    try {
+        if (typeof THREE === "undefined") {
+            console.warn("[Azora] THREE.js not loaded — profile 3D avatar skipped");
+            return;
         }
-        try { _profile3d.renderer.render(_profile3d.scene, _profile3d.camera); } catch (eR) {}
-    }
-    tick();
+        var canvas = document.getElementById("profile3dCanvas");
+        var wrap = document.getElementById("profile3dWrap");
+        if (!canvas || !wrap) {
+            console.warn("[Azora] profile3dCanvas missing");
+            return;
+        }
+        wrap.style.display = "flex";
 
-    // Tap to pause/resume spin (does not stop forever — profiles always spin by default when reopened)
-    canvas.style.cursor = "pointer";
-    canvas.onclick = function () {
-        _profile3d.spinning = !_profile3d.spinning;
-    };
+        disposeProfile3DAvatar();
+        _profile3d.username = username;
+        _profile3d.spinning = true;
+
+        // Force visible size (CSS may still be settling)
+        var w = Math.max(canvas.clientWidth || 0, wrap.clientWidth || 0, 200);
+        var h = Math.max(canvas.clientHeight || 0, 240);
+        canvas.style.width = w + "px";
+        canvas.style.height = h + "px";
+
+        var scene = new THREE.Scene();
+        var camera = new THREE.PerspectiveCamera(35, w / h, 0.1, 100);
+        // Character spans roughly y=-1.2 to y=1.5 — frame full body
+        camera.position.set(0, 0.4, 3.6);
+        camera.lookAt(0, 0.25, 0);
+
+        var renderer;
+        try {
+            renderer = new THREE.WebGLRenderer({
+                canvas: canvas,
+                alpha: true,
+                antialias: true,
+                preserveDrawingBuffer: true
+            });
+        } catch (eGL) {
+            console.warn("[Azora] WebGLRenderer failed", eGL);
+            return;
+        }
+        renderer.setSize(w, h, false);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setClearColor(0x0b1a3a, 0); // transparent over CSS gradient
+
+        var amb = new THREE.AmbientLight(0xffffff, 1.0);
+        scene.add(amb);
+        var dir = new THREE.DirectionalLight(0xffffff, 0.9);
+        dir.position.set(2.5, 5, 3);
+        scene.add(dir);
+        var fill = new THREE.DirectionalLight(0xa5d8ff, 0.45);
+        fill.position.set(-3, 2, -2);
+        scene.add(fill);
+
+        var avatarData = (typeof getAvatarDataForUsername === "function")
+            ? getAvatarDataForUsername(username)
+            : { gender: "boy", head: "#ffcc00", torso: "#1e60ff", leftArm: "#ffcc00", rightArm: "#ffcc00", leftLeg: "#00ebd4", rightLeg: "#00ebd4" };
+
+        var group = buildProfile3DCharacter(avatarData);
+        group.position.set(0, -0.2, 0);
+        scene.add(group);
+
+        // Soft ground disc so character doesn't float in void
+        try {
+            var disc = new THREE.Mesh(
+                new THREE.CircleGeometry(0.9, 32),
+                new THREE.MeshBasicMaterial({ color: 0x1e60ff, transparent: true, opacity: 0.18 })
+            );
+            disc.rotation.x = -Math.PI / 2;
+            disc.position.y = -1.25;
+            scene.add(disc);
+        } catch (eD) {}
+
+        _profile3d.scene = scene;
+        _profile3d.camera = camera;
+        _profile3d.renderer = renderer;
+        _profile3d.group = group;
+
+        function tick() {
+            if (!_profile3d.renderer || _profile3d.username !== username) return;
+            _profile3d.raf = requestAnimationFrame(tick);
+            if (_profile3d.spinning && _profile3d.group) {
+                _profile3d.group.rotation.y += 0.014;
+            }
+            try {
+                _profile3d.renderer.render(_profile3d.scene, _profile3d.camera);
+            } catch (eR) {}
+        }
+        tick();
+
+        canvas.style.cursor = "pointer";
+        canvas.onclick = function (e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            _profile3d.spinning = !_profile3d.spinning;
+        };
+
+        // One immediate render so something appears even before next frame
+        try { renderer.render(scene, camera); } catch (e0) {}
+        console.log("[Azora] profile 3D avatar ready for", username);
+    } catch (err) {
+        console.warn("[Azora] showProfile3DAvatar error", err);
+    }
 }
 window.showProfile3DAvatar = showProfile3DAvatar;
 window.getAvatarDataForUsername = getAvatarDataForUsername;
