@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v64.2 fixed walk/jump pivots + natural jump pose","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v64.4 realistic face wrap + girl hair on gender change","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -3715,20 +3715,44 @@ function applyGenderVisualsToCustomizer(gender, colors) {
     colors = colors || {};
     var realistic = (typeof getAvatarRenderStyle === "function" && getAvatarRenderStyle() === "realistic");
     removeAvatarHair(avatarCharacterGroup);
-    // Prefer equipped marketplace hair; otherwise BOTH genders are bald by default
+    // Also remove realistic hair group if present
+    try {
+        avatarCharacterGroup.traverse(function (o) {
+            if (o && o.name === "hair" && o.parent) o.parent.remove(o);
+        });
+    } catch (eRH) {}
     var styleId = null;
     try {
         if (typeof getEquippedHairStyle === "function") styleId = getEquippedHairStyle();
     } catch (e) {}
-    if (!styleId) {
-        styleId = (colors && colors.hairStyle) || "hair_boy_none";
-    }
-    // Never auto-add girl hair on default — both genders bald until they buy/equip hair
-    if (styleId === "hair_girl_default") styleId = "hair_boy_none";
-    if (styleId && styleId !== "hair_boy_none" && styleId !== "none") {
-        var hy = headMesh ? headMesh.position.y : (realistic ? 1.42 : 1.28);
-        var hair = makeAvatarHair(colors.hair || "#4a3728", hy, realistic ? 0.52 : 0.65, styleId);
-        if (hair) avatarCharacterGroup.add(hair);
+    if (!styleId) styleId = (colors && colors.hairStyle) || "hair_boy_none";
+    var hairCol = (colors && colors.hair) || "#4a3728";
+    var isGirl = (gender === "girl" || gender === "female");
+    if (realistic) {
+        // Realistic: shop hair if equipped, else soft girl hair when girl
+        var hasShop = styleId && styleId !== "hair_boy_none" && styleId !== "none" && styleId !== "hair_girl_default";
+        if (hasShop && typeof makeAvatarHair === "function") {
+            var hy = headMesh ? headMesh.position.y : 1.55;
+            var hair = makeAvatarHair(hairCol, 0, 0.5, styleId);
+            var headJoint = avatarCharacterGroup.userData && avatarCharacterGroup.userData.joints && avatarCharacterGroup.userData.joints.head;
+            if (hair) { if (headJoint) headJoint.add(hair); else avatarCharacterGroup.add(hair); }
+        } else if (isGirl && typeof makeRealisticHair === "function") {
+            var hr = 0.25;
+            try {
+                if (headMesh && headMesh.geometry && headMesh.geometry.parameters) hr = headMesh.geometry.parameters.radius || 0.25;
+            } catch (eHr) {}
+            var rh = makeRealisticHair("girl", hairCol, hr);
+            var hj = avatarCharacterGroup.userData && avatarCharacterGroup.userData.joints && avatarCharacterGroup.userData.joints.head;
+            if (rh) { if (hj) hj.add(rh); else avatarCharacterGroup.add(rh); }
+        }
+    } else {
+        // Blocky: both bald by default unless marketplace hair equipped
+        if (styleId === "hair_girl_default") styleId = "hair_boy_none";
+        if (styleId && styleId !== "hair_boy_none" && styleId !== "none") {
+            var hy2 = headMesh ? headMesh.position.y : 1.28;
+            var hair2 = makeAvatarHair(hairCol, hy2, 0.65, styleId);
+            if (hair2) avatarCharacterGroup.add(hair2);
+        }
     }
     // Blocky-only body shape tweaks (skip when realistic humanoid is active)
     if (!realistic) {
@@ -3754,20 +3778,18 @@ function applyGenderVisualsToCustomizer(gender, colors) {
             else if (avatarCharacterGroup) avatarCharacterGroup.remove(faceGroup);
         }
         if (realistic && typeof buildWrappedSphereFace === "function") {
-            var hr = 0.26;
+            var hr = 0.25;
             try {
                 if (headMesh && headMesh.geometry && headMesh.geometry.parameters) {
-                    hr = headMesh.geometry.parameters.radius || 0.26;
+                    hr = headMesh.geometry.parameters.radius || 0.25;
                 }
             } catch (eR) {}
-            faceGroup = buildWrappedSphereFace(gender, hr, 0);
-            // Attach to head joint if present, else character root
+            faceGroup = buildWrappedSphereFace(gender, hr * 1.02, 0);
+            faceGroup.position.set(0, 0, 0);
             var headJoint = avatarCharacterGroup.userData && avatarCharacterGroup.userData.joints && avatarCharacterGroup.userData.joints.head;
             if (headJoint) headJoint.add(faceGroup);
-            else {
-                faceGroup.position.y = headMesh ? headMesh.position.y : 1.55;
-                avatarCharacterGroup.add(faceGroup);
-            }
+            else if (headMesh && headMesh.parent) headMesh.parent.add(faceGroup);
+            else avatarCharacterGroup.add(faceGroup);
         } else {
             faceGroup = buildAvatarFace(colors.head || "#e0a870", gender);
             faceGroup.position.y = headMesh ? headMesh.position.y : 1.28;
@@ -3904,7 +3926,7 @@ function buildBlockyAvatarMeshes(gender, colors) {
 function buildWrappedSphereFace(gender, headRadius, headY) {
     gender = gender || "boy";
     headRadius = headRadius || 0.26;
-    headY = headY || 1.55;
+    // headY ignored when parented to head group — always sit at head center
     var faceUrl = (typeof faceTextureUrlForGender === "function")
         ? faceTextureUrlForGender(gender)
         : ((gender === "girl" || gender === "female") ? "female_smile.png" : "Smile.png");
@@ -3918,17 +3940,17 @@ function buildWrappedSphereFace(gender, headRadius, headY) {
     var face = new THREE.Group();
     face.name = "face";
     face.userData.gender = gender;
-    face.position.y = headY;
+    face.position.set(0, 0, 0);
 
-    // Spherical patch covering the front of the head so the face curves with the sphere
-    // phi around Y, theta from top — centered on +Z (front)
+    // Front spherical shell — same center as head, slightly larger so it hugs the surface
+    // phi around Y-axis: centered on +Z (front). theta from top pole.
     var geo = new THREE.SphereGeometry(
-        headRadius * 1.02,
-        28, 18,
-        Math.PI * 0.72,   // phiStart — front-left
-        Math.PI * 0.56,   // phiLength — wraps across the face
-        Math.PI * 0.30,   // thetaStart — from forehead
-        Math.PI * 0.50    // thetaLength — down to chin area
+        headRadius * 1.01,
+        32, 24,
+        -Math.PI * 0.5,   // phiStart: from -90° 
+        Math.PI,          // phiLength: 180° front hemisphere around +Z
+        Math.PI * 0.22,   // thetaStart: forehead
+        Math.PI * 0.56    // thetaLength: down toward chin
     );
 
     var mat = new THREE.MeshBasicMaterial({
@@ -3936,8 +3958,8 @@ function buildWrappedSphereFace(gender, headRadius, headY) {
         transparent: true,
         opacity: 0,
         depthWrite: false,
-        side: THREE.FrontSide,
-        alphaTest: 0.12
+        side: THREE.DoubleSide,
+        alphaTest: 0.08
     });
     var shell = new THREE.Mesh(geo, mat);
     shell.name = "faceDecal";
@@ -3955,7 +3977,7 @@ function buildWrappedSphereFace(gender, headRadius, headY) {
         mat.map = tex;
         mat.transparent = true;
         mat.opacity = 1;
-        mat.alphaTest = 0.12;
+        mat.alphaTest = 0.08;
         mat.needsUpdate = true;
         shell.visible = true;
     }
@@ -4000,6 +4022,67 @@ function buildWrappedSphereFace(gender, headRadius, headY) {
 }
 window.buildWrappedSphereFace = buildWrappedSphereFace;
 
+/** Soft realistic hair for spherical heads (girl default in realistic mode) */
+function makeRealisticHair(gender, hairColor, headR) {
+    gender = (gender === "girl" || gender === "female") ? "girl" : "boy";
+    if (gender !== "girl") return null;
+    headR = headR || 0.26;
+    hairColor = hairColor || "#4a3728";
+    var mat = (typeof azoraGlossMaterial === "function")
+        ? azoraGlossMaterial(hairColor)
+        : new THREE.MeshLambertMaterial({ color: hairColor });
+    var g = new THREE.Group();
+    g.name = "hair";
+
+    // Top cap (upper hemisphere)
+    var cap = new THREE.Mesh(
+        new THREE.SphereGeometry(headR * 1.12, 22, 16, 0, Math.PI * 2, 0, Math.PI * 0.58),
+        mat
+    );
+    cap.position.y = headR * 0.08;
+    cap.name = "hairCap";
+    g.add(cap);
+
+    // Back volume
+    var back = new THREE.Mesh(
+        new THREE.SphereGeometry(headR * 0.95, 18, 12, 0, Math.PI * 2, 0, Math.PI),
+        mat
+    );
+    back.scale.set(1.05, 1.15, 0.7);
+    back.position.set(0, -headR * 0.15, -headR * 0.55);
+    back.name = "hairBack";
+    g.add(back);
+
+    // Side falls (longer for girl)
+    var sideL = new THREE.Mesh(
+        new THREE.SphereGeometry(headR * 0.42, 12, 10),
+        mat
+    );
+    sideL.scale.set(0.7, 1.6, 0.75);
+    sideL.position.set(-headR * 0.85, -headR * 0.55, 0.05);
+    sideL.name = "hairSideL";
+    g.add(sideL);
+
+    var sideR = sideL.clone();
+    sideR.position.x = headR * 0.85;
+    sideR.name = "hairSideR";
+    g.add(sideR);
+
+    // Soft bangs
+    var bangs = new THREE.Mesh(
+        new THREE.SphereGeometry(headR * 0.55, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.6),
+        mat
+    );
+    bangs.scale.set(1.15, 0.45, 0.55);
+    bangs.position.set(0, headR * 0.15, headR * 0.75);
+    bangs.name = "hairBangs";
+    g.add(bangs);
+
+    return g;
+}
+window.makeRealisticHair = makeRealisticHair;
+
+
 /**
  * Improved realistic humanoid — hierarchical joints for idle animation.
  * Family-friendly proportions (not anatomical detail).
@@ -4015,14 +4098,14 @@ function buildRealisticHumanoidMeshes(gender, colors) {
     var llC = colors.leftLeg || "#334155";
     var rlC = colors.rightLeg || "#334155";
 
-    // Girl: slightly narrower shoulders / waist, a bit wider hips
-    var shoulderW = isGirl ? 0.34 : 0.40;
-    var chestW = isGirl ? 0.36 : 0.44;
-    var waistW = isGirl ? 0.28 : 0.34;
-    var hipW = isGirl ? 0.36 : 0.34;
-    var headR = isGirl ? 0.24 : 0.26;
-    var armLen = 0.42;
-    var legLen = 0.48;
+    // More natural humanoid proportions
+    var shoulderW = isGirl ? 0.32 : 0.38;
+    var chestW = isGirl ? 0.34 : 0.42;
+    var waistW = isGirl ? 0.26 : 0.32;
+    var hipW = isGirl ? 0.34 : 0.32;
+    var headR = isGirl ? 0.23 : 0.25;
+    var armLen = 0.46;
+    var legLen = 0.52;
 
     function sphere(r, hex, name, seg) {
         var m = new THREE.Mesh(new THREE.SphereGeometry(r, seg || 20, seg || 16), _azoraLimbMat(hex));
@@ -4101,11 +4184,13 @@ function buildRealisticHumanoidMeshes(gender, colors) {
     torsoG.add(headG);
     joints.head = headG;
 
-    headMesh = sphere(headR, headC, "head", 24);
+    // Slightly oval head (more human than perfect ball)
+    headMesh = sphere(headR, headC, "head", 28);
+    headMesh.scale.set(0.95, 1.05, 0.98);
     headG.add(headMesh);
 
-    // Face wraps around the sphere
-    faceGroup = buildWrappedSphereFace(gender, headR, 0);
+    // Face shell shares head center — wraps on the sphere surface
+    faceGroup = buildWrappedSphereFace(gender, headR * 1.02, 0);
     headG.add(faceGroup);
 
     // —— Left arm (jointed) ——
@@ -4213,14 +4298,17 @@ function buildRealisticHumanoidMeshes(gender, colors) {
         elbowRx: elbowR.rotation.x
     };
 
-    // Hair if equipped
+    // Hair: girls get soft realistic hair by default; boys stay bald unless marketplace hair equipped
     try {
         var hs = colors.hairStyle || "";
-        if (hs && hs !== "hair_boy_none" && hs !== "none" && hs !== "hair_girl_default") {
-            if (typeof makeAvatarHair === "function") {
-                var hair = makeAvatarHair(colors.hair || "#4a3728", 0, headR * 2, hs);
-                if (hair) headG.add(hair);
-            }
+        var hairCol = colors.hair || "#4a3728";
+        var hasShopHair = hs && hs !== "hair_boy_none" && hs !== "none" && hs !== "hair_girl_default" && hs !== "hair_realistic_girl";
+        if (hasShopHair && typeof makeAvatarHair === "function") {
+            var hair = makeAvatarHair(hairCol, 0, headR * 2, hs);
+            if (hair) headG.add(hair);
+        } else if (isGirl && typeof makeRealisticHair === "function") {
+            var rh = makeRealisticHair("girl", hairCol, headR);
+            if (rh) headG.add(rh);
         }
     } catch (eH) {}
 }
@@ -11259,23 +11347,26 @@ function animateGameAvatar(mesh, isMoving, dt, opts) {
     }
 
     // —— JUMP / AIR ——
-    // Natural: knees pull up under body, arms lift slightly for balance (not a T-pose / stretch)
+    // Arms raised UP and OUT (never across the torso). Legs kick back slightly.
     if (inAir) {
         var rising = opts.velY == null ? true : opts.velY > 0.02;
-        // Legs tuck up (pivot at hip → positive X swings leg forward/up)
-        var legTuck = rising ? 0.85 : 0.55;
-        setRot(L.leftLeg, legTuck, 0, 0.06);
-        setRot(L.rightLeg, legTuck * 0.95, 0, -0.06);
-        // Arms slightly up and out for balance
-        setRot(L.leftArm, rising ? -0.35 : -0.15, 0, 0.35);
-        setRot(L.rightArm, rising ? -0.35 : -0.15, 0, -0.35);
+        // Left arm: negative Z lifts it outward/up from the left shoulder
+        // Right arm: positive Z lifts it outward/up from the right shoulder
+        var armUp = rising ? -1.05 : -0.7;   // how high (Z magnitude)
+        var armFwd = rising ? -0.2 : 0.05;   // tiny forward lean on X
+        setRot(L.leftArm, armFwd, 0, -Math.abs(armUp));
+        setRot(L.rightArm, armFwd, 0, Math.abs(armUp));
+        // Legs swing slightly BACK (negative X) — like a hop, not a squat covering pose
+        var legBack = rising ? -0.55 : -0.35;
+        setRot(L.leftLeg, legBack, 0, 0.05);
+        setRot(L.rightLeg, legBack * 0.92, 0, -0.05);
         if (L.torso) {
-            L.torso.rotation.x = rising ? -0.06 : 0.1;
+            L.torso.rotation.x = rising ? -0.05 : 0.08;
             L.torso.rotation.y = 0;
             L.torso.scale.y = 1;
         }
         if (L.head) {
-            L.head.rotation.x = rising ? -0.08 : 0.12;
+            L.head.rotation.x = rising ? -0.06 : 0.1;
             L.head.rotation.y = 0;
         }
         return;
@@ -11283,19 +11374,19 @@ function animateGameAvatar(mesh, isMoving, dt, opts) {
 
     // —— WALK ——
     if (isMoving) {
-        // Moderate swing from shoulders/hips (not extreme)
-        var swing = Math.sin(t) * 0.45;
-        setRot(L.leftArm, swing, 0, 0.04);
-        setRot(L.rightArm, -swing, 0, -0.04);
-        setRot(L.leftLeg, -swing * 0.9, 0, 0);
-        setRot(L.rightLeg, swing * 0.9, 0, 0);
+        // Opposite arm/leg swing at shoulders & hips only (no inward Z)
+        var swing = Math.sin(t) * 0.40;
+        setRot(L.leftArm, swing, 0, -0.06);   // slight outward rest
+        setRot(L.rightArm, -swing, 0, 0.06);
+        setRot(L.leftLeg, -swing * 0.85, 0, 0);
+        setRot(L.rightLeg, swing * 0.85, 0, 0);
         if (L.torso) {
-            L.torso.rotation.y = Math.sin(t) * 0.04;
-            L.torso.rotation.x = Math.abs(Math.sin(t)) * 0.025;
+            L.torso.rotation.y = Math.sin(t) * 0.03;
+            L.torso.rotation.x = Math.abs(Math.sin(t)) * 0.02;
             L.torso.scale.y = 1;
         }
         if (L.head) {
-            L.head.rotation.y = Math.sin(t * 0.5) * 0.03;
+            L.head.rotation.y = Math.sin(t * 0.5) * 0.025;
             L.head.rotation.x = 0;
         }
         return;
@@ -11303,8 +11394,8 @@ function animateGameAvatar(mesh, isMoving, dt, opts) {
 
     // —— IDLE ——
     var breath = Math.sin(t) * 0.015;
-    setRot(L.leftArm, Math.sin(t * 0.7) * 0.05, 0, 0.03);
-    setRot(L.rightArm, Math.sin(t * 0.7 + 1.1) * 0.05, 0, -0.03);
+    setRot(L.leftArm, Math.sin(t * 0.7) * 0.05, 0, -0.04);
+    setRot(L.rightArm, Math.sin(t * 0.7 + 1.1) * 0.05, 0, 0.04);
     setRot(L.leftLeg, 0, 0, 0);
     setRot(L.rightLeg, 0, 0, 0);
     if (L.torso) {
@@ -14710,7 +14801,6 @@ window.steerAIImagePrompt = steerAIImagePrompt;
 function onCustomizerGenderChange() {
     var el = document.querySelector('input[name="avatarGenderCustom"]:checked');
     var gender = el && el.value === "girl" ? "girl" : "boy";
-    // If switching to girl and colors still look like boy defaults, offer girl palette
     try {
         var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null") || {};
         acc.gender = gender;
@@ -14718,15 +14808,24 @@ function onCustomizerGenderChange() {
         acc.avatar.gender = gender;
         acc.avatar.face = gender === "girl" ? "female" : "male";
         if (gender === "girl" && (!acc.avatar.hair)) acc.avatar.hair = "#4a3728";
-        // Live preview colors from pickers
+        if (gender === "girl") acc.avatar.hairStyle = acc.avatar.hairStyle || "hair_realistic_girl";
+        else if (acc.avatar.hairStyle === "hair_realistic_girl" || acc.avatar.hairStyle === "hair_girl_default") {
+            acc.avatar.hairStyle = "hair_boy_none";
+        }
         var raw = typeof readAvatarColorInputs === "function" ? readAvatarColorInputs() : {};
         var cols = Object.assign({}, acc.avatar, raw, { gender: gender });
-        if (typeof applyGenderVisualsToCustomizer === "function") applyGenderVisualsToCustomizer(gender, cols);
-        if (typeof applyColorsToMeshes === "function" && typeof moderateCharacterColors === "function") {
-            var v = moderateCharacterColors(cols.head, cols.torso, cols.leftArm, cols.rightArm, cols.leftLeg, cols.rightLeg);
-            applyColorsToMeshes(v);
+
+        // Realistic mode: full rebuild so body shape, face wrap, and hair all update
+        var realistic = (typeof getAvatarRenderStyle === "function" && getAvatarRenderStyle() === "realistic");
+        if (realistic && typeof rebuildAvatarCustomizerMeshes === "function") {
+            rebuildAvatarCustomizerMeshes();
+        } else {
+            if (typeof applyGenderVisualsToCustomizer === "function") applyGenderVisualsToCustomizer(gender, cols);
+            if (typeof applyColorsToMeshes === "function" && typeof moderateCharacterColors === "function") {
+                var v = moderateCharacterColors(cols.head, cols.torso, cols.leftArm, cols.rightArm, cols.leftLeg, cols.rightLeg);
+                applyColorsToMeshes(v);
+            }
         }
-        // Persist gender choice for logged-in users (colors still need Save Avatar)
         if (localStorage.getItem("loggedIn") === "true" && !acc.isGuest) {
             try { localStorage.setItem("azoraAccount", JSON.stringify(acc)); } catch (e) {}
         }
