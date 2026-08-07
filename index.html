@@ -13,7 +13,7 @@
     <link rel="manifest" href="manifest-azora.json">
     <link rel="apple-touch-icon" href="logo.jpg">
     <link rel="icon" href="logo.jpg">
-    <link rel="stylesheet" href="style.css?v=63.8">
+    <link rel="stylesheet" href="style.css?v=63.9">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -439,6 +439,9 @@
 
 <div class="avatar-customizer-container">
     <div id="avatar3d-canvas"></div>
+    <button type="button" id="avatarStyleTestBtn" class="avatar-style-test-btn" onclick="toggleAvatarStyleTest()" title="Test feature: switch between blocky and realistic humanoid">
+        Switch to Realistic (Test)
+    </button>
     <div class="customizer-controls">
         <h3>My Avatar</h3>
 
@@ -1027,7 +1030,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=63.8"></script>
+<script src="script.js?v=63.9"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {

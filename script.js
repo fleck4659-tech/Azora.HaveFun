@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v63.8 less-chibi default body proportions + muted colors","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v63.9 realistic humanoid avatar test toggle","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -3713,6 +3713,7 @@ function applyGenderVisualsToCustomizer(gender, colors) {
     if (!avatarCharacterGroup) return;
     gender = gender || getAvatarGender();
     colors = colors || {};
+    var realistic = (typeof getAvatarRenderStyle === "function" && getAvatarRenderStyle() === "realistic");
     removeAvatarHair(avatarCharacterGroup);
     // Prefer equipped marketplace hair; otherwise BOTH genders are bald by default
     var styleId = null;
@@ -3725,30 +3726,39 @@ function applyGenderVisualsToCustomizer(gender, colors) {
     // Never auto-add girl hair on default — both genders bald until they buy/equip hair
     if (styleId === "hair_girl_default") styleId = "hair_boy_none";
     if (styleId && styleId !== "hair_boy_none" && styleId !== "none") {
-        var hair = makeAvatarHair(colors.hair || "#4a3728", headMesh ? headMesh.position.y : 1.12, 0.65, styleId);
+        var hy = headMesh ? headMesh.position.y : (realistic ? 1.42 : 1.28);
+        var hair = makeAvatarHair(colors.hair || "#4a3728", hy, realistic ? 0.52 : 0.65, styleId);
         if (hair) avatarCharacterGroup.add(hair);
     }
-    // Default girl body = slim distinct shape (not wider/bulkier). Customized scales handled elsewhere.
-    try {
-        var av = colors;
+    // Blocky-only body shape tweaks (skip when realistic humanoid is active)
+    if (!realistic) {
         try {
-            var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
-            if (acc && acc.avatar) av = Object.assign({}, acc.avatar, colors || {});
-        } catch (eA) {}
-        if (typeof applyDefaultBodyShapeToMeshes === "function") {
-            applyDefaultBodyShapeToMeshes(gender, av, {
-                head: headMesh, torso: torsoMesh, leftArm: leftArmMesh, rightArm: rightArmMesh,
-                leftLeg: leftLegMesh, rightLeg: rightLegMesh, group: avatarCharacterGroup
-            });
-        }
-    } catch (eBody) {}
-    // Rebuild face decal for gender
+            var av = colors;
+            try {
+                var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+                if (acc && acc.avatar) av = Object.assign({}, acc.avatar, colors || {});
+            } catch (eA) {}
+            if (typeof applyDefaultBodyShapeToMeshes === "function") {
+                applyDefaultBodyShapeToMeshes(gender, av, {
+                    head: headMesh, torso: torsoMesh, leftArm: leftArmMesh, rightArm: rightArmMesh,
+                    leftLeg: leftLegMesh, rightLeg: rightLegMesh, group: avatarCharacterGroup
+                });
+            }
+        } catch (eBody) {}
+    }
+    // Rebuild face decal for gender (same face system)
     try {
         if (faceGroup && avatarCharacterGroup) {
             avatarCharacterGroup.remove(faceGroup);
         }
-        faceGroup = buildAvatarFace(colors.head || "#ffcc00", gender);
-        faceGroup.position.y = headMesh ? headMesh.position.y : 1.12;
+        faceGroup = buildAvatarFace(colors.head || "#e0a870", gender);
+        faceGroup.position.y = headMesh ? headMesh.position.y : (realistic ? 1.42 : 1.28);
+        if (realistic) {
+            try {
+                var plane = faceGroup.getObjectByName("faceDecal");
+                if (plane) plane.position.z = 0.29;
+            } catch (eP) {}
+        }
         avatarCharacterGroup.add(faceGroup);
     } catch (e) {}
 }
@@ -3756,6 +3766,302 @@ function applyGenderVisualsToCustomizer(gender, colors) {
 window.makeAvatarHair = makeAvatarHair;
 window.applyGenderVisualsToCustomizer = applyGenderVisualsToCustomizer;
 
+
+
+// —— Avatar style test: blocky (default) ↔ realistic humanoid ——
+window._avatarRenderStyle = (function () {
+    try {
+        var s = sessionStorage.getItem("azoraAvatarRenderStyle");
+        if (s === "realistic" || s === "blocky") return s;
+    } catch (e) {}
+    return "blocky";
+})();
+
+function getAvatarRenderStyle() {
+    return window._avatarRenderStyle === "realistic" ? "realistic" : "blocky";
+}
+
+function setAvatarRenderStyle(style) {
+    style = style === "realistic" ? "realistic" : "blocky";
+    window._avatarRenderStyle = style;
+    try { sessionStorage.setItem("azoraAvatarRenderStyle", style); } catch (e) {}
+    var btn = document.getElementById("avatarStyleTestBtn");
+    if (btn) {
+        if (style === "realistic") {
+            btn.textContent = "Switch to Blocky (Test)";
+            btn.classList.add("is-realistic");
+        } else {
+            btn.textContent = "Switch to Realistic (Test)";
+            btn.classList.remove("is-realistic");
+        }
+    }
+}
+
+function clearAvatarCharacterMeshes() {
+    if (!avatarCharacterGroup) return;
+    try {
+        while (avatarCharacterGroup.children.length) {
+            var ch = avatarCharacterGroup.children[0];
+            avatarCharacterGroup.remove(ch);
+            try {
+                if (ch.geometry) ch.geometry.dispose();
+                if (ch.material) {
+                    if (Array.isArray(ch.material)) ch.material.forEach(function (m) { try { m.dispose(); } catch (e) {} });
+                    else ch.material.dispose();
+                }
+            } catch (eD) {}
+        }
+    } catch (e) {}
+    headMesh = torsoMesh = leftArmMesh = rightArmMesh = leftLegMesh = rightLegMesh = null;
+    faceGroup = null;
+    neckMesh = null;
+}
+
+function _azoraLimbMat(hex) {
+    try {
+        if (typeof azoraGlossMaterial === "function") return azoraGlossMaterial(hex);
+    } catch (e) {}
+    return new THREE.MeshLambertMaterial({ color: hex });
+}
+
+/** Classic blocky R6-style limbs (current default) */
+function buildBlockyAvatarMeshes(gender, colors) {
+    colors = colors || {};
+    gender = (gender === "girl" || gender === "female") ? "girl" : "boy";
+    var headC = colors.head || "#e0a870";
+    var torsoC = colors.torso || "#1d4ed8";
+    var laC = colors.leftArm || headC;
+    var raC = colors.rightArm || headC;
+    var llC = colors.leftLeg || "#334155";
+    var rlC = colors.rightLeg || "#334155";
+
+    headMesh = makeBox(0.52, 0.52, 0.52, headC);
+    headMesh.name = "head";
+    headMesh.position.y = 1.28;
+    avatarCharacterGroup.add(headMesh);
+
+    faceGroup = buildAvatarFace(headC, gender);
+    faceGroup.position.y = 1.28;
+    avatarCharacterGroup.add(faceGroup);
+
+    torsoMesh = makeBox(0.78, 1.12, 0.42, torsoC);
+    torsoMesh.name = "torso";
+    torsoMesh.position.y = 0.42;
+    avatarCharacterGroup.add(torsoMesh);
+
+    leftArmMesh = makeBox(0.30, 1.08, 0.30, laC);
+    leftArmMesh.name = "leftArm";
+    leftArmMesh.position.set(-0.56, 0.42, 0);
+    avatarCharacterGroup.add(leftArmMesh);
+
+    rightArmMesh = makeBox(0.30, 1.08, 0.30, raC);
+    rightArmMesh.name = "rightArm";
+    rightArmMesh.position.set(0.56, 0.42, 0);
+    avatarCharacterGroup.add(rightArmMesh);
+
+    leftLegMesh = makeBox(0.30, 1.12, 0.30, llC);
+    leftLegMesh.name = "leftLeg";
+    leftLegMesh.position.set(-0.18, -0.70, 0);
+    avatarCharacterGroup.add(leftLegMesh);
+
+    rightLegMesh = makeBox(0.30, 1.12, 0.30, rlC);
+    rightLegMesh.name = "rightLeg";
+    rightLegMesh.position.set(0.18, -0.70, 0);
+    avatarCharacterGroup.add(rightLegMesh);
+
+    try {
+        if (typeof applyGenderVisualsToCustomizer === "function") {
+            applyGenderVisualsToCustomizer(gender, colors);
+        }
+    } catch (eG) {}
+}
+
+/**
+ * TEST: smoother humanoid made of spheres + cylinders.
+ * Still family-friendly (no detailed anatomy) — just less blocky.
+ */
+function buildRealisticHumanoidMeshes(gender, colors) {
+    colors = colors || {};
+    gender = (gender === "girl" || gender === "female") ? "girl" : "boy";
+    var headC = colors.head || "#e0a870";
+    var torsoC = colors.torso || "#1d4ed8";
+    var laC = colors.leftArm || headC;
+    var raC = colors.rightArm || headC;
+    var llC = colors.leftLeg || "#334155";
+    var rlC = colors.rightLeg || "#334155";
+
+    function sphere(r, hex, name) {
+        var m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), _azoraLimbMat(hex));
+        m.name = name || "";
+        return m;
+    }
+    function cyl(rTop, rBot, h, hex, name) {
+        var m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, 12), _azoraLimbMat(hex));
+        m.name = name || "";
+        return m;
+    }
+    function box(w, h, d, hex, name) {
+        var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), _azoraLimbMat(hex));
+        m.name = name || "";
+        return m;
+    }
+
+    // Head
+    headMesh = sphere(0.28, headC, "head");
+    headMesh.position.y = 1.42;
+    avatarCharacterGroup.add(headMesh);
+
+    // Face decal on front of head (same face system — no face changes)
+    faceGroup = buildAvatarFace(headC, gender);
+    faceGroup.position.y = 1.42;
+    // Pull plane slightly out from sphere surface
+    try {
+        var plane = faceGroup.getObjectByName("faceDecal");
+        if (plane) plane.position.z = 0.29;
+    } catch (eF) {}
+    avatarCharacterGroup.add(faceGroup);
+
+    // Neck
+    neckMesh = cyl(0.08, 0.10, 0.12, headC, "neck");
+    neckMesh.position.y = 1.18;
+    avatarCharacterGroup.add(neckMesh);
+
+    // Torso (slightly tapered capsule look via cylinder)
+    torsoMesh = cyl(0.22, 0.26, 0.85, torsoC, "torso");
+    torsoMesh.position.y = 0.70;
+    avatarCharacterGroup.add(torsoMesh);
+    // Soft chest plate for readable torso color
+    var chest = box(0.42, 0.55, 0.28, torsoC, "chest");
+    chest.position.y = 0.78;
+    avatarCharacterGroup.add(chest);
+
+    // Shoulders
+    var shL = sphere(0.11, torsoC, "shoulderL");
+    shL.position.set(-0.30, 1.05, 0);
+    avatarCharacterGroup.add(shL);
+    var shR = sphere(0.11, torsoC, "shoulderR");
+    shR.position.set(0.30, 1.05, 0);
+    avatarCharacterGroup.add(shR);
+
+    // Left arm chain
+    var uAL = cyl(0.07, 0.065, 0.38, laC, "upperArmL");
+    uAL.position.set(-0.38, 0.82, 0);
+    avatarCharacterGroup.add(uAL);
+    var lAL = cyl(0.06, 0.055, 0.36, laC, "lowerArmL");
+    lAL.position.set(-0.38, 0.45, 0);
+    avatarCharacterGroup.add(lAL);
+    var handL = sphere(0.07, laC, "handL");
+    handL.position.set(-0.38, 0.24, 0);
+    avatarCharacterGroup.add(handL);
+    // Primary ref for color system
+    leftArmMesh = uAL;
+
+    // Right arm chain
+    var uAR = cyl(0.07, 0.065, 0.38, raC, "upperArmR");
+    uAR.position.set(0.38, 0.82, 0);
+    avatarCharacterGroup.add(uAR);
+    var lAR = cyl(0.06, 0.055, 0.36, raC, "lowerArmR");
+    lAR.position.set(0.38, 0.45, 0);
+    avatarCharacterGroup.add(lAR);
+    var handR = sphere(0.07, raC, "handR");
+    handR.position.set(0.38, 0.24, 0);
+    avatarCharacterGroup.add(handR);
+    rightArmMesh = uAR;
+
+    // Hips
+    var hip = cyl(0.20, 0.18, 0.18, torsoC, "hips");
+    hip.position.y = 0.28;
+    avatarCharacterGroup.add(hip);
+
+    // Left leg
+    var thL = cyl(0.09, 0.08, 0.42, llC, "thighL");
+    thL.position.set(-0.12, 0.02, 0);
+    avatarCharacterGroup.add(thL);
+    var shL2 = cyl(0.075, 0.065, 0.40, llC, "shinL");
+    shL2.position.set(-0.12, -0.38, 0);
+    avatarCharacterGroup.add(shL2);
+    var footL = box(0.12, 0.07, 0.22, llC, "footL");
+    footL.position.set(-0.12, -0.62, 0.04);
+    avatarCharacterGroup.add(footL);
+    leftLegMesh = thL;
+
+    // Right leg
+    var thR = cyl(0.09, 0.08, 0.42, rlC, "thighR");
+    thR.position.set(0.12, 0.02, 0);
+    avatarCharacterGroup.add(thR);
+    var shR2 = cyl(0.075, 0.065, 0.40, rlC, "shinR");
+    shR2.position.set(0.12, -0.38, 0);
+    avatarCharacterGroup.add(shR2);
+    var footR = box(0.12, 0.07, 0.22, rlC, "footR");
+    footR.position.set(0.12, -0.62, 0.04);
+    avatarCharacterGroup.add(footR);
+    rightLegMesh = thR;
+
+    // Optional simple hair cap for girls only when hair style equipped — default still bald
+    try {
+        var hs = colors.hairStyle || "";
+        if (hs && hs !== "hair_boy_none" && hs !== "none" && hs !== "hair_girl_default") {
+            if (typeof makeAvatarHair === "function") {
+                var hair = makeAvatarHair(colors.hair || "#4a3728", 1.42, 0.52, hs);
+                if (hair) avatarCharacterGroup.add(hair);
+            }
+        }
+    } catch (eH) {}
+}
+
+function rebuildAvatarCustomizerMeshes() {
+    if (!avatarCharacterGroup || typeof THREE === "undefined") return false;
+    var gender = "boy";
+    try {
+        if (typeof getAvatarGender === "function") gender = getAvatarGender();
+        var gEl = document.querySelector('input[name="avatarGenderCustom"]:checked');
+        if (gEl) gender = gEl.value === "girl" ? "girl" : "boy";
+    } catch (e) {}
+    var colors = {};
+    try {
+        if (typeof readAvatarColorInputs === "function") colors = readAvatarColorInputs() || {};
+    } catch (e2) {}
+    colors.gender = gender;
+    try {
+        var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+        if (acc && acc.avatar) {
+            colors.hairStyle = acc.avatar.hairStyle || colors.hairStyle;
+            colors.hair = acc.avatar.hair || colors.hair;
+        }
+    } catch (e3) {}
+
+    clearAvatarCharacterMeshes();
+    if (getAvatarRenderStyle() === "realistic") {
+        buildRealisticHumanoidMeshes(gender, colors);
+    } else {
+        buildBlockyAvatarMeshes(gender, colors);
+    }
+    try {
+        if (typeof applyColorsToMeshes === "function") applyColorsToMeshes(colors);
+    } catch (e4) {}
+    try {
+        if (renderer && scene && camera) renderer.render(scene, camera);
+    } catch (e5) {}
+    return true;
+}
+
+function toggleAvatarStyleTest() {
+    var next = getAvatarRenderStyle() === "realistic" ? "blocky" : "realistic";
+    setAvatarRenderStyle(next);
+    if (!avatarCharacterGroup) {
+        try { if (typeof init3DAvatar === "function") init3DAvatar(); } catch (e) {}
+    } else {
+        rebuildAvatarCustomizerMeshes();
+    }
+    try {
+        if (typeof playClickSound === "function") playClickSound();
+        else if (typeof playButtonClick === "function") playButtonClick();
+    } catch (eS) {}
+    console.log("[Azora] avatar style test →", next);
+}
+window.toggleAvatarStyleTest = toggleAvatarStyleTest;
+window.getAvatarRenderStyle = getAvatarRenderStyle;
+window.rebuildAvatarCustomizerMeshes = rebuildAvatarCustomizerMeshes;
 
 function init3DAvatar() {
     const container = document.getElementById("avatar3d-canvas");
@@ -3784,41 +4090,23 @@ function init3DAvatar() {
 
     avatarCharacterGroup = new THREE.Group();
     const characterGroup = avatarCharacterGroup;
-
-    // Blocky proportions — less chibi: smaller head, taller torso/legs (still family-friendly blocks)
-    headMesh = makeBox(0.52, 0.52, 0.52, 0xe0a870);
-    headMesh.position.y = 1.28;
-    characterGroup.add(headMesh);
-
-    // Face decal (unchanged system — uses equipped / saved face)
-    faceGroup = buildAvatarFace(0xe0a870, (typeof getAvatarGender === "function" ? getAvatarGender() : "boy"));
-    faceGroup.position.y = 1.28;
-    characterGroup.add(faceGroup);
-
-    // Torso
-    torsoMesh = makeBox(0.78, 1.12, 0.42, 0x1d4ed8);
-    torsoMesh.position.y = 0.42;
-    characterGroup.add(torsoMesh);
-
-    // Arms
-    leftArmMesh = makeBox(0.30, 1.08, 0.30, 0xe0a870);
-    leftArmMesh.position.set(-0.56, 0.42, 0);
-    characterGroup.add(leftArmMesh);
-
-    rightArmMesh = makeBox(0.30, 1.08, 0.30, 0xe0a870);
-    rightArmMesh.position.set(0.56, 0.42, 0);
-    characterGroup.add(rightArmMesh);
-
-    // Legs (longer relative to head)
-    leftLegMesh = makeBox(0.30, 1.12, 0.30, 0x334155);
-    leftLegMesh.position.set(-0.18, -0.70, 0);
-    characterGroup.add(leftLegMesh);
-
-    rightLegMesh = makeBox(0.30, 1.12, 0.30, 0x334155);
-    rightLegMesh.position.set(0.18, -0.70, 0);
-    characterGroup.add(rightLegMesh);
-
     scene.add(characterGroup);
+
+    // Build blocky or realistic based on test toggle
+    try {
+        var _g0 = (typeof getAvatarGender === "function") ? getAvatarGender() : "boy";
+        var _c0 = {};
+        try { if (typeof readAvatarColorInputs === "function") _c0 = readAvatarColorInputs() || {}; } catch (eC) {}
+        if (getAvatarRenderStyle() === "realistic") {
+            buildRealisticHumanoidMeshes(_g0, _c0);
+        } else {
+            buildBlockyAvatarMeshes(_g0, _c0);
+        }
+        setAvatarRenderStyle(getAvatarRenderStyle()); // sync button label
+    } catch (eBuild) {
+        console.warn("[Azora] avatar build fallback", eBuild);
+        buildBlockyAvatarMeshes("boy", {});
+    }
 
     // Spin until user clicks the avatar canvas; stays stopped until page/app is reopened
     if (typeof window._avatarSpinEnabled === "undefined") {
@@ -3908,16 +4196,19 @@ function paintAvatarDefaults() {
     } catch (e) {}
 }
 
-function syncAvatarExtraColors(head, torso, leftArm, rightArm) {
+function syncAvatarExtraColors(head, torso, leftArm, rightArm, leftLeg, rightLeg) {
     if (!avatarCharacterGroup) return;
     avatarCharacterGroup.traverse(function (obj) {
-        if (!obj.isMesh || !obj.material) return;
-        if (obj.name === "nose" && head) obj.material.color.set(head);
-        if (obj.name === "handL" && leftArm) obj.material.color.set(leftArm);
-        if (obj.name === "handR" && rightArm) obj.material.color.set(rightArm);
-        if ((obj.name === "shoulderL" || obj.name === "shoulderR") && torso) obj.material.color.set(torso);
+        if (!obj.isMesh || !obj.material || !obj.material.color) return;
+        var n = obj.name || "";
+        if ((n === "nose" || n === "neck" || n === "head") && head) obj.material.color.set(head);
+        if ((n === "handL" || n === "upperArmL" || n === "lowerArmL" || n === "leftArm") && leftArm) obj.material.color.set(leftArm);
+        if ((n === "handR" || n === "upperArmR" || n === "lowerArmR" || n === "rightArm") && rightArm) obj.material.color.set(rightArm);
+        if ((n === "shoulderL" || n === "shoulderR" || n === "chest" || n === "hips" || n === "torso") && torso) obj.material.color.set(torso);
+        if ((n === "thighL" || n === "shinL" || n === "footL" || n === "leftLeg") && leftLeg) obj.material.color.set(leftLeg);
+        if ((n === "thighR" || n === "shinR" || n === "footR" || n === "rightLeg") && rightLeg) obj.material.color.set(rightLeg);
     });
-    if (neckMesh && head) neckMesh.material.color.set(head);
+    if (neckMesh && head && neckMesh.material && neckMesh.material.color) neckMesh.material.color.set(head);
 }
 
 /* Restricted full-body color combos (all six limbs match a banned set) */
@@ -4103,7 +4394,7 @@ function applyColorsToMeshes(validated) {
         paint(leftLegMesh, validated.leftLeg);
         paint(rightLegMesh, validated.rightLeg);
         if (typeof syncAvatarExtraColors === "function") {
-            syncAvatarExtraColors(validated.head, validated.torso, validated.leftArm, validated.rightArm);
+            syncAvatarExtraColors(validated.head, validated.torso, validated.leftArm, validated.rightArm, validated.leftLeg, validated.rightLeg);
         }
         // Force a frame so the color change is visible immediately
         try {
