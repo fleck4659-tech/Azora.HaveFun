@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v63.7 default girl body shape + bald defaults","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v63.8 less-chibi default body proportions + muted colors","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -73,12 +73,12 @@ function defaultAvatarForGender(gender) {
     if (gender === "girl") {
         return {
             gender: "girl",
-            head: "#ffcc99",
-            torso: "#ff6eb4",
-            leftArm: "#ffcc99",
-            rightArm: "#ffcc99",
-            leftLeg: "#c084fc",
-            rightLeg: "#c084fc",
+            head: "#e8b896",
+            torso: "#db2777",
+            leftArm: "#e8b896",
+            rightArm: "#e8b896",
+            leftLeg: "#6d28d9",
+            rightLeg: "#6d28d9",
             hair: "#4a3728",
             hairStyle: "hair_boy_none",
             face: "female",
@@ -88,12 +88,12 @@ function defaultAvatarForGender(gender) {
     }
     return {
         gender: "boy",
-        head: "#ffcc00",
-        torso: "#1e60ff",
-        leftArm: "#ffcc00",
-        rightArm: "#ffcc00",
-        leftLeg: "#00ebd4",
-        rightLeg: "#00ebd4",
+        head: "#e0a870",
+        torso: "#1d4ed8",
+        leftArm: "#e0a870",
+        rightArm: "#e0a870",
+        leftLeg: "#334155",
+        rightLeg: "#334155",
         hair: "#3b2f2f",
         hairStyle: "hair_boy_none",
         face: "male",
@@ -155,58 +155,55 @@ function applyDefaultBodyShapeToMeshes(gender, avatar, meshes) {
     } catch (eR) {}
 
     if (useGirl) {
-        // Slim feminine blocky silhouette — narrower shoulders, slightly taller torso, thinner limbs
-        if (head) head.scale.set(0.92, 0.92, 0.92);
-        if (torso) {
-            torso.scale.set(0.78, 1.08, 0.92); // narrower width, not wider
-        }
+        // Slim feminine blocky — narrower shoulders, not bulkier
+        if (head) head.scale.set(0.95, 0.95, 0.95);
+        if (torso) torso.scale.set(0.88, 1.02, 0.95);
         if (la) {
-            la.scale.set(0.78, 0.96, 0.78);
+            la.scale.set(0.88, 0.98, 0.88);
             if (la.position) la.position.x = -0.50;
         }
         if (ra) {
-            ra.scale.set(0.78, 0.96, 0.78);
+            ra.scale.set(0.88, 0.98, 0.88);
             if (ra.position) ra.position.x = 0.50;
         }
         if (ll) {
-            ll.scale.set(0.78, 1.04, 0.78);
-            if (ll.position) ll.position.x = -0.16;
+            ll.scale.set(0.88, 1.02, 0.88);
+            if (ll.position) ll.position.x = -0.14;
         }
         if (rl) {
-            rl.scale.set(0.78, 1.04, 0.78);
-            if (rl.position) rl.position.x = 0.16;
+            rl.scale.set(0.88, 1.02, 0.88);
+            if (rl.position) rl.position.x = 0.14;
         }
-        // Soft hip flare (dress hem) — reads as girl shape without bulk
         try {
             if (group && typeof THREE !== "undefined") {
                 var flareMat = (typeof azoraGlossMaterial === "function")
-                    ? azoraGlossMaterial((avatar && avatar.torso) || "#ff6eb4")
-                    : new THREE.MeshLambertMaterial({ color: (avatar && avatar.torso) || "#ff6eb4" });
-                var flare = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.28, 0.50), flareMat);
+                    ? azoraGlossMaterial((avatar && avatar.torso) || "#db2777")
+                    : new THREE.MeshLambertMaterial({ color: (avatar && avatar.torso) || "#db2777" });
+                var flare = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.24, 0.46), flareMat);
                 flare.name = "girlHipFlare";
-                flare.position.set(0, -0.05, 0);
+                flare.position.set(0, -0.02, 0);
                 group.add(flare);
             }
         } catch (eF) {}
     } else {
-        // Boy default (or customized girl that keeps neutral mesh scale)
+        // Boy / neutral base positions matching init3DAvatar
         if (head) head.scale.set(1, 1, 1);
         if (torso) torso.scale.set(1, 1, 1);
         if (la) {
             la.scale.set(1, 1, 1);
-            if (la.position) la.position.x = -0.62;
+            if (la.position) la.position.x = -0.56;
         }
         if (ra) {
             ra.scale.set(1, 1, 1);
-            if (ra.position) ra.position.x = 0.62;
+            if (ra.position) ra.position.x = 0.56;
         }
         if (ll) {
             ll.scale.set(1, 1, 1);
-            if (ll.position) ll.position.x = -0.22;
+            if (ll.position) ll.position.x = -0.18;
         }
         if (rl) {
             rl.scale.set(1, 1, 1);
-            if (rl.position) rl.position.x = 0.22;
+            if (rl.position) rl.position.x = 0.18;
         }
     }
 }
@@ -3788,37 +3785,37 @@ function init3DAvatar() {
     avatarCharacterGroup = new THREE.Group();
     const characterGroup = avatarCharacterGroup;
 
-    // Blocky head
-    headMesh = makeBox(0.65, 0.65, 0.65, 0xffcc00);
-    headMesh.position.y = 1.12;
+    // Blocky proportions — less chibi: smaller head, taller torso/legs (still family-friendly blocks)
+    headMesh = makeBox(0.52, 0.52, 0.52, 0xe0a870);
+    headMesh.position.y = 1.28;
     characterGroup.add(headMesh);
 
-    // Simple face on front
-    faceGroup = buildAvatarFace(0xffcc00, (typeof getAvatarGender === "function" ? getAvatarGender() : "boy"));
-    faceGroup.position.y = 1.12;
+    // Face decal (unchanged system — uses equipped / saved face)
+    faceGroup = buildAvatarFace(0xe0a870, (typeof getAvatarGender === "function" ? getAvatarGender() : "boy"));
+    faceGroup.position.y = 1.28;
     characterGroup.add(faceGroup);
 
-    // Blocky torso
-    torsoMesh = makeBox(0.85, 1.0, 0.45, 0x1e60ff);
-    torsoMesh.position.y = 0.3;
+    // Torso
+    torsoMesh = makeBox(0.78, 1.12, 0.42, 0x1d4ed8);
+    torsoMesh.position.y = 0.42;
     characterGroup.add(torsoMesh);
 
-    // Blocky arms
-    leftArmMesh = makeBox(0.35, 1.0, 0.35, 0xffcc00);
-    leftArmMesh.position.set(-0.62, 0.3, 0);
+    // Arms
+    leftArmMesh = makeBox(0.30, 1.08, 0.30, 0xe0a870);
+    leftArmMesh.position.set(-0.56, 0.42, 0);
     characterGroup.add(leftArmMesh);
 
-    rightArmMesh = makeBox(0.35, 1.0, 0.35, 0xffcc00);
-    rightArmMesh.position.set(0.62, 0.3, 0);
+    rightArmMesh = makeBox(0.30, 1.08, 0.30, 0xe0a870);
+    rightArmMesh.position.set(0.56, 0.42, 0);
     characterGroup.add(rightArmMesh);
 
-    // Blocky legs
-    leftLegMesh = makeBox(0.35, 1.0, 0.35, 0x00ebd4);
-    leftLegMesh.position.set(-0.22, -0.7, 0);
+    // Legs (longer relative to head)
+    leftLegMesh = makeBox(0.30, 1.12, 0.30, 0x334155);
+    leftLegMesh.position.set(-0.18, -0.70, 0);
     characterGroup.add(leftLegMesh);
 
-    rightLegMesh = makeBox(0.35, 1.0, 0.35, 0x00ebd4);
-    rightLegMesh.position.set(0.22, -0.7, 0);
+    rightLegMesh = makeBox(0.30, 1.12, 0.30, 0x334155);
+    rightLegMesh.position.set(0.18, -0.70, 0);
     characterGroup.add(rightLegMesh);
 
     scene.add(characterGroup);
@@ -3900,13 +3897,13 @@ function init3DAvatar() {
 function paintAvatarDefaults() {
     if (!headMesh) return;
     try {
-        headMesh.material.color.set("#ffcc00");
+        headMesh.material.color.set("#e0a870");
         if (neckMesh) neckMesh.material.color.set("#ffcc00");
-        if (torsoMesh) torsoMesh.material.color.set("#1e60ff");
-        if (leftArmMesh) leftArmMesh.material.color.set("#ffcc00");
-        if (rightArmMesh) rightArmMesh.material.color.set("#ffcc00");
-        if (leftLegMesh) leftLegMesh.material.color.set("#00ebd4");
-        if (rightLegMesh) rightLegMesh.material.color.set("#00ebd4");
+        if (torsoMesh) torsoMesh.material.color.set("#1d4ed8");
+        if (leftArmMesh) leftArmMesh.material.color.set("#e0a870");
+        if (rightArmMesh) rightArmMesh.material.color.set("#e0a870");
+        if (leftLegMesh) leftLegMesh.material.color.set("#334155");
+        if (rightLegMesh) rightLegMesh.material.color.set("#334155");
         syncAvatarExtraColors("#ffcc00", "#1e60ff", "#ffcc00", "#ffcc00");
     } catch (e) {}
 }
@@ -3943,12 +3940,12 @@ function moderateCharacterColors(head, torso, leftArm, rightArm, leftLeg, rightL
             return fallback;
         }
     }
-    var cHead = norm(head, "#ffcc00");
-    var cTorso = norm(torso, "#1e60ff");
-    var cLeftArm = norm(leftArm, "#ffcc00");
-    var cRightArm = norm(rightArm, "#ffcc00");
-    var cLeftLeg = norm(leftLeg, "#00ebd4");
-    var cRightLeg = norm(rightLeg, "#00ebd4");
+    var cHead = norm(head, "#e0a870");
+    var cTorso = norm(torso, "#1d4ed8");
+    var cLeftArm = norm(leftArm, "#e0a870");
+    var cRightArm = norm(rightArm, "#e0a870");
+    var cLeftLeg = norm(leftLeg, "#334155");
+    var cRightLeg = norm(rightLeg, "#334155");
 
     var safeTorso = cTorso;
     var moderated = false;
@@ -10606,28 +10603,27 @@ function makeNormAvatar(colors) {
         );
     }
 
-    // Build with FEET on local Y = 0 so standing on ground is just position.y = surfaceY
-    // Legs height 1.0 → centers at 0.5; torso above legs; head on top
-    var legH = 1.0, torsoH = 1.0, headS = 0.65, armH = 1.0;
+    // Less-chibi proportions: smaller head, taller torso/legs (still blocky)
+    var legH = 1.12, torsoH = 1.12, headS = 0.52, armH = 1.08;
 
-    var leftLeg = box(0.35, legH, 0.35, colors.leftLeg);
-    leftLeg.position.set(-0.22, legH / 2, 0);
+    var leftLeg = box(0.30, legH, 0.30, colors.leftLeg);
+    leftLeg.position.set(-0.18, legH / 2, 0);
     leftLeg.name = "leftLeg";
 
-    var rightLeg = box(0.35, legH, 0.35, colors.rightLeg);
-    rightLeg.position.set(0.22, legH / 2, 0);
+    var rightLeg = box(0.30, legH, 0.30, colors.rightLeg);
+    rightLeg.position.set(0.18, legH / 2, 0);
     rightLeg.name = "rightLeg";
 
-    var torso = box(0.85, torsoH, 0.45, colors.torso);
+    var torso = box(0.78, torsoH, 0.42, colors.torso);
     torso.position.y = legH + torsoH / 2;
     torso.name = "torso";
 
-    var leftArm = box(0.35, armH, 0.35, colors.leftArm);
-    leftArm.position.set(-0.62, legH + torsoH / 2, 0);
+    var leftArm = box(0.30, armH, 0.30, colors.leftArm);
+    leftArm.position.set(-0.56, legH + torsoH / 2, 0);
     leftArm.name = "leftArm";
 
-    var rightArm = box(0.35, armH, 0.35, colors.rightArm);
-    rightArm.position.set(0.62, legH + torsoH / 2, 0);
+    var rightArm = box(0.30, armH, 0.30, colors.rightArm);
+    rightArm.position.set(0.56, legH + torsoH / 2, 0);
     rightArm.name = "rightArm";
 
     var head = box(headS, headS, headS, colors.head);
@@ -10646,23 +10642,23 @@ function makeNormAvatar(colors) {
     var isGirl = (gender === "girl" || gender === "female");
     var girlDefault = isGirl && (typeof isDefaultGirlBody !== "function" || isDefaultGirlBody(colors, gender));
     if (girlDefault) {
-        head.scale.set(0.92, 0.92, 0.92);
-        torso.scale.set(0.78, 1.08, 0.92);
-        leftArm.scale.set(0.78, 0.96, 0.78);
-        rightArm.scale.set(0.78, 0.96, 0.78);
-        leftLeg.scale.set(0.78, 1.04, 0.78);
-        rightLeg.scale.set(0.78, 1.04, 0.78);
+        head.scale.set(0.95, 0.95, 0.95);
+        torso.scale.set(0.88, 1.02, 0.95);
+        leftArm.scale.set(0.88, 0.98, 0.88);
+        rightArm.scale.set(0.88, 0.98, 0.88);
+        leftLeg.scale.set(0.88, 1.02, 0.88);
+        rightLeg.scale.set(0.88, 1.02, 0.88);
         leftArm.position.x = -0.50;
         rightArm.position.x = 0.50;
-        leftLeg.position.x = -0.16;
-        rightLeg.position.x = 0.16;
+        leftLeg.position.x = -0.14;
+        rightLeg.position.x = 0.14;
         try {
             var flareMat = (typeof azoraGlossMaterial === "function")
-                ? azoraGlossMaterial(colors.torso || "#ff6eb4")
-                : new THREE.MeshLambertMaterial({ color: colors.torso || "#ff6eb4" });
-            var flare = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.28, 0.50), flareMat);
+                ? azoraGlossMaterial(colors.torso || "#db2777")
+                : new THREE.MeshLambertMaterial({ color: colors.torso || "#db2777" });
+            var flare = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.24, 0.46), flareMat);
             flare.name = "girlHipFlare";
-            flare.position.set(0, legH + 0.12, 0);
+            flare.position.set(0, legH + 0.10, 0);
             g.add(flare);
         } catch (eFl) {}
     }
@@ -19061,49 +19057,51 @@ function buildProfile3DCharacter(avatar) {
     } catch (eFace) {}
 
     var girlDef = gender === "girl" && (typeof isDefaultGirlBody !== "function" || isDefaultGirlBody(avatar, gender));
-    // Girl default: narrower torso + thinner limbs (distinct, not bulkier). Boy: classic blocky.
-    var torsoW = girlDef ? 0.66 : 0.85;
-    var torsoH = girlDef ? 1.08 : 1.0;
-    var torsoD = girlDef ? 0.42 : 0.45;
-    var armS = girlDef ? 0.28 : 0.35;
-    var legS = girlDef ? 0.28 : 0.35;
-    var armX = girlDef ? 0.50 : 0.62;
-    var legX = girlDef ? 0.16 : 0.22;
-    var headS = girlDef ? 0.60 : 0.65;
+    // Less-chibi base: smaller head, taller torso/legs. Girl: slightly narrower.
+    var torsoW = girlDef ? 0.68 : 0.78;
+    var torsoH = girlDef ? 1.14 : 1.12;
+    var torsoD = girlDef ? 0.40 : 0.42;
+    var armS = girlDef ? 0.26 : 0.30;
+    var legS = girlDef ? 0.26 : 0.30;
+    var armX = girlDef ? 0.50 : 0.56;
+    var legX = girlDef ? 0.14 : 0.18;
+    var headS = girlDef ? 0.50 : 0.52;
+    var headY = 1.28;
+    var torsoY = 0.42;
+    var armY = 0.42;
+    var legY = -0.70;
 
-    // Rebuild head size for girl default
-    if (girlDef) {
-        group.remove(head);
-        head = _profile3dBox(headS, headS, headS, headC);
-        head.position.y = 1.12;
-        group.add(head);
-    }
+    // Rebuild head with correct size for both genders
+    try { group.remove(head); } catch (eRh) {}
+    head = _profile3dBox(headS, headS, headS, headC);
+    head.position.y = headY;
+    group.add(head);
 
     var torso = _profile3dBox(torsoW, torsoH, torsoD, torsoC);
-    torso.position.y = 0.3;
+    torso.position.y = torsoY;
     group.add(torso);
 
     if (girlDef) {
         try {
-            var flare = _profile3dBox(0.88, 0.28, 0.48, torsoC);
-            flare.position.set(0, -0.08, 0);
+            var flare = _profile3dBox(0.80, 0.24, 0.44, torsoC);
+            flare.position.set(0, -0.02, 0);
             flare.name = "girlHipFlare";
             group.add(flare);
         } catch (eFl) {}
     }
 
-    var leftArm = _profile3dBox(armS, 1.0, armS, la);
-    leftArm.position.set(-armX, 0.3, 0);
+    var leftArm = _profile3dBox(armS, 1.08, armS, la);
+    leftArm.position.set(-armX, armY, 0);
     group.add(leftArm);
-    var rightArm = _profile3dBox(armS, 1.0, armS, ra);
-    rightArm.position.set(armX, 0.3, 0);
+    var rightArm = _profile3dBox(armS, 1.08, armS, ra);
+    rightArm.position.set(armX, armY, 0);
     group.add(rightArm);
 
-    var leftLeg = _profile3dBox(legS, 1.0, legS, ll);
-    leftLeg.position.set(-legX, -0.7, 0);
+    var leftLeg = _profile3dBox(legS, 1.12, legS, ll);
+    leftLeg.position.set(-legX, legY, 0);
     group.add(leftLeg);
-    var rightLeg = _profile3dBox(legS, 1.0, legS, rl);
-    rightLeg.position.set(legX, -0.7, 0);
+    var rightLeg = _profile3dBox(legS, 1.12, legS, rl);
+    rightLeg.position.set(legX, legY, 0);
     group.add(rightLeg);
 
     // Hair only if equipped — default boys AND girls are bald
