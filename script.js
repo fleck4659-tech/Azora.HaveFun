@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v64.1 in-game avatar walk + idle animations","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v64.2 fixed walk/jump pivots + natural jump pose","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -11179,15 +11179,54 @@ function getNormAvatarColors() {
 function bindGameAvatarLimbs(mesh) {
     if (!mesh) return null;
     mesh.userData = mesh.userData || {};
-    if (mesh.userData.limbs && mesh.userData.limbs.leftArm) return mesh.userData.limbs;
+    // Prefer pivot groups (rotate at shoulder/hip). Fallback to raw limb meshes.
+    if (mesh.userData.limbs && mesh.userData.limbs._pivoted) return mesh.userData.limbs;
+
+    function pivotOrMesh(pivotName, meshName) {
+        return mesh.getObjectByName(pivotName) || mesh.getObjectByName(meshName) || null;
+    }
+
     var limbs = {
         head: mesh.getObjectByName("head") || null,
         torso: mesh.getObjectByName("torso") || null,
-        leftArm: mesh.getObjectByName("leftArm") || null,
-        rightArm: mesh.getObjectByName("rightArm") || null,
-        leftLeg: mesh.getObjectByName("leftLeg") || null,
-        rightLeg: mesh.getObjectByName("rightLeg") || null
+        leftArm: pivotOrMesh("leftArmPivot", "leftArm"),
+        rightArm: pivotOrMesh("rightArmPivot", "rightArm"),
+        leftLeg: pivotOrMesh("leftLegPivot", "leftLeg"),
+        rightLeg: pivotOrMesh("rightLegPivot", "rightLeg"),
+        _pivoted: !!(mesh.getObjectByName("leftArmPivot") || mesh.getObjectByName("leftLegPivot"))
     };
+
+    // Legacy avatars: wrap centered limb boxes into shoulder/hip pivots once
+    if (!limbs._pivoted) {
+        try {
+            function wrapPivot(limbName, pivotName) {
+                var limb = mesh.getObjectByName(limbName);
+                if (!limb || !limb.parent) return null;
+                var pivot = new THREE.Group();
+                pivot.name = pivotName;
+                // Joint at top of limb box
+                var h = 1.0;
+                try {
+                    if (limb.geometry && limb.geometry.parameters && limb.geometry.parameters.height) {
+                        h = limb.geometry.parameters.height;
+                    }
+                } catch (eH) {}
+                var worldPos = limb.position.clone();
+                pivot.position.set(worldPos.x, worldPos.y + h * 0.5, worldPos.z);
+                limb.parent.add(pivot);
+                pivot.add(limb);
+                limb.position.set(0, -h * 0.5, 0);
+                limb.rotation.set(0, 0, 0);
+                return pivot;
+            }
+            limbs.leftArm = wrapPivot("leftArm", "leftArmPivot") || limbs.leftArm;
+            limbs.rightArm = wrapPivot("rightArm", "rightArmPivot") || limbs.rightArm;
+            limbs.leftLeg = wrapPivot("leftLeg", "leftLegPivot") || limbs.leftLeg;
+            limbs.rightLeg = wrapPivot("rightLeg", "rightLegPivot") || limbs.rightLeg;
+            limbs._pivoted = true;
+        } catch (eW) {}
+    }
+
     mesh.userData.limbs = limbs;
     mesh.userData.animPhase = mesh.userData.animPhase || (Math.random() * Math.PI * 2);
     mesh.userData._lastAnimPos = mesh.userData._lastAnimPos || null;
@@ -11197,10 +11236,7 @@ function bindGameAvatarLimbs(mesh) {
 
 /**
  * Animate a game avatar every frame.
- * @param {THREE.Object3D} mesh - avatar group from makeNormAvatar
- * @param {boolean} isMoving - walking/running
- * @param {number} dt - delta seconds (optional, ~1/60)
- * @param {object} opts - { jump: bool }
+ * Limbs rotate at shoulder/hip pivots for natural walk & jump.
  */
 function animateGameAvatar(mesh, isMoving, dt, opts) {
     if (!mesh) return;
@@ -11209,69 +11245,76 @@ function animateGameAvatar(mesh, isMoving, dt, opts) {
     var L = bindGameAvatarLimbs(mesh);
     if (!L || (!L.leftArm && !L.leftLeg)) return;
 
-    var speed = isMoving ? 9.5 : 1.8;
+    var inAir = !!(opts.jump || opts.inAir);
+    var speed = isMoving && !inAir ? 8.5 : 1.6;
     mesh.userData.animPhase = (mesh.userData.animPhase || 0) + dt * speed;
     var t = mesh.userData.animPhase;
-    mesh.userData._animMoving = !!isMoving;
+    mesh.userData._animMoving = !!isMoving && !inAir;
 
-    // Jump pose
-    if (opts.jump || opts.inAir) {
-        if (L.leftArm) { L.leftArm.rotation.x = -0.55; L.leftArm.rotation.z = 0.15; }
-        if (L.rightArm) { L.rightArm.rotation.x = -0.55; L.rightArm.rotation.z = -0.15; }
-        if (L.leftLeg) { L.leftLeg.rotation.x = -0.25; }
-        if (L.rightLeg) { L.rightLeg.rotation.x = 0.15; }
-        if (L.torso) { L.torso.rotation.x = 0.08; }
-        return;
+    function setRot(obj, x, y, z) {
+        if (!obj) return;
+        obj.rotation.x = x || 0;
+        obj.rotation.y = y || 0;
+        obj.rotation.z = z || 0;
     }
 
-    if (isMoving) {
-        var swing = Math.sin(t) * 0.65;
-        var swingOpp = -swing;
-        if (L.leftArm) {
-            L.leftArm.rotation.x = swing;
-            L.leftArm.rotation.z = 0.05;
-        }
-        if (L.rightArm) {
-            L.rightArm.rotation.x = swingOpp;
-            L.rightArm.rotation.z = -0.05;
-        }
-        if (L.leftLeg) {
-            L.leftLeg.rotation.x = swingOpp * 0.95;
-        }
-        if (L.rightLeg) {
-            L.rightLeg.rotation.x = swing * 0.95;
-        }
+    // —— JUMP / AIR ——
+    // Natural: knees pull up under body, arms lift slightly for balance (not a T-pose / stretch)
+    if (inAir) {
+        var rising = opts.velY == null ? true : opts.velY > 0.02;
+        // Legs tuck up (pivot at hip → positive X swings leg forward/up)
+        var legTuck = rising ? 0.85 : 0.55;
+        setRot(L.leftLeg, legTuck, 0, 0.06);
+        setRot(L.rightLeg, legTuck * 0.95, 0, -0.06);
+        // Arms slightly up and out for balance
+        setRot(L.leftArm, rising ? -0.35 : -0.15, 0, 0.35);
+        setRot(L.rightArm, rising ? -0.35 : -0.15, 0, -0.35);
         if (L.torso) {
-            L.torso.rotation.y = Math.sin(t) * 0.06;
-            L.torso.rotation.x = Math.abs(Math.sin(t)) * 0.03;
+            L.torso.rotation.x = rising ? -0.06 : 0.1;
+            L.torso.rotation.y = 0;
             L.torso.scale.y = 1;
         }
         if (L.head) {
-            L.head.rotation.y = Math.sin(t * 0.5) * 0.04;
-            L.head.rotation.x = 0;
+            L.head.rotation.x = rising ? -0.08 : 0.12;
+            L.head.rotation.y = 0;
         }
-    } else {
-        // Idle — same spirit as customizer
-        var breath = Math.sin(t) * 0.018;
-        if (L.leftArm) {
-            L.leftArm.rotation.x = Math.sin(t * 0.75) * 0.07;
-            L.leftArm.rotation.z = 0.04 + Math.sin(t * 0.5) * 0.02;
-        }
-        if (L.rightArm) {
-            L.rightArm.rotation.x = Math.sin(t * 0.75 + 1.2) * 0.07;
-            L.rightArm.rotation.z = -0.04 - Math.sin(t * 0.5) * 0.02;
-        }
-        if (L.leftLeg) L.leftLeg.rotation.x = 0;
-        if (L.rightLeg) L.rightLeg.rotation.x = 0;
+        return;
+    }
+
+    // —— WALK ——
+    if (isMoving) {
+        // Moderate swing from shoulders/hips (not extreme)
+        var swing = Math.sin(t) * 0.45;
+        setRot(L.leftArm, swing, 0, 0.04);
+        setRot(L.rightArm, -swing, 0, -0.04);
+        setRot(L.leftLeg, -swing * 0.9, 0, 0);
+        setRot(L.rightLeg, swing * 0.9, 0, 0);
         if (L.torso) {
-            L.torso.rotation.y = Math.sin(t * 0.4) * 0.02;
-            L.torso.rotation.x = breath;
-            L.torso.scale.y = 1 + Math.sin(t) * 0.012;
+            L.torso.rotation.y = Math.sin(t) * 0.04;
+            L.torso.rotation.x = Math.abs(Math.sin(t)) * 0.025;
+            L.torso.scale.y = 1;
         }
         if (L.head) {
-            L.head.rotation.y = Math.sin(t * 0.45) * 0.05;
-            L.head.rotation.x = Math.sin(t * 0.7) * 0.025;
+            L.head.rotation.y = Math.sin(t * 0.5) * 0.03;
+            L.head.rotation.x = 0;
         }
+        return;
+    }
+
+    // —— IDLE ——
+    var breath = Math.sin(t) * 0.015;
+    setRot(L.leftArm, Math.sin(t * 0.7) * 0.05, 0, 0.03);
+    setRot(L.rightArm, Math.sin(t * 0.7 + 1.1) * 0.05, 0, -0.03);
+    setRot(L.leftLeg, 0, 0, 0);
+    setRot(L.rightLeg, 0, 0, 0);
+    if (L.torso) {
+        L.torso.rotation.y = Math.sin(t * 0.35) * 0.015;
+        L.torso.rotation.x = breath;
+        L.torso.scale.y = 1 + Math.sin(t) * 0.01;
+    }
+    if (L.head) {
+        L.head.rotation.y = Math.sin(t * 0.4) * 0.04;
+        L.head.rotation.x = Math.sin(t * 0.65) * 0.02;
     }
 }
 window.bindGameAvatarLimbs = bindGameAvatarLimbs;
@@ -11289,55 +11332,52 @@ function makeNormAvatar(colors) {
         );
     }
 
-    // Less-chibi proportions: smaller head, taller torso/legs (still blocky)
+    // Less-chibi proportions + joint pivots so walk/jump rotate at shoulders & hips
     var legH = 1.12, torsoH = 1.12, headS = 0.52, armH = 1.08;
-
-    var leftLeg = box(0.30, legH, 0.30, colors.leftLeg);
-    leftLeg.position.set(-0.18, legH / 2, 0);
-    leftLeg.name = "leftLeg";
-
-    var rightLeg = box(0.30, legH, 0.30, colors.rightLeg);
-    rightLeg.position.set(0.18, legH / 2, 0);
-    rightLeg.name = "rightLeg";
-
-    var torso = box(0.78, torsoH, 0.42, colors.torso);
-    torso.position.y = legH + torsoH / 2;
-    torso.name = "torso";
-
-    var leftArm = box(0.30, armH, 0.30, colors.leftArm);
-    leftArm.position.set(-0.56, legH + torsoH / 2, 0);
-    leftArm.name = "leftArm";
-
-    var rightArm = box(0.30, armH, 0.30, colors.rightArm);
-    rightArm.position.set(0.56, legH + torsoH / 2, 0);
-    rightArm.name = "rightArm";
-
-    var head = box(headS, headS, headS, colors.head);
-    head.position.y = legH + torsoH + headS / 2;
-    head.name = "head";
-
-    g.add(leftLeg);
-    g.add(rightLeg);
-    g.add(torso);
-    g.add(leftArm);
-    g.add(rightArm);
-    g.add(head);
-
-    // Girl default: slim distinct proportions (narrower, not bulkier). Bald unless hair equipped.
     var gender = colors.gender || "boy";
     var isGirl = (gender === "girl" || gender === "female");
     var girlDefault = isGirl && (typeof isDefaultGirlBody !== "function" || isDefaultGirlBody(colors, gender));
+    var armX = girlDefault ? 0.50 : 0.56;
+    var legX = girlDefault ? 0.14 : 0.18;
+    var armThick = girlDefault ? 0.26 : 0.30;
+    var legThick = girlDefault ? 0.26 : 0.30;
+    var torsoW = girlDefault ? 0.68 : 0.78;
+
+    // Torso
+    var torso = box(torsoW, torsoH, 0.42, colors.torso);
+    torso.position.y = legH + torsoH / 2;
+    torso.name = "torso";
+    g.add(torso);
+
+    // Head
+    var head = box(girlDefault ? headS * 0.95 : headS, girlDefault ? headS * 0.95 : headS, girlDefault ? headS * 0.95 : headS, colors.head);
+    head.position.y = legH + torsoH + headS / 2;
+    head.name = "head";
+    g.add(head);
+
+    // Helper: limb mesh hangs below a pivot at the joint
+    function addLimbPivot(pivotName, limbName, jointX, jointY, height, thick, color) {
+        var pivot = new THREE.Group();
+        pivot.name = pivotName;
+        pivot.position.set(jointX, jointY, 0);
+        var limb = box(thick, height, thick, color);
+        limb.name = limbName;
+        limb.position.set(0, -height / 2, 0);
+        pivot.add(limb);
+        g.add(pivot);
+        return pivot;
+    }
+
+    // Shoulders = top of torso; hips = top of legs
+    var shoulderY = legH + torsoH;
+    var hipY = legH;
+
+    var leftArmPivot = addLimbPivot("leftArmPivot", "leftArm", -armX, shoulderY, armH, armThick, colors.leftArm);
+    var rightArmPivot = addLimbPivot("rightArmPivot", "rightArm", armX, shoulderY, armH, armThick, colors.rightArm);
+    var leftLegPivot = addLimbPivot("leftLegPivot", "leftLeg", -legX, hipY, legH, legThick, colors.leftLeg);
+    var rightLegPivot = addLimbPivot("rightLegPivot", "rightLeg", legX, hipY, legH, legThick, colors.rightLeg);
+
     if (girlDefault) {
-        head.scale.set(0.95, 0.95, 0.95);
-        torso.scale.set(0.88, 1.02, 0.95);
-        leftArm.scale.set(0.88, 0.98, 0.88);
-        rightArm.scale.set(0.88, 0.98, 0.88);
-        leftLeg.scale.set(0.88, 1.02, 0.88);
-        rightLeg.scale.set(0.88, 1.02, 0.88);
-        leftArm.position.x = -0.50;
-        rightArm.position.x = 0.50;
-        leftLeg.position.x = -0.14;
-        rightLeg.position.x = 0.14;
         try {
             var flareMat = (typeof azoraGlossMaterial === "function")
                 ? azoraGlossMaterial(colors.torso || "#db2777")
@@ -13787,8 +13827,13 @@ function startNormGameWorld(def) {
         try {
             var movingNow = Math.abs(throttle) > 0.05;
             var inAir = !(_normSession && _normSession.onGround);
+            var vy = (_normSession && typeof _normSession.velY === "number") ? _normSession.velY : 0;
             if (typeof animateGameAvatar === "function") {
-                animateGameAvatar(_normLocalMesh, movingNow && !inAir, 0.016, { inAir: inAir, jump: inAir });
+                animateGameAvatar(_normLocalMesh, movingNow && !inAir, 0.016, {
+                    inAir: inAir,
+                    jump: inAir,
+                    velY: vy
+                });
             }
         } catch (eAnimL) {}
 
