@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v63.9 realistic humanoid avatar test toggle","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v64.1 in-game avatar walk + idle animations","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -3746,20 +3746,33 @@ function applyGenderVisualsToCustomizer(gender, colors) {
             }
         } catch (eBody) {}
     }
-    // Rebuild face decal for gender (same face system)
+    // Rebuild face decal for gender
     try {
-        if (faceGroup && avatarCharacterGroup) {
-            avatarCharacterGroup.remove(faceGroup);
+        if (faceGroup) {
+            // face may be parented under head group in realistic mode
+            if (faceGroup.parent) faceGroup.parent.remove(faceGroup);
+            else if (avatarCharacterGroup) avatarCharacterGroup.remove(faceGroup);
         }
-        faceGroup = buildAvatarFace(colors.head || "#e0a870", gender);
-        faceGroup.position.y = headMesh ? headMesh.position.y : (realistic ? 1.42 : 1.28);
-        if (realistic) {
+        if (realistic && typeof buildWrappedSphereFace === "function") {
+            var hr = 0.26;
             try {
-                var plane = faceGroup.getObjectByName("faceDecal");
-                if (plane) plane.position.z = 0.29;
-            } catch (eP) {}
+                if (headMesh && headMesh.geometry && headMesh.geometry.parameters) {
+                    hr = headMesh.geometry.parameters.radius || 0.26;
+                }
+            } catch (eR) {}
+            faceGroup = buildWrappedSphereFace(gender, hr, 0);
+            // Attach to head joint if present, else character root
+            var headJoint = avatarCharacterGroup.userData && avatarCharacterGroup.userData.joints && avatarCharacterGroup.userData.joints.head;
+            if (headJoint) headJoint.add(faceGroup);
+            else {
+                faceGroup.position.y = headMesh ? headMesh.position.y : 1.55;
+                avatarCharacterGroup.add(faceGroup);
+            }
+        } else {
+            faceGroup = buildAvatarFace(colors.head || "#e0a870", gender);
+            faceGroup.position.y = headMesh ? headMesh.position.y : 1.28;
+            avatarCharacterGroup.add(faceGroup);
         }
-        avatarCharacterGroup.add(faceGroup);
     } catch (e) {}
 }
 
@@ -3869,6 +3882,10 @@ function buildBlockyAvatarMeshes(gender, colors) {
     rightLegMesh.position.set(0.18, -0.70, 0);
     avatarCharacterGroup.add(rightLegMesh);
 
+    avatarCharacterGroup.userData = avatarCharacterGroup.userData || {};
+    avatarCharacterGroup.userData.animStyle = "blocky";
+    avatarCharacterGroup.userData.joints = null;
+
     try {
         if (typeof applyGenderVisualsToCustomizer === "function") {
             applyGenderVisualsToCustomizer(gender, colors);
@@ -3880,9 +3897,117 @@ function buildBlockyAvatarMeshes(gender, colors) {
  * TEST: smoother humanoid made of spheres + cylinders.
  * Still family-friendly (no detailed anatomy) — just less blocky.
  */
+/**
+ * Face that wraps around a spherical head (curved shell, not a flat plane).
+ * Uses the same face PNGs (Smile.png / female_smile / equipped faces).
+ */
+function buildWrappedSphereFace(gender, headRadius, headY) {
+    gender = gender || "boy";
+    headRadius = headRadius || 0.26;
+    headY = headY || 1.55;
+    var faceUrl = (typeof faceTextureUrlForGender === "function")
+        ? faceTextureUrlForGender(gender)
+        : ((gender === "girl" || gender === "female") ? "female_smile.png" : "Smile.png");
+    try {
+        if (typeof getEquippedFaceFile === "function") {
+            var eq = getEquippedFaceFile();
+            if (eq) faceUrl = eq;
+        }
+    } catch (eEq) {}
+
+    var face = new THREE.Group();
+    face.name = "face";
+    face.userData.gender = gender;
+    face.position.y = headY;
+
+    // Spherical patch covering the front of the head so the face curves with the sphere
+    // phi around Y, theta from top — centered on +Z (front)
+    var geo = new THREE.SphereGeometry(
+        headRadius * 1.02,
+        28, 18,
+        Math.PI * 0.72,   // phiStart — front-left
+        Math.PI * 0.56,   // phiLength — wraps across the face
+        Math.PI * 0.30,   // thetaStart — from forehead
+        Math.PI * 0.50    // thetaLength — down to chin area
+    );
+
+    var mat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        side: THREE.FrontSide,
+        alphaTest: 0.12
+    });
+    var shell = new THREE.Mesh(geo, mat);
+    shell.name = "faceDecal";
+    shell.visible = false;
+    face.add(shell);
+
+    function showTex(tex) {
+        if (!tex) return;
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        tex.wrapS = THREE.ClampToEdgeWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.needsUpdate = true;
+        mat.map = tex;
+        mat.transparent = true;
+        mat.opacity = 1;
+        mat.alphaTest = 0.12;
+        mat.needsUpdate = true;
+        shell.visible = true;
+    }
+
+    function loadFace(url) {
+        try {
+            var img = new Image();
+            if (typeof location !== "undefined" && location.protocol !== "file:") {
+                img.crossOrigin = "anonymous";
+            }
+            img.onload = function () {
+                try {
+                    var centered = null;
+                    if (typeof textureFromCenteredFace === "function") {
+                        centered = textureFromCenteredFace(img);
+                    }
+                    if (centered) showTex(centered);
+                    else {
+                        var t = new THREE.Texture(img);
+                        t.needsUpdate = true;
+                        showTex(t);
+                    }
+                } catch (e) {
+                    try {
+                        var t2 = new THREE.Texture(img);
+                        t2.needsUpdate = true;
+                        showTex(t2);
+                    } catch (e2) {}
+                }
+            };
+            img.onerror = function () {
+                try {
+                    var loader = new THREE.TextureLoader();
+                    loader.load(url, function (tex) { showTex(tex); });
+                } catch (eL) {}
+            };
+            img.src = url;
+        } catch (e) {}
+    }
+    loadFace(faceUrl);
+    return face;
+}
+window.buildWrappedSphereFace = buildWrappedSphereFace;
+
+/**
+ * Improved realistic humanoid — hierarchical joints for idle animation.
+ * Family-friendly proportions (not anatomical detail).
+ */
 function buildRealisticHumanoidMeshes(gender, colors) {
     colors = colors || {};
     gender = (gender === "girl" || gender === "female") ? "girl" : "boy";
+    var isGirl = gender === "girl";
     var headC = colors.head || "#e0a870";
     var torsoC = colors.torso || "#1d4ed8";
     var laC = colors.leftArm || headC;
@@ -3890,13 +4015,22 @@ function buildRealisticHumanoidMeshes(gender, colors) {
     var llC = colors.leftLeg || "#334155";
     var rlC = colors.rightLeg || "#334155";
 
-    function sphere(r, hex, name) {
-        var m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), _azoraLimbMat(hex));
+    // Girl: slightly narrower shoulders / waist, a bit wider hips
+    var shoulderW = isGirl ? 0.34 : 0.40;
+    var chestW = isGirl ? 0.36 : 0.44;
+    var waistW = isGirl ? 0.28 : 0.34;
+    var hipW = isGirl ? 0.36 : 0.34;
+    var headR = isGirl ? 0.24 : 0.26;
+    var armLen = 0.42;
+    var legLen = 0.48;
+
+    function sphere(r, hex, name, seg) {
+        var m = new THREE.Mesh(new THREE.SphereGeometry(r, seg || 20, seg || 16), _azoraLimbMat(hex));
         m.name = name || "";
         return m;
     }
-    function cyl(rTop, rBot, h, hex, name) {
-        var m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, 12), _azoraLimbMat(hex));
+    function cyl(rTop, rBot, h, hex, name, seg) {
+        var m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, seg || 14), _azoraLimbMat(hex));
         m.name = name || "";
         return m;
     }
@@ -3906,108 +4040,263 @@ function buildRealisticHumanoidMeshes(gender, colors) {
         return m;
     }
 
-    // Head
-    headMesh = sphere(0.28, headC, "head");
-    headMesh.position.y = 1.42;
-    avatarCharacterGroup.add(headMesh);
+    var joints = {};
+    avatarCharacterGroup.userData = avatarCharacterGroup.userData || {};
+    avatarCharacterGroup.userData.animStyle = "realistic";
+    avatarCharacterGroup.userData.joints = joints;
 
-    // Face decal on front of head (same face system — no face changes)
-    faceGroup = buildAvatarFace(headC, gender);
-    faceGroup.position.y = 1.42;
-    // Pull plane slightly out from sphere surface
-    try {
-        var plane = faceGroup.getObjectByName("faceDecal");
-        if (plane) plane.position.z = 0.29;
-    } catch (eF) {}
-    avatarCharacterGroup.add(faceGroup);
-
-    // Neck
-    neckMesh = cyl(0.08, 0.10, 0.12, headC, "neck");
-    neckMesh.position.y = 1.18;
-    avatarCharacterGroup.add(neckMesh);
-
-    // Torso (slightly tapered capsule look via cylinder)
-    torsoMesh = cyl(0.22, 0.26, 0.85, torsoC, "torso");
-    torsoMesh.position.y = 0.70;
-    avatarCharacterGroup.add(torsoMesh);
-    // Soft chest plate for readable torso color
-    var chest = box(0.42, 0.55, 0.28, torsoC, "chest");
-    chest.position.y = 0.78;
-    avatarCharacterGroup.add(chest);
-
-    // Shoulders
-    var shL = sphere(0.11, torsoC, "shoulderL");
-    shL.position.set(-0.30, 1.05, 0);
-    avatarCharacterGroup.add(shL);
-    var shR = sphere(0.11, torsoC, "shoulderR");
-    shR.position.set(0.30, 1.05, 0);
-    avatarCharacterGroup.add(shR);
-
-    // Left arm chain
-    var uAL = cyl(0.07, 0.065, 0.38, laC, "upperArmL");
-    uAL.position.set(-0.38, 0.82, 0);
-    avatarCharacterGroup.add(uAL);
-    var lAL = cyl(0.06, 0.055, 0.36, laC, "lowerArmL");
-    lAL.position.set(-0.38, 0.45, 0);
-    avatarCharacterGroup.add(lAL);
-    var handL = sphere(0.07, laC, "handL");
-    handL.position.set(-0.38, 0.24, 0);
-    avatarCharacterGroup.add(handL);
-    // Primary ref for color system
-    leftArmMesh = uAL;
-
-    // Right arm chain
-    var uAR = cyl(0.07, 0.065, 0.38, raC, "upperArmR");
-    uAR.position.set(0.38, 0.82, 0);
-    avatarCharacterGroup.add(uAR);
-    var lAR = cyl(0.06, 0.055, 0.36, raC, "lowerArmR");
-    lAR.position.set(0.38, 0.45, 0);
-    avatarCharacterGroup.add(lAR);
-    var handR = sphere(0.07, raC, "handR");
-    handR.position.set(0.38, 0.24, 0);
-    avatarCharacterGroup.add(handR);
-    rightArmMesh = uAR;
+    // —— Root (feet at ~-0.85) ——
+    var root = new THREE.Group();
+    root.name = "animRoot";
+    avatarCharacterGroup.add(root);
+    joints.root = root;
 
     // Hips
-    var hip = cyl(0.20, 0.18, 0.18, torsoC, "hips");
-    hip.position.y = 0.28;
-    avatarCharacterGroup.add(hip);
+    var hipsG = new THREE.Group();
+    hipsG.position.y = 0.55;
+    root.add(hipsG);
+    joints.hips = hipsG;
+    var hipsMesh = sphere(hipW * 0.55, torsoC, "hips", 16);
+    hipsMesh.scale.set(1.15, 0.55, 0.75);
+    hipsG.add(hipsMesh);
 
-    // Left leg
-    var thL = cyl(0.09, 0.08, 0.42, llC, "thighL");
-    thL.position.set(-0.12, 0.02, 0);
-    avatarCharacterGroup.add(thL);
-    var shL2 = cyl(0.075, 0.065, 0.40, llC, "shinL");
-    shL2.position.set(-0.12, -0.38, 0);
-    avatarCharacterGroup.add(shL2);
-    var footL = box(0.12, 0.07, 0.22, llC, "footL");
-    footL.position.set(-0.12, -0.62, 0.04);
-    avatarCharacterGroup.add(footL);
+    // Spine / torso group
+    var torsoG = new THREE.Group();
+    torsoG.position.y = 0.08;
+    hipsG.add(torsoG);
+    joints.torso = torsoG;
+
+    // Waist
+    var waist = cyl(waistW * 0.55, hipW * 0.5, 0.22, torsoC, "torso", 16);
+    waist.position.y = 0.14;
+    torsoG.add(waist);
+    torsoMesh = waist;
+
+    // Chest (wider upper body)
+    var chest = cyl(chestW * 0.48, waistW * 0.55, 0.38, torsoC, "chest", 16);
+    chest.position.y = 0.42;
+    torsoG.add(chest);
+    // Soft front plate so torso color reads clearly
+    var plate = box(chestW * 0.9, 0.36, 0.18, torsoC, "chest");
+    plate.position.set(0, 0.42, 0.12);
+    torsoG.add(plate);
+
+    // Shoulders bar
+    var shY = 0.62;
+    var shL = sphere(0.10, torsoC, "shoulderL", 14);
+    shL.position.set(-shoulderW, shY, 0);
+    torsoG.add(shL);
+    var shR = sphere(0.10, torsoC, "shoulderR", 14);
+    shR.position.set(shoulderW, shY, 0);
+    torsoG.add(shR);
+
+    // Neck
+    neckMesh = cyl(0.07, 0.09, 0.14, headC, "neck", 12);
+    neckMesh.position.y = shY + 0.14;
+    torsoG.add(neckMesh);
+
+    // Head group (for slight idle nod)
+    var headG = new THREE.Group();
+    headG.position.y = shY + 0.28;
+    torsoG.add(headG);
+    joints.head = headG;
+
+    headMesh = sphere(headR, headC, "head", 24);
+    headG.add(headMesh);
+
+    // Face wraps around the sphere
+    faceGroup = buildWrappedSphereFace(gender, headR, 0);
+    headG.add(faceGroup);
+
+    // —— Left arm (jointed) ——
+    var armLG = new THREE.Group();
+    armLG.position.set(-shoulderW, shY, 0);
+    torsoG.add(armLG);
+    joints.armL = armLG;
+
+    var uAL = cyl(0.075, 0.065, armLen * 0.55, laC, "upperArmL", 12);
+    uAL.position.y = -armLen * 0.28;
+    // Slight natural hang angle
+    armLG.rotation.z = 0.12;
+    armLG.add(uAL);
+    leftArmMesh = uAL;
+
+    var elbowL = new THREE.Group();
+    elbowL.position.y = -armLen * 0.55;
+    armLG.add(elbowL);
+    joints.elbowL = elbowL;
+    elbowL.rotation.x = 0.15;
+
+    var lAL = cyl(0.06, 0.05, armLen * 0.5, laC, "lowerArmL", 12);
+    lAL.position.y = -armLen * 0.25;
+    elbowL.add(lAL);
+    var handL = sphere(0.065, laC, "handL", 12);
+    handL.position.y = -armLen * 0.52;
+    elbowL.add(handL);
+
+    // —— Right arm ——
+    var armRG = new THREE.Group();
+    armRG.position.set(shoulderW, shY, 0);
+    torsoG.add(armRG);
+    joints.armR = armRG;
+    armRG.rotation.z = -0.12;
+
+    var uAR = cyl(0.075, 0.065, armLen * 0.55, raC, "upperArmR", 12);
+    uAR.position.y = -armLen * 0.28;
+    armRG.add(uAR);
+    rightArmMesh = uAR;
+
+    var elbowR = new THREE.Group();
+    elbowR.position.y = -armLen * 0.55;
+    armRG.add(elbowR);
+    joints.elbowR = elbowR;
+    elbowR.rotation.x = 0.15;
+
+    var lAR = cyl(0.06, 0.05, armLen * 0.5, raC, "lowerArmR", 12);
+    lAR.position.y = -armLen * 0.25;
+    elbowR.add(lAR);
+    var handR = sphere(0.065, raC, "handR", 12);
+    handR.position.y = -armLen * 0.52;
+    elbowR.add(handR);
+
+    // —— Left leg ——
+    var legLG = new THREE.Group();
+    legLG.position.set(-hipW * 0.35, 0, 0);
+    hipsG.add(legLG);
+    joints.legL = legLG;
+
+    var thL = cyl(0.095, 0.08, legLen * 0.55, llC, "thighL", 12);
+    thL.position.y = -legLen * 0.28;
+    legLG.add(thL);
     leftLegMesh = thL;
 
-    // Right leg
-    var thR = cyl(0.09, 0.08, 0.42, rlC, "thighR");
-    thR.position.set(0.12, 0.02, 0);
-    avatarCharacterGroup.add(thR);
-    var shR2 = cyl(0.075, 0.065, 0.40, rlC, "shinR");
-    shR2.position.set(0.12, -0.38, 0);
-    avatarCharacterGroup.add(shR2);
-    var footR = box(0.12, 0.07, 0.22, rlC, "footR");
-    footR.position.set(0.12, -0.62, 0.04);
-    avatarCharacterGroup.add(footR);
+    var kneeL = new THREE.Group();
+    kneeL.position.y = -legLen * 0.55;
+    legLG.add(kneeL);
+    joints.kneeL = kneeL;
+
+    var shL2 = cyl(0.075, 0.06, legLen * 0.5, llC, "shinL", 12);
+    shL2.position.y = -legLen * 0.25;
+    kneeL.add(shL2);
+    var footL = box(0.11, 0.06, 0.20, llC, "footL");
+    footL.position.set(0, -legLen * 0.52, 0.04);
+    kneeL.add(footL);
+
+    // —— Right leg ——
+    var legRG = new THREE.Group();
+    legRG.position.set(hipW * 0.35, 0, 0);
+    hipsG.add(legRG);
+    joints.legR = legRG;
+
+    var thR = cyl(0.095, 0.08, legLen * 0.55, rlC, "thighR", 12);
+    thR.position.y = -legLen * 0.28;
+    legRG.add(thR);
     rightLegMesh = thR;
 
-    // Optional simple hair cap for girls only when hair style equipped — default still bald
+    var kneeR = new THREE.Group();
+    kneeR.position.y = -legLen * 0.55;
+    legRG.add(kneeR);
+    joints.kneeR = kneeR;
+
+    var shR2 = cyl(0.075, 0.06, legLen * 0.5, rlC, "shinR", 12);
+    shR2.position.y = -legLen * 0.25;
+    kneeR.add(shR2);
+    var footR = box(0.11, 0.06, 0.20, rlC, "footR");
+    footR.position.set(0, -legLen * 0.52, 0.04);
+    kneeR.add(footR);
+
+    // Store rest poses for idle animation
+    joints._rest = {
+        armLz: armLG.rotation.z,
+        armRz: armRG.rotation.z,
+        elbowLx: elbowL.rotation.x,
+        elbowRx: elbowR.rotation.x
+    };
+
+    // Hair if equipped
     try {
         var hs = colors.hairStyle || "";
         if (hs && hs !== "hair_boy_none" && hs !== "none" && hs !== "hair_girl_default") {
             if (typeof makeAvatarHair === "function") {
-                var hair = makeAvatarHair(colors.hair || "#4a3728", 1.42, 0.52, hs);
-                if (hair) avatarCharacterGroup.add(hair);
+                var hair = makeAvatarHair(colors.hair || "#4a3728", 0, headR * 2, hs);
+                if (hair) headG.add(hair);
             }
         }
     } catch (eH) {}
 }
+
+/** Idle + subtle life for customizer avatars (blocky + realistic) */
+window._avatarAnimClock = 0;
+window._avatarAnimLast = 0;
+function updateAvatarIdleAnimation() {
+    if (!avatarCharacterGroup) return;
+    var now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    if (!window._avatarAnimLast) window._avatarAnimLast = now;
+    var dt = Math.min(0.05, (now - window._avatarAnimLast) / 1000);
+    window._avatarAnimLast = now;
+    window._avatarAnimClock += dt;
+    var t = window._avatarAnimClock;
+
+    var style = (avatarCharacterGroup.userData && avatarCharacterGroup.userData.animStyle) || "blocky";
+    var joints = avatarCharacterGroup.userData && avatarCharacterGroup.userData.joints;
+
+    // Global gentle bob
+    var breath = Math.sin(t * 1.7) * 0.015;
+    var sway = Math.sin(t * 0.65) * 0.025;
+
+    if (style === "realistic" && joints) {
+        if (joints.root) {
+            joints.root.position.y = breath;
+            joints.root.rotation.y = sway * 0.3;
+        }
+        if (joints.torso) {
+            joints.torso.rotation.x = Math.sin(t * 1.7) * 0.02;
+            joints.torso.rotation.z = Math.sin(t * 0.9) * 0.015;
+        }
+        if (joints.head) {
+            joints.head.rotation.y = Math.sin(t * 0.5) * 0.06;
+            joints.head.rotation.x = Math.sin(t * 1.1) * 0.03;
+        }
+        var rest = joints._rest || {};
+        if (joints.armL) {
+            joints.armL.rotation.z = (rest.armLz || 0.12) + Math.sin(t * 1.3) * 0.06;
+            joints.armL.rotation.x = Math.sin(t * 1.1 + 0.4) * 0.05;
+        }
+        if (joints.armR) {
+            joints.armR.rotation.z = (rest.armRz || -0.12) - Math.sin(t * 1.3 + 0.5) * 0.06;
+            joints.armR.rotation.x = Math.sin(t * 1.1) * 0.05;
+        }
+        if (joints.elbowL) joints.elbowL.rotation.x = (rest.elbowLx || 0.15) + Math.sin(t * 1.4) * 0.08;
+        if (joints.elbowR) joints.elbowR.rotation.x = (rest.elbowRx || 0.15) + Math.sin(t * 1.4 + 0.6) * 0.08;
+        if (joints.legL) joints.legL.rotation.x = Math.sin(t * 0.8) * 0.03;
+        if (joints.legR) joints.legR.rotation.x = Math.sin(t * 0.8 + Math.PI) * 0.03;
+        if (joints.hips) joints.hips.rotation.y = Math.sin(t * 0.55) * 0.02;
+    } else {
+        // Blocky idle: bob + slight limb sway using primary meshes
+        avatarCharacterGroup.position.y = breath;
+        if (!window._avatarSpinEnabled) {
+            avatarCharacterGroup.rotation.y += Math.sin(t * 0.4) * 0.0008;
+        }
+        if (leftArmMesh) {
+            leftArmMesh.rotation.x = Math.sin(t * 1.25) * 0.08;
+            leftArmMesh.rotation.z = Math.sin(t * 0.9) * 0.04;
+        }
+        if (rightArmMesh) {
+            rightArmMesh.rotation.x = Math.sin(t * 1.25 + Math.PI) * 0.08;
+            rightArmMesh.rotation.z = -Math.sin(t * 0.9) * 0.04;
+        }
+        if (leftLegMesh) leftLegMesh.rotation.x = Math.sin(t * 0.85) * 0.04;
+        if (rightLegMesh) rightLegMesh.rotation.x = Math.sin(t * 0.85 + Math.PI) * 0.04;
+        if (torsoMesh) {
+            torsoMesh.scale.y = 1 + Math.sin(t * 1.7) * 0.015;
+        }
+        if (headMesh) {
+            headMesh.rotation.y = Math.sin(t * 0.55) * 0.05;
+        }
+    }
+}
+window.updateAvatarIdleAnimation = updateAvatarIdleAnimation;
+
 
 function rebuildAvatarCustomizerMeshes() {
     if (!avatarCharacterGroup || typeof THREE === "undefined") return false;
@@ -4117,6 +4406,9 @@ function init3DAvatar() {
         if (avatarCharacterGroup && window._avatarSpinEnabled) {
             avatarCharacterGroup.rotation.y += 0.008;
         }
+        try {
+            if (typeof updateAvatarIdleAnimation === "function") updateAvatarIdleAnimation();
+        } catch (eAnim) {}
         if (renderer && scene && camera) renderer.render(scene, camera);
     }
     animate();
@@ -10882,6 +11174,109 @@ function getNormAvatarColors() {
 }
 
 /** Same proportions as the main avatar customizer */
+
+/** Bind named limb meshes on a game avatar for animation */
+function bindGameAvatarLimbs(mesh) {
+    if (!mesh) return null;
+    mesh.userData = mesh.userData || {};
+    if (mesh.userData.limbs && mesh.userData.limbs.leftArm) return mesh.userData.limbs;
+    var limbs = {
+        head: mesh.getObjectByName("head") || null,
+        torso: mesh.getObjectByName("torso") || null,
+        leftArm: mesh.getObjectByName("leftArm") || null,
+        rightArm: mesh.getObjectByName("rightArm") || null,
+        leftLeg: mesh.getObjectByName("leftLeg") || null,
+        rightLeg: mesh.getObjectByName("rightLeg") || null
+    };
+    mesh.userData.limbs = limbs;
+    mesh.userData.animPhase = mesh.userData.animPhase || (Math.random() * Math.PI * 2);
+    mesh.userData._lastAnimPos = mesh.userData._lastAnimPos || null;
+    mesh.userData._animMoving = false;
+    return limbs;
+}
+
+/**
+ * Animate a game avatar every frame.
+ * @param {THREE.Object3D} mesh - avatar group from makeNormAvatar
+ * @param {boolean} isMoving - walking/running
+ * @param {number} dt - delta seconds (optional, ~1/60)
+ * @param {object} opts - { jump: bool }
+ */
+function animateGameAvatar(mesh, isMoving, dt, opts) {
+    if (!mesh) return;
+    dt = (typeof dt === "number" && dt > 0 && dt < 0.1) ? dt : 0.016;
+    opts = opts || {};
+    var L = bindGameAvatarLimbs(mesh);
+    if (!L || (!L.leftArm && !L.leftLeg)) return;
+
+    var speed = isMoving ? 9.5 : 1.8;
+    mesh.userData.animPhase = (mesh.userData.animPhase || 0) + dt * speed;
+    var t = mesh.userData.animPhase;
+    mesh.userData._animMoving = !!isMoving;
+
+    // Jump pose
+    if (opts.jump || opts.inAir) {
+        if (L.leftArm) { L.leftArm.rotation.x = -0.55; L.leftArm.rotation.z = 0.15; }
+        if (L.rightArm) { L.rightArm.rotation.x = -0.55; L.rightArm.rotation.z = -0.15; }
+        if (L.leftLeg) { L.leftLeg.rotation.x = -0.25; }
+        if (L.rightLeg) { L.rightLeg.rotation.x = 0.15; }
+        if (L.torso) { L.torso.rotation.x = 0.08; }
+        return;
+    }
+
+    if (isMoving) {
+        var swing = Math.sin(t) * 0.65;
+        var swingOpp = -swing;
+        if (L.leftArm) {
+            L.leftArm.rotation.x = swing;
+            L.leftArm.rotation.z = 0.05;
+        }
+        if (L.rightArm) {
+            L.rightArm.rotation.x = swingOpp;
+            L.rightArm.rotation.z = -0.05;
+        }
+        if (L.leftLeg) {
+            L.leftLeg.rotation.x = swingOpp * 0.95;
+        }
+        if (L.rightLeg) {
+            L.rightLeg.rotation.x = swing * 0.95;
+        }
+        if (L.torso) {
+            L.torso.rotation.y = Math.sin(t) * 0.06;
+            L.torso.rotation.x = Math.abs(Math.sin(t)) * 0.03;
+            L.torso.scale.y = 1;
+        }
+        if (L.head) {
+            L.head.rotation.y = Math.sin(t * 0.5) * 0.04;
+            L.head.rotation.x = 0;
+        }
+    } else {
+        // Idle — same spirit as customizer
+        var breath = Math.sin(t) * 0.018;
+        if (L.leftArm) {
+            L.leftArm.rotation.x = Math.sin(t * 0.75) * 0.07;
+            L.leftArm.rotation.z = 0.04 + Math.sin(t * 0.5) * 0.02;
+        }
+        if (L.rightArm) {
+            L.rightArm.rotation.x = Math.sin(t * 0.75 + 1.2) * 0.07;
+            L.rightArm.rotation.z = -0.04 - Math.sin(t * 0.5) * 0.02;
+        }
+        if (L.leftLeg) L.leftLeg.rotation.x = 0;
+        if (L.rightLeg) L.rightLeg.rotation.x = 0;
+        if (L.torso) {
+            L.torso.rotation.y = Math.sin(t * 0.4) * 0.02;
+            L.torso.rotation.x = breath;
+            L.torso.scale.y = 1 + Math.sin(t) * 0.012;
+        }
+        if (L.head) {
+            L.head.rotation.y = Math.sin(t * 0.45) * 0.05;
+            L.head.rotation.x = Math.sin(t * 0.7) * 0.025;
+        }
+    }
+}
+window.bindGameAvatarLimbs = bindGameAvatarLimbs;
+window.animateGameAvatar = animateGameAvatar;
+
 function makeNormAvatar(colors) {
     colors = colors || getNormAvatarColors();
     var g = new THREE.Group();
@@ -10969,6 +11364,7 @@ function makeNormAvatar(colors) {
     // Mark foot height for placement helpers
     g.userData.footOffset = 0; // feet already at y=0 in local space
     g.userData.gender = gender;
+    try { bindGameAvatarLimbs(g); } catch (eB) {}
     return g;
 }
 
@@ -13387,6 +13783,15 @@ function startNormGameWorld(def) {
             _normSession.onGround = false;
         }
 
+        // —— Avatar walk / idle animation (local player) ——
+        try {
+            var movingNow = Math.abs(throttle) > 0.05;
+            var inAir = !(_normSession && _normSession.onGround);
+            if (typeof animateGameAvatar === "function") {
+                animateGameAvatar(_normLocalMesh, movingNow && !inAir, 0.016, { inAir: inAir, jump: inAir });
+            }
+        } catch (eAnimL) {}
+
         // --- Camera LOCKED behind character, slightly above (orbit off) ---
         var target = _normLocalMesh.position;
         var dist = _normSession.camDist || 5.0;
@@ -13639,6 +14044,7 @@ function startNormPresence(def) {
                         if (_normScene && typeof THREE !== "undefined") {
                             if (!_normRemoteMeshes[pid]) {
                                 var mesh = makeNormAvatarForCurrentGame(row.avatar || null);
+                                try { if (typeof bindGameAvatarLimbs === 'function') bindGameAvatarLimbs(mesh); } catch (eBL) {}
                                 placeNormAvatarOnGround(
                                     mesh,
                                     (row.pos && typeof row.pos.x === "number") ? row.pos.x : 2,
@@ -13689,11 +14095,22 @@ function startNormPresence(def) {
             var mesh = _normRemoteMeshes[pid];
             if (!mesh || !mesh.userData) return;
             var t = mesh.userData.targetPos;
+            var prev = mesh.userData._lastAnimPos;
+            var moving = false;
             if (t) {
                 mesh.position.x += (t.x - mesh.position.x) * 0.28;
                 mesh.position.y += (t.y - mesh.position.y) * 0.28;
                 mesh.position.z += (t.z - mesh.position.z) * 0.28;
             }
+            // Detect movement from position change (for walk cycle)
+            try {
+                var cx = mesh.position.x, cz = mesh.position.z;
+                if (prev) {
+                    var dx = cx - prev.x, dz = cz - prev.z;
+                    moving = (dx * dx + dz * dz) > 0.00008;
+                }
+                mesh.userData._lastAnimPos = { x: cx, z: cz };
+            } catch (eM) {}
             if (typeof mesh.userData.targetYaw === "number") {
                 var cur = mesh.rotation.y;
                 var goal = mesh.userData.targetYaw;
@@ -13702,6 +14119,11 @@ function startNormPresence(def) {
                 while (diff < -Math.PI) diff += Math.PI * 2;
                 mesh.rotation.y = cur + diff * 0.28;
             }
+            try {
+                if (typeof animateGameAvatar === "function") {
+                    animateGameAvatar(mesh, moving, 0.016, {});
+                }
+            } catch (eRA) {}
         });
     };
 
