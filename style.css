@@ -4821,3 +4821,12 @@ footer {
 .avatar-style-test-btn.is-realistic:hover {
     background: linear-gradient(180deg, #bfdbfe 0%, #93c5fd 100%);
 }
+
+.avatar-style-test-btn.is-mannequin {
+    color: #1e293b;
+    background: linear-gradient(180deg, #c4c4c4 0%, #9a9a9a 100%);
+    border-color: rgba(0,0,0,0.2);
+}
+.avatar-style-test-btn.is-mannequin:hover {
+    background: linear-gradient(180deg, #d4d4d4 0%, #b0b0b0 100%);
+}

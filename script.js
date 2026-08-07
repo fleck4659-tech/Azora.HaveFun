@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v64.4 realistic face wrap + girl hair on gender change","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v64.5 test gray clay woman mannequin","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -3807,27 +3807,32 @@ window.applyGenderVisualsToCustomizer = applyGenderVisualsToCustomizer;
 window._avatarRenderStyle = (function () {
     try {
         var s = sessionStorage.getItem("azoraAvatarRenderStyle");
-        if (s === "realistic" || s === "blocky") return s;
+        if (s === "realistic" || s === "blocky" || s === "mannequin") return s;
     } catch (e) {}
     return "blocky";
 })();
 
 function getAvatarRenderStyle() {
-    return window._avatarRenderStyle === "realistic" ? "realistic" : "blocky";
+    var s = window._avatarRenderStyle;
+    if (s === "realistic" || s === "mannequin") return s;
+    return "blocky";
 }
 
 function setAvatarRenderStyle(style) {
-    style = style === "realistic" ? "realistic" : "blocky";
+    if (style !== "realistic" && style !== "mannequin") style = "blocky";
     window._avatarRenderStyle = style;
     try { sessionStorage.setItem("azoraAvatarRenderStyle", style); } catch (e) {}
     var btn = document.getElementById("avatarStyleTestBtn");
     if (btn) {
+        btn.classList.remove("is-realistic", "is-mannequin");
         if (style === "realistic") {
-            btn.textContent = "Switch to Blocky (Test)";
+            btn.textContent = "Switch to Mannequin (Test)";
             btn.classList.add("is-realistic");
+        } else if (style === "mannequin") {
+            btn.textContent = "Switch to Blocky (Test)";
+            btn.classList.add("is-mannequin");
         } else {
             btn.textContent = "Switch to Realistic (Test)";
-            btn.classList.remove("is-realistic");
         }
     }
 }
@@ -4386,6 +4391,192 @@ function updateAvatarIdleAnimation() {
 window.updateAvatarIdleAnimation = updateAvatarIdleAnimation;
 
 
+
+/** Matte non-reflective clay material (test mannequin) */
+function azoraClayMaterial(hex) {
+    hex = hex || 0x8b8b8b;
+    try {
+        if (typeof THREE.MeshStandardMaterial === "function") {
+            return new THREE.MeshStandardMaterial({
+                color: hex,
+                roughness: 1.0,
+                metalness: 0.0,
+                flatShading: false
+            });
+        }
+    } catch (e) {}
+    return new THREE.MeshLambertMaterial({ color: hex });
+}
+
+/**
+ * TEST ONLY — full-body gray clay woman mannequin.
+ * Organic human proportions, matte clay, modest feminine form.
+ * Single solid gray — no skin tone, no face texture. Remove if not wanted.
+ */
+function buildMannequinWomanMeshes() {
+    if (!avatarCharacterGroup || typeof THREE === "undefined") return;
+
+    var CLAY = 0x8b8b8b;
+    function mat() { return azoraClayMaterial(CLAY); }
+    function sphere(r, seg) {
+        return new THREE.Mesh(new THREE.SphereGeometry(r, seg || 20, seg || 16), mat());
+    }
+    function cyl(rt, rb, h, seg) {
+        return new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg || 14), mat());
+    }
+    function ellip(rx, ry, rz) {
+        var m = sphere(1, 22);
+        m.scale.set(rx, ry, rz);
+        return m;
+    }
+
+    var joints = {};
+    avatarCharacterGroup.userData = avatarCharacterGroup.userData || {};
+    avatarCharacterGroup.userData.animStyle = "realistic";
+    avatarCharacterGroup.userData.joints = joints;
+    avatarCharacterGroup.userData.isMannequin = true;
+
+    var root = new THREE.Group();
+    root.name = "animRoot";
+    avatarCharacterGroup.add(root);
+    joints.root = root;
+
+    // —— Hips / pelvis (wider feminine) ——
+    var hipsG = new THREE.Group();
+    hipsG.position.y = 0.58;
+    root.add(hipsG);
+    joints.hips = hipsG;
+    var pelvis = ellip(0.20, 0.12, 0.14);
+    pelvis.name = "hips";
+    hipsG.add(pelvis);
+
+    // —— Torso group ——
+    var torsoG = new THREE.Group();
+    torsoG.position.y = 0.06;
+    hipsG.add(torsoG);
+    joints.torso = torsoG;
+
+    // Soft waist (narrower)
+    var waist = cyl(0.12, 0.15, 0.20, 16);
+    waist.position.y = 0.12;
+    waist.name = "torso";
+    torsoG.add(waist);
+    torsoMesh = waist;
+
+    // Upper torso / ribcage with modest chest volume (unified shape, not exaggerated)
+    var ribcage = ellip(0.16, 0.18, 0.12);
+    ribcage.position.y = 0.38;
+    ribcage.name = "chest";
+    torsoG.add(ribcage);
+    // Subtle forward chest volume for modest feminine form (artist mannequin style)
+    var chestSoft = ellip(0.13, 0.08, 0.06);
+    chestSoft.position.set(0, 0.40, 0.08);
+    chestSoft.name = "chest";
+    torsoG.add(chestSoft);
+
+    // Shoulders
+    var shY = 0.58;
+    var shL = sphere(0.085, 14);
+    shL.position.set(-0.28, shY, 0);
+    shL.name = "shoulderL";
+    torsoG.add(shL);
+    var shR = sphere(0.085, 14);
+    shR.position.set(0.28, shY, 0);
+    shR.name = "shoulderR";
+    torsoG.add(shR);
+
+    // Neck
+    neckMesh = cyl(0.045, 0.055, 0.12, 12);
+    neckMesh.position.y = shY + 0.12;
+    neckMesh.name = "neck";
+    torsoG.add(neckMesh);
+
+    // Head (slightly oval, no face decal — pure shape study)
+    var headG = new THREE.Group();
+    headG.position.y = shY + 0.26;
+    torsoG.add(headG);
+    joints.head = headG;
+    headMesh = ellip(0.11, 0.135, 0.12);
+    headMesh.name = "head";
+    headG.add(headMesh);
+    faceGroup = null; // no face on clay mannequin
+
+    // —— Arms ——
+    function buildArm(side) {
+        var sign = side === "L" ? -1 : 1;
+        var armG = new THREE.Group();
+        armG.position.set(sign * 0.28, shY, 0);
+        armG.rotation.z = sign * 0.14;
+        torsoG.add(armG);
+        joints[side === "L" ? "armL" : "armR"] = armG;
+
+        var upper = cyl(0.055, 0.048, 0.28, 12);
+        upper.position.y = -0.15;
+        upper.name = side === "L" ? "upperArmL" : "upperArmR";
+        armG.add(upper);
+        if (side === "L") leftArmMesh = upper; else rightArmMesh = upper;
+
+        var elbow = new THREE.Group();
+        elbow.position.y = -0.30;
+        elbow.rotation.x = 0.12;
+        armG.add(elbow);
+        joints[side === "L" ? "elbowL" : "elbowR"] = elbow;
+
+        var lower = cyl(0.045, 0.038, 0.26, 12);
+        lower.position.y = -0.14;
+        lower.name = side === "L" ? "lowerArmL" : "lowerArmR";
+        elbow.add(lower);
+
+        var hand = sphere(0.05, 12);
+        hand.position.y = -0.30;
+        hand.name = side === "L" ? "handL" : "handR";
+        elbow.add(hand);
+    }
+    buildArm("L");
+    buildArm("R");
+
+    // —— Legs ——
+    function buildLeg(side) {
+        var sign = side === "L" ? -1 : 1;
+        var legG = new THREE.Group();
+        legG.position.set(sign * 0.11, 0, 0);
+        hipsG.add(legG);
+        joints[side === "L" ? "legL" : "legR"] = legG;
+
+        var thigh = cyl(0.08, 0.065, 0.32, 12);
+        thigh.position.y = -0.16;
+        thigh.name = side === "L" ? "thighL" : "thighR";
+        legG.add(thigh);
+        if (side === "L") leftLegMesh = thigh; else rightLegMesh = thigh;
+
+        var knee = new THREE.Group();
+        knee.position.y = -0.34;
+        legG.add(knee);
+        joints[side === "L" ? "kneeL" : "kneeR"] = knee;
+
+        var shin = cyl(0.058, 0.045, 0.30, 12);
+        shin.position.y = -0.16;
+        shin.name = side === "L" ? "shinL" : "shinR";
+        knee.add(shin);
+
+        var foot = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.05, 0.18), mat());
+        foot.position.set(0, -0.34, 0.04);
+        foot.name = side === "L" ? "footL" : "footR";
+        knee.add(foot);
+    }
+    buildLeg("L");
+    buildLeg("R");
+
+    joints._rest = {
+        armLz: joints.armL ? joints.armL.rotation.z : 0.14,
+        armRz: joints.armR ? joints.armR.rotation.z : -0.14,
+        elbowLx: 0.12,
+        elbowRx: 0.12
+    };
+}
+window.buildMannequinWomanMeshes = buildMannequinWomanMeshes;
+window.azoraClayMaterial = azoraClayMaterial;
+
 function rebuildAvatarCustomizerMeshes() {
     if (!avatarCharacterGroup || typeof THREE === "undefined") return false;
     var gender = "boy";
@@ -4408,13 +4599,19 @@ function rebuildAvatarCustomizerMeshes() {
     } catch (e3) {}
 
     clearAvatarCharacterMeshes();
-    if (getAvatarRenderStyle() === "realistic") {
+    var style = getAvatarRenderStyle();
+    if (style === "mannequin") {
+        buildMannequinWomanMeshes();
+    } else if (style === "realistic") {
         buildRealisticHumanoidMeshes(gender, colors);
     } else {
         buildBlockyAvatarMeshes(gender, colors);
     }
     try {
-        if (typeof applyColorsToMeshes === "function") applyColorsToMeshes(colors);
+        // Mannequin stays solid gray clay — skip player colors
+        if (style !== "mannequin" && typeof applyColorsToMeshes === "function") {
+            applyColorsToMeshes(colors);
+        }
     } catch (e4) {}
     try {
         if (renderer && scene && camera) renderer.render(scene, camera);
@@ -4423,7 +4620,8 @@ function rebuildAvatarCustomizerMeshes() {
 }
 
 function toggleAvatarStyleTest() {
-    var next = getAvatarRenderStyle() === "realistic" ? "blocky" : "realistic";
+    var cur = getAvatarRenderStyle();
+    var next = cur === "blocky" ? "realistic" : (cur === "realistic" ? "mannequin" : "blocky");
     setAvatarRenderStyle(next);
     if (!avatarCharacterGroup) {
         try { if (typeof init3DAvatar === "function") init3DAvatar(); } catch (e) {}
@@ -4474,7 +4672,10 @@ function init3DAvatar() {
         var _g0 = (typeof getAvatarGender === "function") ? getAvatarGender() : "boy";
         var _c0 = {};
         try { if (typeof readAvatarColorInputs === "function") _c0 = readAvatarColorInputs() || {}; } catch (eC) {}
-        if (getAvatarRenderStyle() === "realistic") {
+        var _st = getAvatarRenderStyle();
+        if (_st === "mannequin") {
+            buildMannequinWomanMeshes();
+        } else if (_st === "realistic") {
             buildRealisticHumanoidMeshes(_g0, _c0);
         } else {
             buildBlockyAvatarMeshes(_g0, _c0);
@@ -4743,6 +4944,11 @@ function setAvatarColorInputs(avatar) {
 /** Apply validated colors to live 3D meshes (returns true if applied) */
 function applyColorsToMeshes(validated) {
     if (!validated) return false;
+    // Test mannequin is always solid gray clay
+    try {
+        if (typeof getAvatarRenderStyle === "function" && getAvatarRenderStyle() === "mannequin") return true;
+        if (avatarCharacterGroup && avatarCharacterGroup.userData && avatarCharacterGroup.userData.isMannequin) return true;
+    } catch (eM) {}
     if (!headMesh || !torsoMesh || !leftArmMesh || !rightArmMesh || !leftLegMesh || !rightLegMesh) {
         return false;
     }
