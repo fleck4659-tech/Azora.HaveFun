@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v63.5 profile avatar per-user not mine","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v63.7 default girl body shape + bald defaults","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -80,7 +80,10 @@ function defaultAvatarForGender(gender) {
             leftLeg: "#c084fc",
             rightLeg: "#c084fc",
             hair: "#4a3728",
-            face: "female"
+            hairStyle: "hair_boy_none",
+            face: "female",
+            faceFile: "female_smile.png",
+            bodyShape: "girl_default"
         };
     }
     return {
@@ -92,9 +95,122 @@ function defaultAvatarForGender(gender) {
         leftLeg: "#00ebd4",
         rightLeg: "#00ebd4",
         hair: "#3b2f2f",
-        face: "male"
+        hairStyle: "hair_boy_none",
+        face: "male",
+        faceFile: "Smile.png",
+        bodyShape: "boy_default"
     };
 }
+
+/** True when a girl still uses the platform default body (no custom scales / shop hair). */
+function isDefaultGirlBody(avatar, gender) {
+    gender = gender || (avatar && avatar.gender) || "boy";
+    if (gender !== "girl" && gender !== "female") return false;
+    avatar = avatar || {};
+    // Custom limb scales → not default body
+    try {
+        var sc = avatar.scales;
+        if (sc && typeof sc === "object") {
+            var keys = ["head", "torso", "arms", "legs"];
+            for (var i = 0; i < keys.length; i++) {
+                var v = Number(sc[keys[i]]);
+                if (!isNaN(v) && Math.abs(v - 1) > 0.04) return false;
+            }
+        }
+    } catch (e) {}
+    // Equipped non-default hair from marketplace → treat as customized look
+    var hs = avatar.hairStyle || "";
+    if (hs && hs !== "hair_boy_none" && hs !== "none" && hs !== "hair_girl_default" && hs !== "") {
+        // shop hair styles like hair_girl_bob still get slim body, but if they heavily customized we keep body
+        // Only force classic "fatter" path off — default girl body is the new slim shape unless scales differ
+    }
+    // Explicit bodyShape flag
+    if (avatar.bodyShape === "custom") return false;
+    if (avatar.bodyShape === "girl_default") return true;
+    // Color-only changes still count as default body shape
+    return true;
+}
+window.isDefaultGirlBody = isDefaultGirlBody;
+
+/** Apply boy vs girl default limb proportions. Girls: slim hourglass (NOT wider/bulkier). */
+function applyDefaultBodyShapeToMeshes(gender, avatar, meshes) {
+    meshes = meshes || {};
+    var head = meshes.head || (typeof headMesh !== "undefined" ? headMesh : null);
+    var torso = meshes.torso || (typeof torsoMesh !== "undefined" ? torsoMesh : null);
+    var la = meshes.leftArm || (typeof leftArmMesh !== "undefined" ? leftArmMesh : null);
+    var ra = meshes.rightArm || (typeof rightArmMesh !== "undefined" ? rightArmMesh : null);
+    var ll = meshes.leftLeg || (typeof leftLegMesh !== "undefined" ? leftLegMesh : null);
+    var rl = meshes.rightLeg || (typeof rightLegMesh !== "undefined" ? rightLegMesh : null);
+    var group = meshes.group || (typeof avatarCharacterGroup !== "undefined" ? avatarCharacterGroup : null);
+
+    gender = (gender === "girl" || gender === "female") ? "girl" : "boy";
+    var useGirl = gender === "girl" && isDefaultGirlBody(avatar, gender);
+
+    // Remove previous flare if any
+    try {
+        if (group) {
+            var old = group.getObjectByName("girlHipFlare");
+            if (old) group.remove(old);
+        }
+    } catch (eR) {}
+
+    if (useGirl) {
+        // Slim feminine blocky silhouette — narrower shoulders, slightly taller torso, thinner limbs
+        if (head) head.scale.set(0.92, 0.92, 0.92);
+        if (torso) {
+            torso.scale.set(0.78, 1.08, 0.92); // narrower width, not wider
+        }
+        if (la) {
+            la.scale.set(0.78, 0.96, 0.78);
+            if (la.position) la.position.x = -0.50;
+        }
+        if (ra) {
+            ra.scale.set(0.78, 0.96, 0.78);
+            if (ra.position) ra.position.x = 0.50;
+        }
+        if (ll) {
+            ll.scale.set(0.78, 1.04, 0.78);
+            if (ll.position) ll.position.x = -0.16;
+        }
+        if (rl) {
+            rl.scale.set(0.78, 1.04, 0.78);
+            if (rl.position) rl.position.x = 0.16;
+        }
+        // Soft hip flare (dress hem) — reads as girl shape without bulk
+        try {
+            if (group && typeof THREE !== "undefined") {
+                var flareMat = (typeof azoraGlossMaterial === "function")
+                    ? azoraGlossMaterial((avatar && avatar.torso) || "#ff6eb4")
+                    : new THREE.MeshLambertMaterial({ color: (avatar && avatar.torso) || "#ff6eb4" });
+                var flare = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.28, 0.50), flareMat);
+                flare.name = "girlHipFlare";
+                flare.position.set(0, -0.05, 0);
+                group.add(flare);
+            }
+        } catch (eF) {}
+    } else {
+        // Boy default (or customized girl that keeps neutral mesh scale)
+        if (head) head.scale.set(1, 1, 1);
+        if (torso) torso.scale.set(1, 1, 1);
+        if (la) {
+            la.scale.set(1, 1, 1);
+            if (la.position) la.position.x = -0.62;
+        }
+        if (ra) {
+            ra.scale.set(1, 1, 1);
+            if (ra.position) ra.position.x = 0.62;
+        }
+        if (ll) {
+            ll.scale.set(1, 1, 1);
+            if (ll.position) ll.position.x = -0.22;
+        }
+        if (rl) {
+            rl.scale.set(1, 1, 1);
+            if (rl.position) rl.position.x = 0.22;
+        }
+    }
+}
+window.applyDefaultBodyShapeToMeshes = applyDefaultBodyShapeToMeshes;
 
 function getAvatarGender() {
     try {
@@ -3601,27 +3717,34 @@ function applyGenderVisualsToCustomizer(gender, colors) {
     gender = gender || getAvatarGender();
     colors = colors || {};
     removeAvatarHair(avatarCharacterGroup);
-    // Prefer equipped marketplace hair, else default style for gender
+    // Prefer equipped marketplace hair; otherwise BOTH genders are bald by default
     var styleId = null;
     try {
         if (typeof getEquippedHairStyle === "function") styleId = getEquippedHairStyle();
     } catch (e) {}
     if (!styleId) {
-        if (gender === "girl" || gender === "female") styleId = "hair_girl_default";
-        else styleId = "hair_boy_none";
+        styleId = (colors && colors.hairStyle) || "hair_boy_none";
     }
+    // Never auto-add girl hair on default — both genders bald until they buy/equip hair
+    if (styleId === "hair_girl_default") styleId = "hair_boy_none";
     if (styleId && styleId !== "hair_boy_none" && styleId !== "none") {
         var hair = makeAvatarHair(colors.hair || "#4a3728", headMesh ? headMesh.position.y : 1.12, 0.65, styleId);
         if (hair) avatarCharacterGroup.add(hair);
     }
-    if (gender === "girl" || gender === "female") {
-        // Slightly wider hips / dress silhouette on torso
-        if (torsoMesh) {
-            torsoMesh.scale.set(1.05, 1.05, 1.08);
+    // Default girl body = slim distinct shape (not wider/bulkier). Customized scales handled elsewhere.
+    try {
+        var av = colors;
+        try {
+            var acc = JSON.parse(localStorage.getItem("azoraAccount") || "null");
+            if (acc && acc.avatar) av = Object.assign({}, acc.avatar, colors || {});
+        } catch (eA) {}
+        if (typeof applyDefaultBodyShapeToMeshes === "function") {
+            applyDefaultBodyShapeToMeshes(gender, av, {
+                head: headMesh, torso: torsoMesh, leftArm: leftArmMesh, rightArm: rightArmMesh,
+                leftLeg: leftLegMesh, rightLeg: rightLegMesh, group: avatarCharacterGroup
+            });
         }
-    } else {
-        if (torsoMesh) torsoMesh.scale.set(1, 1, 1);
-    }
+    } catch (eBody) {}
     // Rebuild face decal for gender
     try {
         if (faceGroup && avatarCharacterGroup) {
@@ -4249,7 +4372,7 @@ function saveAvatar() {
         if (typeof getEquippedHairStyle === "function") equippedHair = getEquippedHairStyle();
     } catch (eH) {}
     if (!equippedHair) {
-        equippedHair = (account.avatar && account.avatar.hairStyle) || (genderNow === "girl" ? "hair_girl_default" : "hair_boy_none");
+        equippedHair = (account.avatar && account.avatar.hairStyle) || "hair_boy_none";
     }
     var scalesNow = { head: 1, torso: 1, arms: 1, legs: 1 };
     try { if (typeof readAvatarScaleInputs === "function") scalesNow = readAvatarScaleInputs(); } catch (eSc) {}
@@ -4263,6 +4386,18 @@ function saveAvatar() {
         hair: (account.avatar && account.avatar.hair) || (genderNow === "girl" ? "#4a3728" : "#3b2f2f"),
         hairStyle: equippedHair,
         gender: genderNow,
+        face: (function () {
+            try {
+                if (typeof getEquippedFaceStyle === "function") return getEquippedFaceStyle();
+            } catch (e) {}
+            return genderNow === "girl" ? "face_female_smile" : "face_smile";
+        })(),
+        faceFile: (function () {
+            try {
+                if (typeof getEquippedFaceFile === "function") return getEquippedFaceFile();
+            } catch (e) {}
+            return genderNow === "girl" ? "female_smile.png" : "Smile.png";
+        })(),
         face: genderNow === "girl" ? "female" : "male",
         scales: scalesNow
     };
@@ -10506,16 +10641,40 @@ function makeNormAvatar(colors) {
     g.add(rightArm);
     g.add(head);
 
-    // Girl: slightly dress-like torso + blocky hair
+    // Girl default: slim distinct proportions (narrower, not bulkier). Bald unless hair equipped.
     var gender = colors.gender || "boy";
-    if (gender === "girl" || gender === "female") {
-        torso.scale.set(1.08, 1.05, 1.1);
+    var isGirl = (gender === "girl" || gender === "female");
+    var girlDefault = isGirl && (typeof isDefaultGirlBody !== "function" || isDefaultGirlBody(colors, gender));
+    if (girlDefault) {
+        head.scale.set(0.92, 0.92, 0.92);
+        torso.scale.set(0.78, 1.08, 0.92);
+        leftArm.scale.set(0.78, 0.96, 0.78);
+        rightArm.scale.set(0.78, 0.96, 0.78);
+        leftLeg.scale.set(0.78, 1.04, 0.78);
+        rightLeg.scale.set(0.78, 1.04, 0.78);
+        leftArm.position.x = -0.50;
+        rightArm.position.x = 0.50;
+        leftLeg.position.x = -0.16;
+        rightLeg.position.x = 0.16;
         try {
-            var hairY = legH + torsoH + headS / 2;
-            var hair = makeAvatarHair(colors.hair || "#4a3728", hairY, headS);
-            if (hair) g.add(hair);
-        } catch (eH) {}
+            var flareMat = (typeof azoraGlossMaterial === "function")
+                ? azoraGlossMaterial(colors.torso || "#ff6eb4")
+                : new THREE.MeshLambertMaterial({ color: colors.torso || "#ff6eb4" });
+            var flare = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.28, 0.50), flareMat);
+            flare.name = "girlHipFlare";
+            flare.position.set(0, legH + 0.12, 0);
+            g.add(flare);
+        } catch (eFl) {}
     }
+    // Hair only if explicitly equipped (not default) — both genders bald on default
+    try {
+        var hs = colors.hairStyle || "";
+        if (hs && hs !== "hair_boy_none" && hs !== "none" && hs !== "hair_girl_default") {
+            var hairY = legH + torsoH + headS / 2;
+            var hair = makeAvatarHair(colors.hair || "#4a3728", hairY, headS, hs);
+            if (hair) g.add(hair);
+        }
+    } catch (eH) {}
 
     // Face decal (boy Smile.png / girl female_smile.png)
     attachNormFaceDecal(g, head, gender);
@@ -18691,8 +18850,9 @@ function getAvatarDataForUsername(username) {
             leftLeg: src.leftLeg || base.leftLeg,
             rightLeg: src.rightLeg || base.rightLeg,
             hair: src.hair || base.hair,
-            hairStyle: src.hairStyle || (g === "girl" ? "hair_girl_default" : "hair_boy_none"),
+            hairStyle: src.hairStyle || "hair_boy_none",
             face: src.face || base.face || "default",
+            faceFile: src.faceFile || null,
             scales: src.scales ? {
                 head: src.scales.head || 1,
                 torso: src.scales.torso || 1,
@@ -18717,7 +18877,12 @@ function getAvatarDataForUsername(username) {
         var pub = JSON.parse(localStorage.getItem("azoraPublicAvatars") || "{}");
         var hit = pub[username] || pub[username.toLowerCase()];
         if (hit && typeof hit === "object") {
-            return cloneAvatar(hit, hit.gender);
+            // Ignore cache entries that were wrongly tagged with the viewer's data for another user
+            var ownerTag = hit._forUser || hit.username || null;
+            if (ownerTag && String(ownerTag).toLowerCase() !== username.toLowerCase()) {
+                hit = null;
+            }
+            if (hit) return cloneAvatar(hit, hit.gender);
         }
     } catch (ePub) {}
 
@@ -18762,11 +18927,14 @@ function publishPublicAvatar(username, avatar) {
     try {
         var pub = JSON.parse(localStorage.getItem("azoraPublicAvatars") || "{}");
         var copy = {
+            _forUser: username,
+            username: username,
             gender: avatar.gender || "boy",
             head: avatar.head, torso: avatar.torso,
             leftArm: avatar.leftArm, rightArm: avatar.rightArm,
             leftLeg: avatar.leftLeg, rightLeg: avatar.rightLeg,
             hair: avatar.hair, hairStyle: avatar.hairStyle, face: avatar.face,
+            faceFile: avatar.faceFile || null,
             scales: avatar.scales || null,
             updatedAt: Date.now()
         };
@@ -18787,6 +18955,7 @@ function publishPublicAvatar(username, avatar) {
                     leftArm: avatar.leftArm, rightArm: avatar.rightArm,
                     leftLeg: avatar.leftLeg, rightLeg: avatar.rightLeg,
                     hair: avatar.hair, hairStyle: avatar.hairStyle, face: avatar.face,
+                    faceFile: avatar.faceFile || null,
                     scales: avatar.scales || null
                 },
                 updatedAt: Date.now()
@@ -18856,11 +19025,25 @@ function buildProfile3DCharacter(avatar) {
     head.position.y = 1.12;
     group.add(head);
 
-    // Face decal
+    // Face decal — ONLY from THIS avatar, never the viewer's equipped inventory
     try {
-        var faceUrl = (typeof faceTextureUrlForGender === "function")
-            ? faceTextureUrlForGender(gender)
-            : (gender === "girl" ? "female_smile.png" : "Smile.png");
+        var faceUrl = null;
+        if (avatar.faceFile && typeof avatar.faceFile === "string") {
+            faceUrl = avatar.faceFile;
+        } else if (avatar.face && String(avatar.face).indexOf(".png") !== -1) {
+            faceUrl = avatar.face;
+        } else if (avatar.face && avatar.face !== "default" && avatar.face !== "male" && avatar.face !== "female") {
+            // shop face id → file
+            try {
+                if (typeof faceCatalogById === "function") {
+                    var fi = faceCatalogById(avatar.face);
+                    if (fi && fi.file) faceUrl = fi.file;
+                }
+            } catch (eCat) {}
+        }
+        if (!faceUrl) {
+            faceUrl = (gender === "girl") ? "female_smile.png" : "Smile.png";
+        }
         var loader = new THREE.TextureLoader();
         loader.load(faceUrl, function (tex) {
             try {
@@ -18877,49 +19060,59 @@ function buildProfile3DCharacter(avatar) {
         }, undefined, function () {});
     } catch (eFace) {}
 
-    var torso = _profile3dBox(
-        gender === "girl" ? 0.78 : 0.85,
-        gender === "girl" ? 1.05 : 1.0,
-        0.45,
-        torsoC
-    );
+    var girlDef = gender === "girl" && (typeof isDefaultGirlBody !== "function" || isDefaultGirlBody(avatar, gender));
+    // Girl default: narrower torso + thinner limbs (distinct, not bulkier). Boy: classic blocky.
+    var torsoW = girlDef ? 0.66 : 0.85;
+    var torsoH = girlDef ? 1.08 : 1.0;
+    var torsoD = girlDef ? 0.42 : 0.45;
+    var armS = girlDef ? 0.28 : 0.35;
+    var legS = girlDef ? 0.28 : 0.35;
+    var armX = girlDef ? 0.50 : 0.62;
+    var legX = girlDef ? 0.16 : 0.22;
+    var headS = girlDef ? 0.60 : 0.65;
+
+    // Rebuild head size for girl default
+    if (girlDef) {
+        group.remove(head);
+        head = _profile3dBox(headS, headS, headS, headC);
+        head.position.y = 1.12;
+        group.add(head);
+    }
+
+    var torso = _profile3dBox(torsoW, torsoH, torsoD, torsoC);
     torso.position.y = 0.3;
     group.add(torso);
 
-    var leftArm = _profile3dBox(0.35, 1.0, 0.35, la);
-    leftArm.position.set(-0.62, 0.3, 0);
+    if (girlDef) {
+        try {
+            var flare = _profile3dBox(0.88, 0.28, 0.48, torsoC);
+            flare.position.set(0, -0.08, 0);
+            flare.name = "girlHipFlare";
+            group.add(flare);
+        } catch (eFl) {}
+    }
+
+    var leftArm = _profile3dBox(armS, 1.0, armS, la);
+    leftArm.position.set(-armX, 0.3, 0);
     group.add(leftArm);
-    var rightArm = _profile3dBox(0.35, 1.0, 0.35, ra);
-    rightArm.position.set(0.62, 0.3, 0);
+    var rightArm = _profile3dBox(armS, 1.0, armS, ra);
+    rightArm.position.set(armX, 0.3, 0);
     group.add(rightArm);
 
-    var leftLeg = _profile3dBox(0.35, 1.0, 0.35, ll);
-    leftLeg.position.set(-0.22, -0.7, 0);
+    var leftLeg = _profile3dBox(legS, 1.0, legS, ll);
+    leftLeg.position.set(-legX, -0.7, 0);
     group.add(leftLeg);
-    var rightLeg = _profile3dBox(0.35, 1.0, 0.35, rl);
-    rightLeg.position.set(0.22, -0.7, 0);
+    var rightLeg = _profile3dBox(legS, 1.0, legS, rl);
+    rightLeg.position.set(legX, -0.7, 0);
     group.add(rightLeg);
 
-    // Simple hair for girls (longer blocky) / short for boys if style present
+    // Hair only if equipped — default boys AND girls are bald
     try {
-        var styleId = avatar.hairStyle || (gender === "girl" ? "hair_girl_default" : "hair_boy_none");
-        if (typeof makeAvatarHair === "function" && styleId && styleId !== "hair_boy_none") {
-            var hair = makeAvatarHair(hairC, 1.12, 0.65, styleId);
+        var styleId = avatar.hairStyle || "hair_boy_none";
+        if (styleId === "hair_girl_default") styleId = "hair_boy_none";
+        if (typeof makeAvatarHair === "function" && styleId && styleId !== "hair_boy_none" && styleId !== "none") {
+            var hair = makeAvatarHair(hairC, 1.12, headS, styleId);
             if (hair) group.add(hair);
-        } else if (gender === "girl") {
-            // Fallback long hair blocks
-            var top = _profile3dBox(0.72, 0.28, 0.72, hairC);
-            top.position.y = 1.42;
-            group.add(top);
-            var back = _profile3dBox(0.7, 0.85, 0.22, hairC);
-            back.position.set(0, 0.95, -0.28);
-            group.add(back);
-            var sideL = _profile3dBox(0.18, 0.7, 0.35, hairC);
-            sideL.position.set(-0.4, 1.0, 0.05);
-            group.add(sideL);
-            var sideR = _profile3dBox(0.18, 0.7, 0.35, hairC);
-            sideR.position.set(0.4, 1.0, 0.05);
-            group.add(sideR);
         }
     } catch (eH) {}
 
@@ -19060,7 +19253,9 @@ function showProfile3DAvatar(username) {
 
         // One immediate render so something appears even before next frame
         try { renderer.render(scene, camera); } catch (e0) {}
-        console.log("[Azora] profile 3D avatar ready for", username);
+        console.log("[Azora] profile 3D avatar ready for", username, {
+            head: avatarData.head, torso: avatarData.torso, gender: avatarData.gender, faceFile: avatarData.faceFile || avatarData.face
+        });
     } catch (err) {
         console.warn("[Azora] showProfile3DAvatar error", err);
     }
