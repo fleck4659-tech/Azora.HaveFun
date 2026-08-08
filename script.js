@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v64.5 test gray clay woman mannequin","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v64.7 AI image gen+edit on, restrictions ON","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -3804,37 +3804,14 @@ window.applyGenderVisualsToCustomizer = applyGenderVisualsToCustomizer;
 
 
 // —— Avatar style test: blocky (default) ↔ realistic humanoid ——
-window._avatarRenderStyle = (function () {
-    try {
-        var s = sessionStorage.getItem("azoraAvatarRenderStyle");
-        if (s === "realistic" || s === "blocky" || s === "mannequin") return s;
-    } catch (e) {}
-    return "blocky";
-})();
-
-function getAvatarRenderStyle() {
-    var s = window._avatarRenderStyle;
-    if (s === "realistic" || s === "mannequin") return s;
-    return "blocky";
-}
-
+// Avatar style tests removed — blocky only
+window._avatarRenderStyle = "blocky";
+function getAvatarRenderStyle() { return "blocky"; }
 function setAvatarRenderStyle(style) {
-    if (style !== "realistic" && style !== "mannequin") style = "blocky";
-    window._avatarRenderStyle = style;
-    try { sessionStorage.setItem("azoraAvatarRenderStyle", style); } catch (e) {}
+    window._avatarRenderStyle = "blocky";
+    try { sessionStorage.removeItem("azoraAvatarRenderStyle"); } catch (e) {}
     var btn = document.getElementById("avatarStyleTestBtn");
-    if (btn) {
-        btn.classList.remove("is-realistic", "is-mannequin");
-        if (style === "realistic") {
-            btn.textContent = "Switch to Mannequin (Test)";
-            btn.classList.add("is-realistic");
-        } else if (style === "mannequin") {
-            btn.textContent = "Switch to Blocky (Test)";
-            btn.classList.add("is-mannequin");
-        } else {
-            btn.textContent = "Switch to Realistic (Test)";
-        }
-    }
+    if (btn) btn.style.display = "none";
 }
 
 function clearAvatarCharacterMeshes() {
@@ -4392,191 +4369,6 @@ window.updateAvatarIdleAnimation = updateAvatarIdleAnimation;
 
 
 
-/** Matte non-reflective clay material (test mannequin) */
-function azoraClayMaterial(hex) {
-    hex = hex || 0x8b8b8b;
-    try {
-        if (typeof THREE.MeshStandardMaterial === "function") {
-            return new THREE.MeshStandardMaterial({
-                color: hex,
-                roughness: 1.0,
-                metalness: 0.0,
-                flatShading: false
-            });
-        }
-    } catch (e) {}
-    return new THREE.MeshLambertMaterial({ color: hex });
-}
-
-/**
- * TEST ONLY — full-body gray clay woman mannequin.
- * Organic human proportions, matte clay, modest feminine form.
- * Single solid gray — no skin tone, no face texture. Remove if not wanted.
- */
-function buildMannequinWomanMeshes() {
-    if (!avatarCharacterGroup || typeof THREE === "undefined") return;
-
-    var CLAY = 0x8b8b8b;
-    function mat() { return azoraClayMaterial(CLAY); }
-    function sphere(r, seg) {
-        return new THREE.Mesh(new THREE.SphereGeometry(r, seg || 20, seg || 16), mat());
-    }
-    function cyl(rt, rb, h, seg) {
-        return new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg || 14), mat());
-    }
-    function ellip(rx, ry, rz) {
-        var m = sphere(1, 22);
-        m.scale.set(rx, ry, rz);
-        return m;
-    }
-
-    var joints = {};
-    avatarCharacterGroup.userData = avatarCharacterGroup.userData || {};
-    avatarCharacterGroup.userData.animStyle = "realistic";
-    avatarCharacterGroup.userData.joints = joints;
-    avatarCharacterGroup.userData.isMannequin = true;
-
-    var root = new THREE.Group();
-    root.name = "animRoot";
-    avatarCharacterGroup.add(root);
-    joints.root = root;
-
-    // —— Hips / pelvis (wider feminine) ——
-    var hipsG = new THREE.Group();
-    hipsG.position.y = 0.58;
-    root.add(hipsG);
-    joints.hips = hipsG;
-    var pelvis = ellip(0.20, 0.12, 0.14);
-    pelvis.name = "hips";
-    hipsG.add(pelvis);
-
-    // —— Torso group ——
-    var torsoG = new THREE.Group();
-    torsoG.position.y = 0.06;
-    hipsG.add(torsoG);
-    joints.torso = torsoG;
-
-    // Soft waist (narrower)
-    var waist = cyl(0.12, 0.15, 0.20, 16);
-    waist.position.y = 0.12;
-    waist.name = "torso";
-    torsoG.add(waist);
-    torsoMesh = waist;
-
-    // Upper torso / ribcage with modest chest volume (unified shape, not exaggerated)
-    var ribcage = ellip(0.16, 0.18, 0.12);
-    ribcage.position.y = 0.38;
-    ribcage.name = "chest";
-    torsoG.add(ribcage);
-    // Subtle forward chest volume for modest feminine form (artist mannequin style)
-    var chestSoft = ellip(0.13, 0.08, 0.06);
-    chestSoft.position.set(0, 0.40, 0.08);
-    chestSoft.name = "chest";
-    torsoG.add(chestSoft);
-
-    // Shoulders
-    var shY = 0.58;
-    var shL = sphere(0.085, 14);
-    shL.position.set(-0.28, shY, 0);
-    shL.name = "shoulderL";
-    torsoG.add(shL);
-    var shR = sphere(0.085, 14);
-    shR.position.set(0.28, shY, 0);
-    shR.name = "shoulderR";
-    torsoG.add(shR);
-
-    // Neck
-    neckMesh = cyl(0.045, 0.055, 0.12, 12);
-    neckMesh.position.y = shY + 0.12;
-    neckMesh.name = "neck";
-    torsoG.add(neckMesh);
-
-    // Head (slightly oval, no face decal — pure shape study)
-    var headG = new THREE.Group();
-    headG.position.y = shY + 0.26;
-    torsoG.add(headG);
-    joints.head = headG;
-    headMesh = ellip(0.11, 0.135, 0.12);
-    headMesh.name = "head";
-    headG.add(headMesh);
-    faceGroup = null; // no face on clay mannequin
-
-    // —— Arms ——
-    function buildArm(side) {
-        var sign = side === "L" ? -1 : 1;
-        var armG = new THREE.Group();
-        armG.position.set(sign * 0.28, shY, 0);
-        armG.rotation.z = sign * 0.14;
-        torsoG.add(armG);
-        joints[side === "L" ? "armL" : "armR"] = armG;
-
-        var upper = cyl(0.055, 0.048, 0.28, 12);
-        upper.position.y = -0.15;
-        upper.name = side === "L" ? "upperArmL" : "upperArmR";
-        armG.add(upper);
-        if (side === "L") leftArmMesh = upper; else rightArmMesh = upper;
-
-        var elbow = new THREE.Group();
-        elbow.position.y = -0.30;
-        elbow.rotation.x = 0.12;
-        armG.add(elbow);
-        joints[side === "L" ? "elbowL" : "elbowR"] = elbow;
-
-        var lower = cyl(0.045, 0.038, 0.26, 12);
-        lower.position.y = -0.14;
-        lower.name = side === "L" ? "lowerArmL" : "lowerArmR";
-        elbow.add(lower);
-
-        var hand = sphere(0.05, 12);
-        hand.position.y = -0.30;
-        hand.name = side === "L" ? "handL" : "handR";
-        elbow.add(hand);
-    }
-    buildArm("L");
-    buildArm("R");
-
-    // —— Legs ——
-    function buildLeg(side) {
-        var sign = side === "L" ? -1 : 1;
-        var legG = new THREE.Group();
-        legG.position.set(sign * 0.11, 0, 0);
-        hipsG.add(legG);
-        joints[side === "L" ? "legL" : "legR"] = legG;
-
-        var thigh = cyl(0.08, 0.065, 0.32, 12);
-        thigh.position.y = -0.16;
-        thigh.name = side === "L" ? "thighL" : "thighR";
-        legG.add(thigh);
-        if (side === "L") leftLegMesh = thigh; else rightLegMesh = thigh;
-
-        var knee = new THREE.Group();
-        knee.position.y = -0.34;
-        legG.add(knee);
-        joints[side === "L" ? "kneeL" : "kneeR"] = knee;
-
-        var shin = cyl(0.058, 0.045, 0.30, 12);
-        shin.position.y = -0.16;
-        shin.name = side === "L" ? "shinL" : "shinR";
-        knee.add(shin);
-
-        var foot = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.05, 0.18), mat());
-        foot.position.set(0, -0.34, 0.04);
-        foot.name = side === "L" ? "footL" : "footR";
-        knee.add(foot);
-    }
-    buildLeg("L");
-    buildLeg("R");
-
-    joints._rest = {
-        armLz: joints.armL ? joints.armL.rotation.z : 0.14,
-        armRz: joints.armR ? joints.armR.rotation.z : -0.14,
-        elbowLx: 0.12,
-        elbowRx: 0.12
-    };
-}
-window.buildMannequinWomanMeshes = buildMannequinWomanMeshes;
-window.azoraClayMaterial = azoraClayMaterial;
-
 function rebuildAvatarCustomizerMeshes() {
     if (!avatarCharacterGroup || typeof THREE === "undefined") return false;
     var gender = "boy";
@@ -4599,19 +4391,9 @@ function rebuildAvatarCustomizerMeshes() {
     } catch (e3) {}
 
     clearAvatarCharacterMeshes();
-    var style = getAvatarRenderStyle();
-    if (style === "mannequin") {
-        buildMannequinWomanMeshes();
-    } else if (style === "realistic") {
-        buildRealisticHumanoidMeshes(gender, colors);
-    } else {
-        buildBlockyAvatarMeshes(gender, colors);
-    }
+    buildBlockyAvatarMeshes(gender, colors);
     try {
-        // Mannequin stays solid gray clay — skip player colors
-        if (style !== "mannequin" && typeof applyColorsToMeshes === "function") {
-            applyColorsToMeshes(colors);
-        }
+        if (typeof applyColorsToMeshes === "function") applyColorsToMeshes(colors);
     } catch (e4) {}
     try {
         if (renderer && scene && camera) renderer.render(scene, camera);
@@ -4620,19 +4402,8 @@ function rebuildAvatarCustomizerMeshes() {
 }
 
 function toggleAvatarStyleTest() {
-    var cur = getAvatarRenderStyle();
-    var next = cur === "blocky" ? "realistic" : (cur === "realistic" ? "mannequin" : "blocky");
-    setAvatarRenderStyle(next);
-    if (!avatarCharacterGroup) {
-        try { if (typeof init3DAvatar === "function") init3DAvatar(); } catch (e) {}
-    } else {
-        rebuildAvatarCustomizerMeshes();
-    }
-    try {
-        if (typeof playClickSound === "function") playClickSound();
-        else if (typeof playButtonClick === "function") playButtonClick();
-    } catch (eS) {}
-    console.log("[Azora] avatar style test →", next);
+    // Test styles removed — blocky only
+    setAvatarRenderStyle("blocky");
 }
 window.toggleAvatarStyleTest = toggleAvatarStyleTest;
 window.getAvatarRenderStyle = getAvatarRenderStyle;
@@ -4672,14 +4443,8 @@ function init3DAvatar() {
         var _g0 = (typeof getAvatarGender === "function") ? getAvatarGender() : "boy";
         var _c0 = {};
         try { if (typeof readAvatarColorInputs === "function") _c0 = readAvatarColorInputs() || {}; } catch (eC) {}
-        var _st = getAvatarRenderStyle();
-        if (_st === "mannequin") {
-            buildMannequinWomanMeshes();
-        } else if (_st === "realistic") {
-            buildRealisticHumanoidMeshes(_g0, _c0);
-        } else {
-            buildBlockyAvatarMeshes(_g0, _c0);
-        }
+        buildBlockyAvatarMeshes(_g0, _c0);
+        setAvatarRenderStyle("blocky");
         setAvatarRenderStyle(getAvatarRenderStyle()); // sync button label
     } catch (eBuild) {
         console.warn("[Azora] avatar build fallback", eBuild);
@@ -4944,11 +4709,6 @@ function setAvatarColorInputs(avatar) {
 /** Apply validated colors to live 3D meshes (returns true if applied) */
 function applyColorsToMeshes(validated) {
     if (!validated) return false;
-    // Test mannequin is always solid gray clay
-    try {
-        if (typeof getAvatarRenderStyle === "function" && getAvatarRenderStyle() === "mannequin") return true;
-        if (avatarCharacterGroup && avatarCharacterGroup.userData && avatarCharacterGroup.userData.isMannequin) return true;
-    } catch (eM) {}
     if (!headMesh || !torsoMesh || !leftArmMesh || !rightArmMesh || !leftLegMesh || !rightLegMesh) {
         return false;
     }
@@ -14722,6 +14482,8 @@ window.leaveNormGame = leaveNormGame;
 var _aiImgBusy = false;
 var _aiImgTimer = null;
 var _aiImgProgressTimer = null;
+var _aiImgMode = "generate"; // "generate" | "edit"
+var _aiImgEditDataUrl = null;
 
 /** Returns { blocked: true, reason } or { blocked: false } */
 /** Returns { blocked: true, reason, message } or { blocked: false } */
@@ -14788,10 +14550,66 @@ function steerAIImagePrompt(raw) {
 
 
 
+function setAIImageMode(mode) {
+    _aiImgMode = mode === "edit" ? "edit" : "generate";
+    var genBtn = document.getElementById("aiImgModeGen");
+    var editBtn = document.getElementById("aiImgModeEdit");
+    var editSec = document.getElementById("aiImageEditSection");
+    var label = document.getElementById("aiImagePromptLabel");
+    var ta = document.getElementById("aiImagePrompt");
+    var actionBtn = document.getElementById("aiImageGenerateBtn");
+    if (genBtn) genBtn.classList.toggle("active", _aiImgMode === "generate");
+    if (editBtn) editBtn.classList.toggle("active", _aiImgMode === "edit");
+    if (editSec) editSec.style.display = _aiImgMode === "edit" ? "block" : "none";
+    if (label) label.textContent = _aiImgMode === "edit" ? "Describe the edit" : "Describe your image";
+    if (ta) ta.placeholder = _aiImgMode === "edit"
+        ? "Example: make the sky purple, add cartoon clouds"
+        : "Example: a sunny park with cartoon trees and a blue sky";
+    if (actionBtn) actionBtn.textContent = _aiImgMode === "edit" ? "Apply edit" : "Generate";
+}
+window.setAIImageMode = setAIImageMode;
+
+function onAIImageFileSelected(ev) {
+    _aiImgEditDataUrl = null;
+    var wrap = document.getElementById("aiImageEditPreviewWrap");
+    var prev = document.getElementById("aiImageEditPreview");
+    var file = ev && ev.target && ev.target.files && ev.target.files[0];
+    if (!file) {
+        if (wrap) wrap.style.display = "none";
+        return;
+    }
+    if (!/^image\/(png|jpeg|jpg|webp|gif)$/i.test(file.type)) {
+        showAIImageStatus("error", "Please upload a PNG, JPG, WEBP, or GIF image.");
+        if (wrap) wrap.style.display = "none";
+        return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+        showAIImageStatus("error", "Image is too large (max 8 MB).");
+        if (wrap) wrap.style.display = "none";
+        return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+        _aiImgEditDataUrl = String(reader.result || "");
+        if (prev) prev.src = _aiImgEditDataUrl;
+        if (wrap) wrap.style.display = "block";
+        showAIImageStatus("ok", "Image loaded — describe how to edit it.");
+    };
+    reader.onerror = function () {
+        showAIImageStatus("error", "Could not read that file.");
+        if (wrap) wrap.style.display = "none";
+    };
+    reader.readAsDataURL(file);
+}
+window.onAIImageFileSelected = onAIImageFileSelected;
+
 function openAIImageGenerator() {
     var ov = document.getElementById("aiImageOverlay");
     if (!ov) return;
     ov.style.display = "flex";
+    _aiImgMode = "generate";
+    _aiImgEditDataUrl = null;
+    setAIImageMode("generate");
     resetAIImageUI(false);
     var ta = document.getElementById("aiImagePrompt");
     if (ta) setTimeout(function () { ta.focus(); }, 50);
@@ -14865,11 +14683,16 @@ function startAIImageGenerate() {
     if (_aiImgBusy) return;
     var ta = document.getElementById("aiImagePrompt");
     var prompt = ta ? ta.value.trim() : "";
-    var mod = moderateAIImagePrompt(prompt);
+    var isEdit = _aiImgMode === "edit";
 
-    // Immediate empty check (still show brief process for consistency on tos/error only)
+    if (isEdit && !_aiImgEditDataUrl) {
+        showAIImageStatus("error", "Upload an image first, then describe the edit.");
+        return;
+    }
+
+    var mod = moderateAIImagePrompt(prompt);
     if (mod.blocked && mod.reason === "empty") {
-        showAIImageStatus("error", mod.message);
+        showAIImageStatus("error", isEdit ? "Please describe how to edit the image." : mod.message);
         return;
     }
 
@@ -14880,7 +14703,7 @@ function startAIImageGenerate() {
     if (res) res.style.display = "none";
     showAIImageStatus("info", "Checking your prompt and preparing…");
 
-    // TOS violation → 10 seconds processing, then reject
+    // Restrictions stay ON — TOS violation → ~10s then reject
     if (mod.blocked && mod.reason === "tos") {
         runAIImageProgress(10000, "Reviewing prompt against Azora rules…");
         _aiImgTimer = setTimeout(function () {
@@ -14894,21 +14717,22 @@ function startAIImageGenerate() {
         return;
     }
 
-    // Safe path → ~30 seconds, then generate
-    runAIImageProgress(30000, "Generating your image… this takes about 30 seconds");
-    showAIImageStatus("info", "Creating your image from your description…");
+    // Safe path → ~30 seconds
+    runAIImageProgress(30000, isEdit ? "Editing your image… about 30 seconds" : "Generating your image… about 30 seconds");
+    showAIImageStatus("info", isEdit ? "Applying your edit…" : "Creating your image from your description…");
 
     _aiImgTimer = setTimeout(function () {
-        finishAIImageGenerate(prompt);
+        finishAIImageGenerate(prompt, isEdit);
     }, 30000);
 }
 
-function finishAIImageGenerate(prompt) {
+function finishAIImageGenerate(prompt, isEdit) {
     clearAIImageTimers();
     var btn = document.getElementById("aiImageGenerateBtn");
     var pw = document.getElementById("aiImageProgressWrap");
+    isEdit = !!isEdit;
 
-    // Final safety re-check
+    // Final safety re-check (restrictions stay ON)
     var mod = moderateAIImagePrompt(prompt);
     if (mod.blocked) {
         _aiImgBusy = false;
@@ -14918,12 +14742,19 @@ function finishAIImageGenerate(prompt) {
         return;
     }
 
-    // Build a safe image request — safety tags only (no extra subjects like "family")
-    // Steer ambiguous words (e.g. "heart" → cute symbol, not organ) + safety tags (no extra subjects)
     var steered = (typeof steerAIImagePrompt === "function") ? steerAIImagePrompt(prompt) : prompt;
     var safePrompt = steered + ", high quality, clean art, appropriate for all ages, no violence, no gore, no blood, no medical organ illustration, no nsfw";
+    if (isEdit) {
+        safePrompt = "edit this image: " + steered + ", keep the same subject, high quality, clean art, appropriate for all ages, no violence, no gore, no blood, no nsfw";
+    }
     var url = "https://image.pollinations.ai/prompt/" + encodeURIComponent(safePrompt) +
         "?width=768&height=768&nologo=true&safe=true&seed=" + Math.floor(Math.random() * 1e9);
+    // When editing, pass the uploaded image as a reference if the provider supports it
+    if (isEdit && _aiImgEditDataUrl) {
+        try {
+            url += "&image=" + encodeURIComponent(_aiImgEditDataUrl.slice(0, 1800));
+        } catch (eImg) {}
+    }
 
     var img = document.getElementById("aiImageResultImg");
     var res = document.getElementById("aiImageResult");
@@ -15021,16 +14852,10 @@ function onCustomizerGenderChange() {
         var raw = typeof readAvatarColorInputs === "function" ? readAvatarColorInputs() : {};
         var cols = Object.assign({}, acc.avatar, raw, { gender: gender });
 
-        // Realistic mode: full rebuild so body shape, face wrap, and hair all update
-        var realistic = (typeof getAvatarRenderStyle === "function" && getAvatarRenderStyle() === "realistic");
-        if (realistic && typeof rebuildAvatarCustomizerMeshes === "function") {
-            rebuildAvatarCustomizerMeshes();
-        } else {
-            if (typeof applyGenderVisualsToCustomizer === "function") applyGenderVisualsToCustomizer(gender, cols);
-            if (typeof applyColorsToMeshes === "function" && typeof moderateCharacterColors === "function") {
-                var v = moderateCharacterColors(cols.head, cols.torso, cols.leftArm, cols.rightArm, cols.leftLeg, cols.rightLeg);
-                applyColorsToMeshes(v);
-            }
+        if (typeof applyGenderVisualsToCustomizer === "function") applyGenderVisualsToCustomizer(gender, cols);
+        if (typeof applyColorsToMeshes === "function" && typeof moderateCharacterColors === "function") {
+            var v = moderateCharacterColors(cols.head, cols.torso, cols.leftArm, cols.rightArm, cols.leftLeg, cols.rightLeg);
+            applyColorsToMeshes(v);
         }
         if (localStorage.getItem("loggedIn") === "true" && !acc.isGuest) {
             try { localStorage.setItem("azoraAccount", JSON.stringify(acc)); } catch (e) {}

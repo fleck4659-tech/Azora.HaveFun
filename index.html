@@ -13,7 +13,7 @@
     <link rel="manifest" href="manifest-azora.json">
     <link rel="apple-touch-icon" href="logo.jpg">
     <link rel="icon" href="logo.jpg">
-    <link rel="stylesheet" href="style.css?v=64.5">
+    <link rel="stylesheet" href="style.css?v=64.7">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -439,9 +439,6 @@
 
 <div class="avatar-customizer-container">
     <div id="avatar3d-canvas"></div>
-    <button type="button" id="avatarStyleTestBtn" class="avatar-style-test-btn" onclick="toggleAvatarStyleTest()" title="Test feature: cycle Blocky → Realistic → Gray Mannequin → Blocky">
-        Switch to Realistic (Test)
-    </button>
     <div class="customizer-controls">
         <h3>My Avatar</h3>
 
@@ -1006,15 +1003,24 @@
 </div>
 
 <div id="aiImageOverlay" class="overlay" style="display:none;">
-    <div class="popup ai-image-popup" style="max-width:min(360px,calc(100vw - 20px));text-align:left;">
+    <div class="popup ai-image-popup" style="max-width:min(380px,calc(100vw - 20px));text-align:left;">
         <h2 style="text-align:center;margin-top:0;">🎨 AI Image Generator</h2>
-        
-        <p style="font-size: 10px; opacity: 0.7; margin-top: -8px; margin-bottom: 12px; text-align: center;">
-            This image generator uses Gemini's image gen tool.
-        </p>
+        <p class="ai-img-policy">Family-friendly only. Violence, gore, blood, explicit content, and other harmful prompts are blocked. Restrictions stay ON.</p>
 
-        <p class="ai-img-policy">Azora is a family-friendly platform. Prompts with violence, gore, blood, explicit content, or other TOS violations are blocked.</p>
-        <label class="settings-label" for="aiImagePrompt">Describe your image</label>
+        <div class="ai-img-mode-row" style="display:flex;gap:8px;margin-bottom:10px;">
+            <button type="button" id="aiImgModeGen" class="ai-img-mode-btn active" onclick="setAIImageMode('generate')">Generate new</button>
+            <button type="button" id="aiImgModeEdit" class="ai-img-mode-btn" onclick="setAIImageMode('edit')">Edit image</button>
+        </div>
+
+        <div id="aiImageEditSection" style="display:none;margin-bottom:10px;">
+            <label class="settings-label" for="aiImageFileInput">Upload an image to edit</label>
+            <input type="file" id="aiImageFileInput" accept="image/png,image/jpeg,image/webp,image/gif" onchange="onAIImageFileSelected(event)" style="width:100%;font-size:12px;margin-top:4px;" />
+            <div id="aiImageEditPreviewWrap" style="display:none;margin-top:8px;text-align:center;">
+                <img id="aiImageEditPreview" alt="Image to edit" style="max-width:100%;max-height:120px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);" />
+            </div>
+        </div>
+
+        <label class="settings-label" for="aiImagePrompt" id="aiImagePromptLabel">Describe your image</label>
         <textarea id="aiImagePrompt" class="ai-image-prompt" maxlength="400" placeholder="Example: a sunny park with cartoon trees and a blue sky"></textarea>
         <div class="ai-img-status" id="aiImageStatus" style="display:none;"></div>
         <div class="ai-img-progress-wrap" id="aiImageProgressWrap" style="display:none;">
@@ -1030,7 +1036,7 @@
         </div>
     </div>
 </div>
-<script src="script.js?v=64.5"></script>
+<script src="script.js?v=64.7"></script>
 <script>
 // Register Azora as installable app (not the staff website)
 if ("serviceWorker" in navigator) {
