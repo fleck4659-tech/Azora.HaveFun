@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v64.7 AI image gen+edit on, restrictions ON","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v64.8 real image edit keeps original photo","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -14571,6 +14571,7 @@ window.setAIImageMode = setAIImageMode;
 
 function onAIImageFileSelected(ev) {
     _aiImgEditDataUrl = null;
+    window._aiImgEditFile = null;
     var wrap = document.getElementById("aiImageEditPreviewWrap");
     var prev = document.getElementById("aiImageEditPreview");
     var file = ev && ev.target && ev.target.files && ev.target.files[0];
@@ -14588,16 +14589,18 @@ function onAIImageFileSelected(ev) {
         if (wrap) wrap.style.display = "none";
         return;
     }
+    window._aiImgEditFile = file;
     var reader = new FileReader();
     reader.onload = function () {
         _aiImgEditDataUrl = String(reader.result || "");
         if (prev) prev.src = _aiImgEditDataUrl;
         if (wrap) wrap.style.display = "block";
-        showAIImageStatus("ok", "Image loaded — describe how to edit it.");
+        showAIImageStatus("ok", "Image loaded — describe what to add or change (the original photo is kept).");
     };
     reader.onerror = function () {
         showAIImageStatus("error", "Could not read that file.");
         if (wrap) wrap.style.display = "none";
+        window._aiImgEditFile = null;
     };
     reader.readAsDataURL(file);
 }
@@ -14609,7 +14612,14 @@ function openAIImageGenerator() {
     ov.style.display = "flex";
     _aiImgMode = "generate";
     _aiImgEditDataUrl = null;
+    window._aiImgEditFile = null;
     setAIImageMode("generate");
+    try {
+        var fi = document.getElementById("aiImageFileInput");
+        if (fi) fi.value = "";
+        var wrap = document.getElementById("aiImageEditPreviewWrap");
+        if (wrap) wrap.style.display = "none";
+    } catch (eC) {}
     resetAIImageUI(false);
     var ta = document.getElementById("aiImagePrompt");
     if (ta) setTimeout(function () { ta.focus(); }, 50);
@@ -14743,69 +14753,154 @@ function finishAIImageGenerate(prompt, isEdit) {
     }
 
     var steered = (typeof steerAIImagePrompt === "function") ? steerAIImagePrompt(prompt) : prompt;
-    var safePrompt = steered + ", high quality, clean art, appropriate for all ages, no violence, no gore, no blood, no medical organ illustration, no nsfw";
-    if (isEdit) {
-        safePrompt = "edit this image: " + steered + ", keep the same subject, high quality, clean art, appropriate for all ages, no violence, no gore, no blood, no nsfw";
-    }
-    var url = "https://image.pollinations.ai/prompt/" + encodeURIComponent(safePrompt) +
-        "?width=768&height=768&nologo=true&safe=true&seed=" + Math.floor(Math.random() * 1e9);
-    // When editing, pass the uploaded image as a reference if the provider supports it
-    if (isEdit && _aiImgEditDataUrl) {
-        try {
-            url += "&image=" + encodeURIComponent(_aiImgEditDataUrl.slice(0, 1800));
-        } catch (eImg) {}
-    }
 
-    var img = document.getElementById("aiImageResultImg");
-    var res = document.getElementById("aiImageResult");
-    if (!img || !res) {
-        _aiImgBusy = false;
-        if (btn) btn.disabled = false;
-        showAIImageStatus("error", "Something went wrong");
-        return;
-    }
-
-    // Load with timeout → error path ~ already used 30s; if fail show error after short wait to match "10s on error" feel from start of load
-    var loadStart = Date.now();
-    var settled = false;
-
-    function fail() {
-        if (settled) return;
-        settled = true;
-        var waitLeft = Math.max(0, 10000 - (Date.now() - loadStart));
-        // Error presentation: about 10 seconds of "error processing" if load fails fast
-        runAIImageProgress(Math.max(waitLeft, 800), "Something went wrong — finishing…");
-        showAIImageStatus("info", "Having trouble finishing the image…");
-        setTimeout(function () {
+    function showResult(url) {
+        var img = document.getElementById("aiImageResultImg");
+        var res = document.getElementById("aiImageResult");
+        if (!img || !res) {
+            _aiImgBusy = false;
+            if (btn) btn.disabled = false;
+            showAIImageStatus("error", "Something went wrong");
+            return;
+        }
+        var loadStart = Date.now();
+        var settled = false;
+        function fail() {
+            if (settled) return;
+            settled = true;
+            var waitLeft = Math.max(0, 8000 - (Date.now() - loadStart));
+            runAIImageProgress(Math.max(waitLeft, 600), "Something went wrong — finishing…");
+            showAIImageStatus("info", "Having trouble finishing the image…");
+            setTimeout(function () {
+                clearAIImageTimers();
+                _aiImgBusy = false;
+                if (btn) btn.disabled = false;
+                if (pw) pw.style.display = "none";
+                res.style.display = "none";
+                showAIImageStatus("error", "Something went wrong");
+            }, Math.max(waitLeft, 600));
+        }
+        function ok() {
+            if (settled) return;
+            settled = true;
             clearAIImageTimers();
             _aiImgBusy = false;
             if (btn) btn.disabled = false;
             if (pw) pw.style.display = "none";
-            res.style.display = "none";
-            showAIImageStatus("error", "Something went wrong");
-        }, Math.max(waitLeft, 800));
+            res.style.display = "block";
+            showAIImageStatus("ok", isEdit ? "Done! Edit applied to your photo." : "Done! Here's your image.");
+        }
+        img.onload = ok;
+        img.onerror = fail;
+        img.src = url;
+        setTimeout(function () { if (!settled) fail(); }, 60000);
     }
 
-    function ok() {
-        if (settled) return;
-        settled = true;
-        clearAIImageTimers();
-        _aiImgBusy = false;
-        if (btn) btn.disabled = false;
-        if (pw) pw.style.display = "none";
-        res.style.display = "block";
-        showAIImageStatus("ok", "Done! Here's your image.");
+    // —— EDIT: upload original photo, then img2img so changes are added to THAT image ——
+    if (isEdit) {
+        if (!_aiImgEditDataUrl && !window._aiImgEditFile) {
+            _aiImgBusy = false;
+            if (btn) btn.disabled = false;
+            if (pw) pw.style.display = "none";
+            showAIImageStatus("error", "Upload an image first, then describe the edit.");
+            return;
+        }
+        showAIImageStatus("info", "Preparing your photo for editing…");
+        uploadAIImageForEdit()
+            .then(function (publicUrl) {
+                // Strong instruction: keep the same photo, only apply the requested change
+                var editPrompt =
+                    "Photo edit of the exact same image provided. " +
+                    "Do not replace the person or scene with a different one. " +
+                    "Keep the same person, same face, same pose, same background, same camera angle, same lighting. " +
+                    "Only apply this change: " + steered + ". " +
+                    "Photorealistic edit of the original photograph, natural result, " +
+                    "fully clothed, appropriate for all ages, no nsfw, no violence, no gore";
+                var url = "https://image.pollinations.ai/prompt/" + encodeURIComponent(editPrompt) +
+                    "?width=768&height=768&nologo=true&safe=true" +
+                    "&image=" + encodeURIComponent(publicUrl) +
+                    "&seed=" + Math.floor(Math.random() * 1e9);
+                showAIImageStatus("info", "Applying your edit to the original photo…");
+                showResult(url);
+            })
+            .catch(function (err) {
+                console.warn("[Azora] edit upload failed", err);
+                // Fallback: still try with data URL hosted via a tiny proxy-free approach
+                // If upload fails, show clear error rather than inventing a new image
+                _aiImgBusy = false;
+                if (btn) btn.disabled = false;
+                if (pw) pw.style.display = "none";
+                showAIImageStatus("error", "Could not prepare your photo for editing. Check your connection and try again.");
+            });
+        return;
     }
 
-    img.onload = ok;
-    img.onerror = fail;
-    img.src = url;
-
-    // Hard timeout 45s on network hang
-    setTimeout(function () {
-        if (!settled) fail();
-    }, 45000);
+    // —— GENERATE new image ——
+    var safePrompt = steered + ", high quality, clean art, appropriate for all ages, fully clothed, no violence, no gore, no blood, no medical organ illustration, no nsfw";
+    var url = "https://image.pollinations.ai/prompt/" + encodeURIComponent(safePrompt) +
+        "?width=768&height=768&nologo=true&safe=true&seed=" + Math.floor(Math.random() * 1e9);
+    showResult(url);
 }
+
+/** Upload the user's photo to a temporary host so the image API can read it as a real URL (img2img). */
+function uploadAIImageForEdit() {
+    return new Promise(function (resolve, reject) {
+        var file = window._aiImgEditFile;
+        if (!file && _aiImgEditDataUrl) {
+            try {
+                // Rebuild a Blob from the data URL if the File is missing
+                var parts = String(_aiImgEditDataUrl).split(",");
+                var mime = (parts[0].match(/:(.*?);/) || [])[1] || "image/png";
+                var bin = atob(parts[1] || "");
+                var arr = new Uint8Array(bin.length);
+                for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+                file = new Blob([arr], { type: mime });
+            } catch (e) {
+                reject(e);
+                return;
+            }
+        }
+        if (!file) {
+            reject(new Error("no file"));
+            return;
+        }
+
+        // 1) Try catbox.moe (returns a direct public image URL)
+        var fd = new FormData();
+        fd.append("reqtype", "fileupload");
+        fd.append("fileToUpload", file, "azora-edit.png");
+        fetch("https://catbox.moe/user/api.php", { method: "POST", body: fd })
+            .then(function (r) { return r.text(); })
+            .then(function (txt) {
+                txt = String(txt || "").trim();
+                if (/^https?:\/\/.+\/.+\.(png|jpe?g|webp|gif)/i.test(txt) || /^https?:\/\/files\.catbox\.moe\//i.test(txt)) {
+                    resolve(txt);
+                    return;
+                }
+                throw new Error("catbox bad response");
+            })
+            .catch(function () {
+                // 2) Fallback: tmpfiles.org
+                var fd2 = new FormData();
+                fd2.append("file", file, "azora-edit.png");
+                return fetch("https://tmpfiles.org/api/v1/upload", { method: "POST", body: fd2 })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        var u = data && data.data && data.data.url;
+                        if (!u) throw new Error("tmpfiles failed");
+                        // Convert page URL → direct download URL
+                        u = String(u).replace("http://", "https://");
+                        if (u.indexOf("tmpfiles.org/") !== -1 && u.indexOf("/dl/") === -1) {
+                            u = u.replace("tmpfiles.org/", "tmpfiles.org/dl/");
+                        }
+                        resolve(u);
+                    });
+            })
+            .catch(function (e) { reject(e); });
+    });
+}
+window.uploadAIImageForEdit = uploadAIImageForEdit;
+
 
 window.openAIImageGenerator = openAIImageGenerator;
 // Inside script.js (AI Image Generator Section)
