@@ -1373,15 +1373,17 @@ function publishCurrentGame() {
     g.visibility = "public";
     g.published = true;
     g.publishedAt = Date.now();
+    g.gameKind = "norm"; // Creator Studio games are 3D Norm Games — NOT Feed/Quick Games
+    g.dimensions = "3D";
     saveCreatorGames(games);
 
     try {
-        var feed = [];
-        try { feed = JSON.parse(localStorage.getItem("azoraAzaFnGames") || "[]"); } catch (e) { feed = []; }
-        if (!Array.isArray(feed)) feed = [];
-        // Remove old entry for same id
-        feed = feed.filter(function (f) { return f && f.id !== g.id; });
-        feed.unshift({
+        // Publish to Norm Games list (GAMES section) — never the TikTok-style Feed
+        var normList = [];
+        try { normList = JSON.parse(localStorage.getItem("azoraPublishedNormGames") || "[]"); } catch (e) { normList = []; }
+        if (!Array.isArray(normList)) normList = [];
+        normList = normList.filter(function (f) { return f && f.id !== g.id; });
+        normList.unshift({
             id: g.id,
             name: gameName,
             title: gameName,
@@ -1390,23 +1392,40 @@ function publishCurrentGame() {
             creator: author,
             published: true,
             visibility: "public",
+            gameKind: "norm",
+            dimensions: "3D",
+            world: "studio",
             createdAt: g.createdAt || Date.now(),
             publishedAt: Date.now(),
             parts: g.parts || [],
             baseplate: g.baseplate || null,
             sky: g.sky || null
         });
-        localStorage.setItem("azoraAzaFnGames", JSON.stringify(feed.slice(0, 80)));
-        // Also write a simple public list some index pages may read
-        localStorage.setItem("azoraPublishedGames", JSON.stringify(feed.slice(0, 80)));
+        localStorage.setItem("azoraPublishedNormGames", JSON.stringify(normList.slice(0, 80)));
+
+        // Strip this game out of Feed/Quick Games if it was published there before
+        try {
+            var feed = JSON.parse(localStorage.getItem("azoraAzaFnGames") || "[]");
+            if (Array.isArray(feed)) {
+                feed = feed.filter(function (f) { return !f || f.id !== g.id; });
+                localStorage.setItem("azoraAzaFnGames", JSON.stringify(feed));
+            }
+        } catch (eF) {}
+        try {
+            var pub = JSON.parse(localStorage.getItem("azoraPublishedGames") || "[]");
+            if (Array.isArray(pub)) {
+                pub = pub.filter(function (f) { return !f || f.id !== g.id; });
+                localStorage.setItem("azoraPublishedGames", JSON.stringify(pub));
+            }
+        } catch (eP) {}
     } catch (e) {
-        console.warn("publish feed write failed", e);
+        console.warn("publish norm write failed", e);
     }
 
     renderGamesList();
-    alert('Published "' + gameName + '" by ' + author + '!');
-    arrowBubbleSpeak("Published <strong>" + gameName + "</strong> by <strong>" + author + "</strong> to the Feed.");
-    setStatus("Published " + gameName + " by " + author);
+    alert('Published "' + gameName + '" by ' + author + ' to Norm Games!\n\nOpen the main Azora page → GAMES → Norm Games to Join it.');
+    arrowBubbleSpeak("Published <strong>" + gameName + "</strong> by <strong>" + author + "</strong> to <strong>Norm Games</strong> (not Feed).");
+    setStatus("Published " + gameName + " to Norm Games");
 }
 
 function handleBack() {

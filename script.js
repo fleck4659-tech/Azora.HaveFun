@@ -9,7 +9,7 @@
         }
     } catch (e) {}
 })();
-console.log("%c[Azora] script.js v64.8 real image edit keeps original photo","color:#1e60ff;font-weight:bold;font-size:14px");
+console.log("%c[Azora] script.js v65.1 creator publish → Norm Games not Feed","color:#1e60ff;font-weight:bold;font-size:14px");
 try { console.log("[Azora] Cloud ready:", typeof AZORA_CLOUD !== "undefined" && AZORA_CLOUD.isReady && AZORA_CLOUD.isReady()); } catch (e) {}
 // Configuration - Adjust these to change speed and phrases
 const fallSpeed = 2; // Higher number = faster fall
@@ -7480,6 +7480,10 @@ function isGameRemovedFromFeed(game) {
 
 function canViewerSeeGameOnFeed(game, viewerUsername) {
     if (!game || !game.published) return false;
+    // Creator Studio 3D games belong in Norm Games, never Feed
+    if (game.gameKind === "norm" || game.world === "studio") return false;
+    if (Array.isArray(game.parts) && game.parts.length > 0) return false;
+    if (game.baseplate) return false;
     // Not deleted → always ok
     if (!game.deleted && !game.deletedAt) return true;
     // Deleted: creator loses it instantly
@@ -11193,6 +11197,116 @@ var NORM_GAMES = {
     }
 };
 
+/** Creator Studio publishes land here (Norm Games), never on Feed */
+function getPublishedStudioNormGames() {
+    try {
+        var list = JSON.parse(localStorage.getItem("azoraPublishedNormGames") || "[]");
+        return Array.isArray(list) ? list.filter(function (g) { return g && g.published !== false; }) : [];
+    } catch (e) { return []; }
+}
+
+function migrateStudioGamesOffFeed() {
+    // Move any Creator Studio entries that were wrongly put on Feed into Norm Games
+    try {
+        var feed = JSON.parse(localStorage.getItem("azoraAzaFnGames") || "[]");
+        if (!Array.isArray(feed) || !feed.length) return;
+        var norm = getPublishedStudioNormGames();
+        var moved = false;
+        var stay = [];
+        feed.forEach(function (g) {
+            if (!g) return;
+            var isStudio = (g.world === "studio") || (g.gameKind === "norm") ||
+                (Array.isArray(g.parts) && g.parts.length > 0) || g.baseplate;
+            if (isStudio) {
+                moved = true;
+                if (!norm.some(function (n) { return n && n.id === g.id; })) {
+                    norm.unshift({
+                        id: g.id,
+                        name: g.name || g.title || "Studio Game",
+                        title: g.title || g.name || "Studio Game",
+                        by: g.by || g.author || g.creator || "Player",
+                        author: g.by || g.author || g.creator || "Player",
+                        published: true,
+                        gameKind: "norm",
+                        dimensions: "3D",
+                        world: "studio",
+                        publishedAt: g.publishedAt || Date.now(),
+                        parts: g.parts || [],
+                        baseplate: g.baseplate || null,
+                        sky: g.sky || null
+                    });
+                }
+            } else {
+                stay.push(g);
+            }
+        });
+        if (moved) {
+            localStorage.setItem("azoraAzaFnGames", JSON.stringify(stay));
+            localStorage.setItem("azoraPublishedNormGames", JSON.stringify(norm.slice(0, 80)));
+        }
+    } catch (e) {}
+}
+
+function registerStudioNormGames() {
+    migrateStudioGamesOffFeed();
+    var list = getPublishedStudioNormGames();
+    list.forEach(function (g) {
+        if (!g || !g.id) return;
+        var sid = "studio-" + g.id;
+        NORM_GAMES[sid] = {
+            id: sid,
+            title: g.title || g.name || "Studio Game",
+            owner: g.by || g.author || "Player",
+            dimensions: "3D",
+            world: "studio",
+            avatarMode: "human",
+            roomPath: "/azoraNormRooms/" + sid + "/players",
+            studioData: g,
+            isStudio: true
+        };
+    });
+}
+
+function renderStudioNormGameCards() {
+    var listEl = document.getElementById("normGamesList");
+    if (!listEl) return;
+    // Remove previous dynamic studio cards
+    listEl.querySelectorAll(".norm-game-card[data-studio='1']").forEach(function (el) {
+        el.parentNode.removeChild(el);
+    });
+    registerStudioNormGames();
+    var list = getPublishedStudioNormGames();
+    list.forEach(function (g) {
+        if (!g || !g.id) return;
+        var sid = "studio-" + g.id;
+        var card = document.createElement("article");
+        card.className = "norm-game-card";
+        card.setAttribute("data-game-id", sid);
+        card.setAttribute("data-studio", "1");
+        var author = g.by || g.author || "Player";
+        var partCount = (g.parts && g.parts.length) ? g.parts.length : 0;
+        card.innerHTML =
+            '<div class="norm-game-icon">🧱</div>' +
+            '<div class="norm-game-info">' +
+            '<h4></h4>' +
+            '<p><span class="by-creator"></span>. 3D world built in Creator Studio.</p>' +
+            '<span class="norm-game-meta">3D · Studio · Multiplayer · ' + partCount + ' parts</span>' +
+            '</div>' +
+            '<button type="button" class="norm-join-btn">Join</button>';
+        card.querySelector("h4").textContent = g.title || g.name || "Studio Game";
+        card.querySelector(".by-creator").textContent = "By " + author;
+        card.querySelector(".norm-join-btn").onclick = function () {
+            if (typeof joinNormGame === "function") joinNormGame(sid);
+        };
+        listEl.appendChild(card);
+    });
+}
+window.getPublishedStudioNormGames = getPublishedStudioNormGames;
+window.registerStudioNormGames = registerStudioNormGames;
+window.renderStudioNormGameCards = renderStudioNormGameCards;
+window.migrateStudioGamesOffFeed = migrateStudioGamesOffFeed;
+
+
 function getNormDisplayName() {
     try {
         var acc = JSON.parse(localStorage.getItem("azoraAccount") || "{}");
@@ -11818,6 +11932,7 @@ window.setupNormJoysticks = setupNormJoysticks;
 
 function joinNormGame(gameId) {
     try { if (typeof stopFallingPhrasesForGame === "function") stopFallingPhrasesForGame(); } catch (eFall) {}
+    try { if (typeof registerStudioNormGames === "function") registerStudioNormGames(); } catch (eR) {}
     var def = NORM_GAMES[gameId];
     if (!def) {
         alert("That Norm Game is not available yet.");
@@ -13003,10 +13118,126 @@ function getNormSpawnForWorld(worldType) {
 }
 
 
+
+/** Rebuild a Creator Studio published world from saved parts + baseplate */
+function buildStudioWorld(scene, studioData) {
+    if (!scene || typeof THREE === "undefined") return;
+    studioData = studioData || {};
+    var parts = Array.isArray(studioData.parts) ? studioData.parts : [];
+    var bp = studioData.baseplate || {};
+    var sky = studioData.sky || {};
+
+    // Baseplate
+    var bpSize = (bp.size != null) ? Number(bp.size) : 64;
+    if (!isFinite(bpSize) || bpSize < 8) bpSize = 64;
+    var bpColor = 0x4a7c3a;
+    try {
+        if (bp.color) bpColor = new THREE.Color(bp.color).getHex();
+    } catch (eC) {}
+    var bpMat = (typeof azoraGlossMaterial === "function")
+        ? azoraGlossMaterial(bpColor)
+        : new THREE.MeshLambertMaterial({ color: bpColor });
+    var base = new THREE.Mesh(new THREE.BoxGeometry(bpSize, 1, bpSize), bpMat);
+    base.position.y = -0.5;
+    base.receiveShadow = true;
+    scene.add(base);
+    // Floor collider for walking
+    if (typeof _normFloorColliders !== "undefined") {
+        _normFloorColliders.push({
+            type: "floor",
+            minX: -bpSize / 2, maxX: bpSize / 2,
+            minZ: -bpSize / 2, maxZ: bpSize / 2,
+            y: 0.02
+        });
+    }
+
+    function shapeGeo(shape, size) {
+        size = size || { x: 2, y: 2, z: 2 };
+        var sx = Math.max(0.2, Number(size.x) || 2);
+        var sy = Math.max(0.2, Number(size.y) || 2);
+        var sz = Math.max(0.2, Number(size.z) || 2);
+        var g;
+        shape = String(shape || "Block");
+        if (shape === "Sphere" || shape === "Ball") {
+            g = new THREE.SphereGeometry(Math.max(sx, sy, sz) / 2, 16, 12);
+        } else if (shape === "Cylinder") {
+            g = new THREE.CylinderGeometry(sx / 2, sx / 2, sy, 16);
+        } else if (shape === "Wedge" || shape === "Ramp") {
+            g = new THREE.BoxGeometry(sx, sy, sz);
+        } else if (shape === "CornerWedge") {
+            g = new THREE.BoxGeometry(sx, sy, sz);
+        } else {
+            g = new THREE.BoxGeometry(sx, sy, sz);
+        }
+        return g;
+    }
+
+    parts.forEach(function (p) {
+        if (!p) return;
+        var col = 0xb0b8c4;
+        try { if (p.color) col = new THREE.Color(p.color).getHex(); } catch (e) {}
+        var op = (p.transparency != null) ? Number(p.transparency) : 1;
+        if (!(op >= 0 && op <= 1)) op = 1;
+        var mat = (typeof azoraGlossMaterial === "function")
+            ? azoraGlossMaterial(col)
+            : new THREE.MeshLambertMaterial({ color: col });
+        if (op < 0.99) {
+            mat.transparent = true;
+            mat.opacity = op;
+        }
+        var mesh = new THREE.Mesh(shapeGeo(p.shape, p.size), mat);
+        var pos = p.pos || { x: 0, y: 1, z: 0 };
+        mesh.position.set(Number(pos.x) || 0, Number(pos.y) || 1, Number(pos.z) || 0);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+        // Simple floor collider on top of box-like parts if they can collide
+        if (p.canCollide !== false && typeof _normFloorColliders !== "undefined") {
+            var sx = Math.max(0.2, Number((p.size && p.size.x) || 2));
+            var sy = Math.max(0.2, Number((p.size && p.size.y) || 2));
+            var sz = Math.max(0.2, Number((p.size && p.size.z) || 2));
+            var px = Number(pos.x) || 0;
+            var py = Number(pos.y) || 1;
+            var pz = Number(pos.z) || 0;
+            var topY = py + sy / 2;
+            // Only treat reasonably flat tops as walkable
+            if (sy >= 0.4) {
+                _normFloorColliders.push({
+                    type: "floor",
+                    minX: px - sx / 2, maxX: px + sx / 2,
+                    minZ: pz - sz / 2, maxZ: pz + sz / 2,
+                    y: topY
+                });
+            }
+        }
+    });
+
+    // Optional sky tint from studio settings
+    try {
+        if (sky && sky.color && _normScene && _normScene.background) {
+            _normScene.background = new THREE.Color(sky.color);
+        }
+    } catch (eS) {}
+}
+window.buildStudioWorld = buildStudioWorld;
+
 function buildNormWorldByType(scene, tex, worldType) {
     if (!scene || typeof THREE === "undefined") return;
     tex = tex || {};
     worldType = worldType || "catpark";
+
+    // Creator Studio published world
+    if (worldType === "studio") {
+        var sdata = null;
+        try {
+            if (_normSession && _normSession.studioData) sdata = _normSession.studioData;
+            else if (_normSession && _normSession.id && NORM_GAMES[_normSession.id]) {
+                sdata = NORM_GAMES[_normSession.id].studioData || null;
+            }
+        } catch (e) {}
+        buildStudioWorld(scene, sdata || {});
+        return;
+    }
 
     // Planet Empire — huge open world
     if (worldType === "empire") {
@@ -13630,6 +13861,12 @@ window.toggleNormMusicPause = toggleNormMusicPause;
 function startNormGameWorld(def) {
     disposeNormWorld(false);
     startNormMusic();
+    try {
+        if (!_normSession) _normSession = {};
+        _normSession.world = (def && def.world) || _normSession.world || "city";
+        if (def && def.studioData) _normSession.studioData = def.studioData;
+        if (def && def.isStudio) _normSession.isStudio = true;
+    } catch (eSess) {}
 
     // Only YOU at start — other rows come from live presence
     var meName = getNormDisplayName();
@@ -14493,19 +14730,30 @@ function moderateAIImagePrompt(raw) {
         return { blocked: true, reason: "empty", message: "Please describe an image (at least a few words)." };
     }
 
-    // TOS / safety blocklist (violence, gore, blood, explicit, etc.)
+    // Strict family-friendly blocklist (explicit, violence, creepy/horror body content, etc.)
     var banned = [
+        // Explicit / NSFW
         "nude", "naked", "nsfw", "porn", "sex", "sexy", "sexual", "erotic", "hentai", "xxx",
-        "onlyfans", "boobs", "breast", "penis", "vagina", "genital",
+        "onlyfans", "boobs", "breast", "penis", "vagina", "genital", "nipple", "topless",
+        "bottomless", "undressed", "no clothes", "without clothes", "no shirt", "shirtless",
+        "lingerie", "underwear only", "bikini only", "bare chest", "bare body",
+        "unclothed", "clothing optional", "see through", "transparent clothes",
+        // Violence / gore
         "gore", "gory", "blood", "bloody", "bleeding", "dismember", "decapitat", "corpse",
         "murder", "kill", "killing", "stab", "shoot", "gunshot", "torture", "massacre",
         "war crime", "execution", "behead", "guts", "intestines", "body horror",
         "anatomical heart", "real heart", "human organ", "human heart organ",
         "shoot someone", "kill someone", "hurt someone", "attack people",
         "suicide", "self-harm", "self harm", "cut myself",
+        // Hate / crime
         "racial slur", "nazi", "terrorist attack", "bomb the",
         "meth lab", "cocaine", "heroin inject",
-        "child exploit", "underage nude", "loli", "shota"
+        "child exploit", "underage nude", "loli", "shota",
+        // Creepy / disturbing / horror figures (these were producing unsafe body images)
+        "creepy", "disturbing", "horrifying", "horrific", "nightmare", "haunted figure",
+        "scary figure", "tall figure", "slender", "slenderman", "entity in the",
+        "body horror", "uncanny", "skinless", "faceless man", "faceless woman",
+        "emaciated", "starving body", "exposed ribs", "twisted body", "mangled"
     ];
 
     for (var i = 0; i < banned.length; i++) {
@@ -14513,10 +14761,21 @@ function moderateAIImagePrompt(raw) {
             return {
                 blocked: true,
                 reason: "tos",
-                message: "This prompt was rejected. It looks like it breaks Azora's rules (no violence, gore/blood, explicit content, or other harmful requests). Please try a friendly, creative idea instead."
+                message: "This prompt was rejected. Azora does not allow violence, gore, explicit content, or creepy/disturbing body images. Please try a friendly, creative, all-ages idea instead."
             };
         }
     }
+
+    // Extra pattern: "disturbing/creepy/horror + figure/person/body/room"
+    if (/(creepy|disturbing|horrifying|horrific|nightmare|terrifying|unsettling)/.test(text) &&
+        /(figure|person|body|human|girl|boy|woman|man|room|hallway|corridor)/.test(text)) {
+        return {
+            blocked: true,
+            reason: "tos",
+            message: "This prompt was rejected. Creepy or disturbing images of people are not allowed on Azora. Try a fun cartoon character or a bright scene instead."
+        };
+    }
+
     return { blocked: false };
 }
 
@@ -14543,6 +14802,11 @@ function steerAIImagePrompt(raw) {
     // Common safe rewrites
     if (/^(a\s+)?skull[!.?]*$/i.test(lower)) {
         return "a friendly cartoon skull icon, simple cute style, not scary, no gore";
+    }
+
+    // If the prompt involves a person/character, force fully clothed family-friendly look
+    if (/(person|people|human|figure|character|girl|boy|woman|man|kid|child|avatar|someone|somebody)/.test(lower)) {
+        original += ", fully clothed, modest casual clothing, friendly expression, family-friendly, appropriate for all ages";
     }
 
     return original;
@@ -14607,6 +14871,7 @@ function onAIImageFileSelected(ev) {
 window.onAIImageFileSelected = onAIImageFileSelected;
 
 function openAIImageGenerator() {
+    return; // AI Image Generator removed
     var ov = document.getElementById("aiImageOverlay");
     if (!ov) return;
     ov.style.display = "flex";
@@ -14690,6 +14955,7 @@ function showAIImageStatus(kind, message) {
 }
 
 function startAIImageGenerate() {
+    return; // AI Image Generator removed
     if (_aiImgBusy) return;
     var ta = document.getElementById("aiImagePrompt");
     var prompt = ta ? ta.value.trim() : "";
@@ -14815,7 +15081,8 @@ function finishAIImageGenerate(prompt, isEdit) {
                     "Keep the same person, same face, same pose, same background, same camera angle, same lighting. " +
                     "Only apply this change: " + steered + ". " +
                     "Photorealistic edit of the original photograph, natural result, " +
-                    "fully clothed, appropriate for all ages, no nsfw, no violence, no gore";
+                    "keep the person fully clothed with modest clothing, " +
+                    "no nudity, no revealing clothes, appropriate for all ages, no nsfw, no violence, no gore, no horror";
                 var url = "https://image.pollinations.ai/prompt/" + encodeURIComponent(editPrompt) +
                     "?width=768&height=768&nologo=true&safe=true" +
                     "&image=" + encodeURIComponent(publicUrl) +
@@ -14836,7 +15103,10 @@ function finishAIImageGenerate(prompt, isEdit) {
     }
 
     // —— GENERATE new image ——
-    var safePrompt = steered + ", high quality, clean art, appropriate for all ages, fully clothed, no violence, no gore, no blood, no medical organ illustration, no nsfw";
+    var safePrompt = steered +
+        ", high quality clean art, G-rated family-friendly, fully clothed with modest clothing, " +
+        "no nudity, no revealing clothes, no underwear focus, no violence, no gore, no blood, " +
+        "no horror, no creepy atmosphere, no disturbing imagery, safe for children";
     var url = "https://image.pollinations.ai/prompt/" + encodeURIComponent(safePrompt) +
         "?width=768&height=768&nologo=true&safe=true&seed=" + Math.floor(Math.random() * 1e9);
     showResult(url);
@@ -14902,7 +15172,22 @@ function uploadAIImageForEdit() {
 window.uploadAIImageForEdit = uploadAIImageForEdit;
 
 
-window.openAIImageGenerator = openAIImageGenerator;
+window.openAIImageGenerator = function () {
+    try {
+        var ov = document.getElementById("aiImageOverlay");
+        if (ov) ov.style.display = "none";
+    } catch (e) {}
+    console.log("[Azora] AI Image Generator has been removed.");
+};
+window.startAIImageGenerate = function () { return; };
+window.closeAIImageGenerator = function () {
+    try {
+        var ov = document.getElementById("aiImageOverlay");
+        if (ov) ov.style.display = "none";
+    } catch (e) {}
+};
+window.setAIImageMode = function () {};
+window.onAIImageFileSelected = function () {};
 // Inside script.js (AI Image Generator Section)
 function handleAIImageGenerate(promptText) {
     showAIImageStatus("info", "Generating image with Gemini...");
@@ -20243,3 +20528,18 @@ function showProfile3DAvatar(username) {
 }
 window.showProfile3DAvatar = showProfile3DAvatar;
 window.getAvatarDataForUsername = getAvatarDataForUsername;
+
+
+// Boot: show published Creator Studio games under Norm Games (not Feed)
+(function bootStudioNormGames() {
+    function run() {
+        try {
+            if (typeof migrateStudioGamesOffFeed === "function") migrateStudioGamesOffFeed();
+            if (typeof registerStudioNormGames === "function") registerStudioNormGames();
+            if (typeof renderStudioNormGameCards === "function") renderStudioNormGameCards();
+        } catch (e) { console.warn("[Azora] studio norm boot", e); }
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
+    else run();
+    setTimeout(run, 800);
+})();
